@@ -147,3 +147,10 @@ As imagens exibidas no portal passam pela rota `/api/image-proxy`. O proxy valid
 A assinatura do proxy usa `IMAGE_PROXY_SECRET` quando configurada. Se ela não existir e o Supabase estiver configurado, o backend usa a chave de serviço como segredo. Para separar as duas coisas, defina uma chave aleatória longa em `IMAGE_PROXY_SECRET`.
 
 O importador tenta reconhecer JSON-LD, autor, data, seção, legenda da imagem e se o corpo da matéria está presente. Em conteúdo de terceiros, ele não replica automaticamente o texto integral; cria um rascunho de apuração com a fonte para a redação produzir a própria matéria.
+
+
+## Radar Goiás
+
+O painel administrativo possui a aba **Radar Goiás**, que reúne manchetes das áreas locais do G1 Goiás, Metrópoles (Entorno e Goiás), Mais Goiás, Diário de Goiás e O Popular/Daqui. As fontes gerais passam por filtro regional para evitar notícias que não sejam de Goiás ou Goiânia.
+
+O botão **Importar notícia** abre a matéria como rascunho e preenche os metadados disponíveis, incluindo título, resumo, imagem, autor, data e os campos de crédito da fonte. O link original é preservado no post.

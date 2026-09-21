@@ -3,10 +3,11 @@
 import { FormEvent, useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 import TeamManager from "@/components/TeamManager";
+import NewsRadar from "@/components/NewsRadar";
 import type { Category, ImportedNews, Post, PostStatus, StaffUserPublic } from "@/lib/types";
 import { slugify } from "@/lib/slug";
 
-type View = "list" | "form" | "import" | "categories" | "users";
+type View = "list" | "form" | "import" | "radar" | "categories" | "users";
 type FormState = {
   id?: string; title:string; slug:string; excerpt:string; content:string; category:string;
   city:string; author:string; image_url:string; featured:boolean; status:PostStatus;
@@ -169,7 +170,8 @@ export default function AdminApp(){
         <a href="#" onClick={e=>{e.preventDefault();setView("list");}}>📰 Notícias</a>
         <a href="#" onClick={e=>{e.preventDefault();newPost();}}>✍️ Nova postagem</a>
         {currentUser?.role==="admin"&&<a href="#" onClick={e=>{e.preventDefault();setView("categories");setMessage("");}}>🗂️ Abas / editorias</a>}
-        <a href="#" onClick={e=>{e.preventDefault();setView("import");setMessage("");}}>🔎 Importar notícias</a>
+        <a href="#" onClick={e=>{e.preventDefault();setView("radar");setMessage("");}}>📡 Radar Goiás</a>
+        <a href="#" onClick={e=>{e.preventDefault();setView("import");setMessage("");}}>🔎 Importar por URL</a>
         {currentUser?.role==="admin"&&<a href="#" onClick={e=>{e.preventDefault();setView("users");setMessage("");}}>👥 Equipe / usuários</a>}
         <a href="/" target="_blank">🌐 Abrir portal</a>
       </aside>
@@ -209,6 +211,8 @@ export default function AdminApp(){
           <div className="importBox"><label>Link da matéria, site ou RSS</label><div className="importRow"><input type="url" value={importUrl} onChange={e=>setImportUrl(e.target.value)} placeholder="https://site.com/noticia ou /feed"/><button className="btn" disabled={busy} onClick={()=>importNews("article")}>Importar matéria</button><button className="btn secondary" disabled={busy} onClick={()=>importNews("feed")}>Carregar RSS</button></div><p>O importador identifica título, resumo, imagem, autor, data e a estrutura do corpo da matéria. Em fontes de terceiros, o texto integral não é copiado automaticamente.</p></div>
           <div className="importResults">{importItems.map((it,i)=><article className="importCard" key={it.source_url+i}>{it.image_url&&<img src={it.image_proxy_url||it.image_url} alt="" loading="lazy"/>}<div><span className="storyTag">{it.source_name}</span><h3>{it.title}</h3><p>{it.excerpt}</p><div className="importMeta">{it.source_author&&<span>✍️ {it.source_author}</span>}{it.article_section&&<span>🗂️ {it.article_section}</span>}{it.body_detected&&<span>📄 Corpo detectado{it.body_paragraphs?" • "+it.body_paragraphs+" parágrafos":""}</span>}{it.image_proxy_url&&<span>⚡ Imagem otimizada por proxy</span>}</div><div className="actions"><button className="btn" onClick={()=>useImported(it)}>Usar no editor</button><a className="btn secondary" href={it.source_url} target="_blank" rel="noreferrer">Abrir fonte</a></div></div></article>)}</div>
         </section>}
+
+        {view==="radar"&&<NewsRadar onImport={useImported}/>}
 
         {view==="users"&&currentUser?.role==="admin"&&<TeamManager/>}
 
