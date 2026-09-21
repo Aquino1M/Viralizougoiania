@@ -2,10 +2,9 @@ import { NextResponse } from "next/server";
 import { lookup } from "node:dns/promises";
 import { isIP } from "node:net";
 import { isAdmin } from "@/lib/session";
-import { proxyImageUrl } from "@/lib/image-proxy";
 import type { ImportedNews } from "@/lib/types";
 
-const MAX_HTML = 4_000_000;
+const MAX_HTML = 2_000_000;
 
 function decodeEntities(value: string) {
   const named: Record<string, string> = {
@@ -22,14 +21,8 @@ function decodeEntities(value: string) {
 }
 
 function cleanText(value = "") {
-  return decodeEntities(
-    value
-      .replace(/<!\[CDATA\[([\s\S]*?)\]\]>/g, "$1")
-      .replace(/<br\s*\/?>/gi, "\n")
-      .replace(/<[^>]*>/g, " "),
-  )
-    .replace(/[ \t]+/g, " ")
-    .replace(/\s*\n\s*/g, "\n")
+  return decodeEntities(value.replace(/<!\[CDATA\[([\s\S]*?)\]\]>/g, "$1").replace(/<[^>]*>/g, " "))
+    .replace(/\s+/g, " ")
     .trim();
 }
 
@@ -45,9 +38,7 @@ function metaContent(html: string, key: string) {
   const tags = html.match(/<meta\b[^>]*>/gi) || [];
   for (const tag of tags) {
     const attrs = attrMap(tag);
-    if ((attrs.property || attrs.name || attrs.itemprop || "").toLowerCase() === key.toLowerCase()) {
-      return attrs.content || "";
-    }
+    if ((attrs.property || attrs.name || attrs.itemprop || "").toLowerCase() === key.toLowerCase()) return attrs.content || "";
   }
   return "";
 }
@@ -70,9 +61,7 @@ function findArticleLd(value: unknown): Record<string, unknown> | null {
   const obj = value as Record<string, unknown>;
   const type = obj["@type"];
   const types = Array.isArray(type) ? type : [type];
-  if (types.some((t) => ["NewsArticle", "Article", "BlogPosting", "ReportageNewsArticle"].includes(String(t)))) {
-    return obj;
-  }
+  if (types.some((t) => ["NewsArticle", "Article", "BlogPosting"].includes(String(t)))) return obj;
   for (const v of Object.values(obj)) {
     const found = findArticleLd(v);
     if (found) return found;
@@ -95,76 +84,19 @@ function extractJsonLd(html: string) {
 function jsonImage(value: unknown) {
   if (typeof value === "string") return value;
   if (Array.isArray(value)) return jsonImage(value[0]);
-  if (value && typeof value === "object") {
-    const obj = value as Record<string, unknown>;
-    return String(obj.url || obj.contentUrl || "");
-  }
+  if (value && typeof value === "object") return String((value as Record<string, unknown>).url || "");
   return "";
-}
-
-function jsonImageCaption(value: unknown) {
-  if (Array.isArray(value)) return jsonImageCaption(value[0]);
-  if (value && typeof value === "object") {
-    const obj = value as Record<string, unknown>;
-    return cleanText(String(obj.caption || obj.description || obj.name || ""));
-  }
-  return "";
-}
-
-function authorName(value: unknown) {
-  if (Array.isArray(value)) return value.map(authorName).filter(Boolean).join(", ");
-  if (typeof value === "string") return cleanText(value);
-  if (value && typeof value === "object") {
-    return cleanText(String((value as Record<string, unknown>).name || ""));
-  }
-  return "";
-}
-
-function safeIso(value: string) {
-  if (!value || Number.isNaN(Date.parse(value))) return null;
-  return new Date(value).toISOString();
-}
-
-function cleanHeadline(value: string, source: string) {
-  let title = cleanText(value);
-  const suffixes = [source, "g1", "globo.com"]
-    .filter(Boolean)
-    .map((s) => s.replace(/[.*+?^${}()|[\]\\]/g, "\\$&"));
-  if (suffixes.length) {
-    title = title.replace(new RegExp(`\\s*[|–—-]\\s*(?:${suffixes.join("|")})\\s*$`, "i"), "").trim();
-  }
-  return title;
-}
-
-function detectBodyInfo(html: string, ld: Record<string, unknown> | null) {
-  const structured = typeof ld?.articleBody === "string" ? cleanText(String(ld.articleBody)) : "";
-  const structuredParagraphs = structured
-    ? structured.split(/\n{2,}|\n/).map((p) => p.trim()).filter((p) => p.length > 35).length
-    : 0;
-
-  const g1Paragraphs = html.match(/<p\b[^>]*class=["'][^"']*(?:content-text__container|mc-article-body[^"']*)[^"']*["'][^>]*>[\s\S]*?<\/p>/gi) || [];
-  const articleBlock = html.match(/<article\b[\s\S]*?<\/article>/i)?.[0] || "";
-  const genericArticleParagraphs = articleBlock.match(/<p\b[^>]*>[\s\S]*?<\/p>/gi) || [];
-  const count = Math.max(structuredParagraphs, g1Paragraphs.length, genericArticleParagraphs.length);
-
-  return {
-    detected: structured.length > 350 || count >= 3,
-    paragraphs: count,
-  };
 }
 
 function isPrivateIp(ip: string) {
   if (ip === "::1" || ip === "0.0.0.0") return true;
-  if (/^(fc|fd|fe8|fe9|fea|feb)/i.test(ip)) return true;
+  if (ip.startsWith("fc") || ip.startsWith("fd") || ip.startsWith("fe8") || ip.startsWith("fe9") || ip.startsWith("fea") || ip.startsWith("feb")) return true;
   const mapped = ip.match(/^::ffff:(\d+\.\d+\.\d+\.\d+)$/i)?.[1];
   if (mapped) return isPrivateIp(mapped);
   if (isIP(ip) === 4) {
     const [a, b] = ip.split(".").map(Number);
-    return a === 10 || a === 127 || a === 0 || a >= 224 ||
-      (a === 169 && b === 254) ||
-      (a === 172 && b >= 16 && b <= 31) ||
-      (a === 192 && b === 168) ||
-      (a === 100 && b >= 64 && b <= 127);
+    return a === 10 || a === 127 || a === 0 || a >= 224 || (a === 169 && b === 254) ||
+      (a === 172 && b >= 16 && b <= 31) || (a === 192 && b === 168) || (a === 100 && b >= 64 && b <= 127);
   }
   return false;
 }
@@ -172,16 +104,14 @@ function isPrivateIp(ip: string) {
 async function assertSafeUrl(raw: string) {
   let url: URL;
   try { url = new URL(raw); } catch { throw new Error("URL inválida."); }
-  if (!["http:", "https:"].includes(url.protocol)) throw new Error("Use apenas links http ou https.");
+  if (!['http:', 'https:'].includes(url.protocol)) throw new Error("Use apenas links http ou https.");
   const host = url.hostname.toLowerCase();
   if (host === "localhost" || host.endsWith(".local")) throw new Error("Endereço local não permitido.");
   if (isIP(host)) {
     if (isPrivateIp(host)) throw new Error("Endereço privado não permitido.");
   } else {
     const addresses = await lookup(host, { all: true });
-    if (!addresses.length || addresses.some((a) => isPrivateIp(a.address))) {
-      throw new Error("Esse endereço não pode ser acessado pelo importador.");
-    }
+    if (!addresses.length || addresses.some((a: { address: string }) => isPrivateIp(a.address))) throw new Error("Esse endereço não pode ser acessado pelo importador.");
   }
   return url;
 }
@@ -192,14 +122,9 @@ async function safeFetch(raw: string) {
     const res = await fetch(current, {
       redirect: "manual",
       cache: "no-store",
-      signal: AbortSignal.timeout(15_000),
-      headers: {
-        "User-Agent": "Mozilla/5.0 (compatible; Viralizougoiania/1.0; +https://github.com/Aquino1M/Viralizougoiania)",
-        "Accept-Language": "pt-BR,pt;q=0.9,en;q=0.7",
-        Accept: "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
-      },
+      signal: AbortSignal.timeout(12_000),
+      headers: { "User-Agent": "Viralizougoiania-NewsImporter/1.0" },
     });
-
     if ([301, 302, 303, 307, 308].includes(res.status)) {
       const location = res.headers.get("location");
       if (!location) throw new Error("Redirecionamento inválido na fonte.");
@@ -218,40 +143,19 @@ async function safeFetch(raw: string) {
 function extractArticle(html: string, finalUrl: string): ImportedNews {
   const ld = extractJsonLd(html);
   const htmlTitle = cleanText(html.match(/<title\b[^>]*>([\s\S]*?)<\/title>/i)?.[1] || "");
-  const sourceName = cleanText(
-    metaContent(html, "og:site_name") ||
-    String((ld?.publisher as Record<string, unknown> | undefined)?.name || "") ||
-    new URL(finalUrl).hostname.replace(/^www\./, ""),
-  );
-  const rawTitle = metaContent(html, "og:title") || String(ld?.headline || ld?.name || "") || htmlTitle;
-  const title = cleanHeadline(rawTitle, sourceName);
-  const excerpt = cleanText(
-    metaContent(html, "og:description") ||
-    metaContent(html, "description") ||
-    String(ld?.description || ""),
-  );
-  const image = absoluteUrl(metaContent(html, "og:image") || jsonImage(ld?.image), finalUrl);
-  const imageCaption = jsonImageCaption(ld?.image) || cleanText(metaContent(html, "og:image:alt"));
-  const sourceAuthor = authorName(ld?.author) || cleanText(metaContent(html, "author"));
-  const articleSection = cleanText(String(ld?.articleSection || metaContent(html, "article:section") || ""));
+  const title = cleanText(metaContent(html, "og:title") || String(ld?.headline || ld?.name || "") || htmlTitle);
+  const excerpt = cleanText(metaContent(html, "og:description") || metaContent(html, "description") || String(ld?.description || ""));
+  const image = metaContent(html, "og:image") || jsonImage(ld?.image);
+  const sourceName = cleanText(metaContent(html, "og:site_name") || String((ld?.publisher as Record<string, unknown> | undefined)?.name || "") || new URL(finalUrl).hostname.replace(/^www\./, ""));
   const published = metaContent(html, "article:published_time") || String(ld?.datePublished || "");
-  const body = detectBodyInfo(html, ld);
-
   if (!title) throw new Error("Não consegui identificar o título dessa matéria.");
-
   return {
     title,
     excerpt,
-    image_url: image,
-    image_proxy_url: image && proxyImageUrl(image, 1200).startsWith("/api/image-proxy") ? proxyImageUrl(image, 1200) : "",
-    image_caption: imageCaption,
+    image_url: absoluteUrl(image, finalUrl),
     source_name: sourceName,
     source_url: finalUrl,
-    source_author: sourceAuthor,
-    article_section: articleSection,
-    body_detected: body.detected,
-    body_paragraphs: body.paragraphs,
-    published_at: safeIso(published),
+    published_at: published ? new Date(published).toISOString() : null,
   };
 }
 
@@ -280,15 +184,13 @@ function parseFeed(xml: string, feedUrl: string): ImportedNews[] {
   return items.slice(0, 25).map((item) => {
     const link = absoluteUrl(feedLink(item), feedUrl);
     const date = cleanText(tag(item, "pubDate") || tag(item, "published") || tag(item, "updated"));
-    const image = absoluteUrl(feedImage(item), feedUrl);
     return {
-      title: cleanHeadline(cleanText(tag(item, "title")), sourceName),
+      title: cleanText(tag(item, "title")),
       excerpt: cleanText(tag(item, "description") || tag(item, "summary") || tag(item, "content")).slice(0, 500),
-      image_url: image,
-      image_proxy_url: image && proxyImageUrl(image, 800).startsWith("/api/image-proxy") ? proxyImageUrl(image, 800) : "",
+      image_url: absoluteUrl(feedImage(item), feedUrl),
       source_name: sourceName,
       source_url: link || feedUrl,
-      published_at: safeIso(date),
+      published_at: date && !Number.isNaN(Date.parse(date)) ? new Date(date).toISOString() : null,
     };
   }).filter((item) => item.title && item.source_url);
 }
@@ -306,7 +208,6 @@ function discoverFeed(html: string, baseUrl: string) {
 
 export async function POST(req: Request) {
   if (!(await isAdmin())) return NextResponse.json({ error: "Não autorizado" }, { status: 401 });
-
   try {
     const body = await req.json();
     const url = String(body.url || "").trim();
@@ -321,27 +222,17 @@ export async function POST(req: Request) {
     let feedText = first.text;
     let feedUrl = first.url;
     const looksLikeFeed = /<(rss|feed|rdf:RDF)\b/i.test(first.text) || /xml|rss|atom/i.test(first.contentType);
-
     if (!looksLikeFeed) {
       const discovered = discoverFeed(first.text, first.url);
-      if (!discovered) {
-        return NextResponse.json(
-          { error: "Não encontrei um RSS/Atom nessa página. Cole diretamente o endereço do feed." },
-          { status: 400 },
-        );
-      }
+      if (!discovered) return NextResponse.json({ error: "Não encontrei um RSS/Atom nessa página. Cole diretamente o endereço do feed." }, { status: 400 });
       const feed = await safeFetch(discovered);
       feedText = feed.text;
       feedUrl = feed.url;
     }
-
     const items = parseFeed(feedText, feedUrl);
     if (!items.length) return NextResponse.json({ error: "Não encontrei notícias nesse feed." }, { status: 400 });
     return NextResponse.json({ items, feed_url: feedUrl });
   } catch (e) {
-    return NextResponse.json(
-      { error: e instanceof Error ? e.message : "Erro ao importar notícia" },
-      { status: 500 },
-    );
+    return NextResponse.json({ error: e instanceof Error ? e.message : "Erro ao importar notícia" }, { status: 500 });
   }
 }
