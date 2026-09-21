@@ -71,7 +71,7 @@ export default function NewsRadar({ onImport }: { onImport: (item: ImportedNews)
       });
       const d=await r.json().catch(()=>({}));
       if(!r.ok||!Array.isArray(d.items))return;
-      const times=new Map<string,string|null>(d.items.map((x:{url:string;published_at:string|null})=>[x.url,x.published_at]));
+      const times=new Map<string,string|null>(d.items.map((x:{url:string;published_at:string|null}):[string,string|null]=>[x.url,x.published_at]));
       setItems(current=>current.map(item=>times.has(item.url)?{...item,published_at:times.get(item.url)||null}:item));
     }finally{
       setLoadingTimes(false);
