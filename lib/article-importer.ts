@@ -37,7 +37,8 @@ function cleanInline(value = "") {
 }
 
 function regexEscape(value: string) {
-  return value.replace(/[.*+?^$()|[\]{}\\]/g, "\\$&");
+  const special = new Set(["\\", "^", "$", ".", "|", "?", "*", "+", "(", ")", "[", "]", "{", "}"]);
+  return Array.from(value).map((ch) => special.has(ch) ? "\\" + ch : ch).join("");
 }
 
 function cleanTitle(value = "", source = "") {
