@@ -104,9 +104,9 @@ export async function POST(req:Request){
   if(!(await isAdmin()))return NextResponse.json({error:"Não autorizado"},{status:401});
   try{
     const body=await req.json();
-    const urls=Array.isArray(body.urls)?body.urls.map(String).filter(Boolean).slice(0,50):[];
+    const urls:string[]=Array.isArray(body.urls)?body.urls.map((value:unknown)=>String(value)).filter((value:string)=>Boolean(value)).slice(0,50):[];
     if(!urls.length)return NextResponse.json({items:[]});
-    const unique=[...new Set(urls)];
+    const unique:string[]=[...new Set<string>(urls)];
     const items=await inChunks(unique,6,fetchTime);
     return NextResponse.json({items});
   }catch{
