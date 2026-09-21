@@ -124,7 +124,7 @@ function jsonImageCaption(value: unknown) {
   return "";
 }
 
-function authorName(value: unknown) {
+function authorName(value: unknown): string {
   if (Array.isArray(value)) return value.map(authorName).filter(Boolean).join(", ");
   if (typeof value === "string") return cleanInline(value);
   if (value && typeof value === "object") return cleanInline(String((value as Record<string, unknown>).name || ""));
