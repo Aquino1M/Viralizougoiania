@@ -25,8 +25,14 @@ export type ImportedNews = {
   title: string;
   excerpt: string;
   image_url: string;
+  image_proxy_url?: string;
+  image_caption?: string;
   source_name: string;
   source_url: string;
+  source_author?: string;
+  article_section?: string;
+  body_detected?: boolean;
+  body_paragraphs?: number;
   published_at?: string | null;
 };
 

@@ -95,12 +95,32 @@ export default function AdminApp(){
     const r=await fetch("/api/import-news",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({url:importUrl,mode:kind})});
     const d=await r.json();setBusy(false);
     if(!r.ok){setMessage("Erro: "+(d.error||"falha ao importar"));return;}
-    setImportItems(d.items||[]);setMessage(String((d.items||[]).length)+" item(ns) encontrado(s).");
+    setImportItems(d.items||[]);
+    setMessage(String((d.items||[]).length)+" item(ns) encontrado(s).");
     if(kind==="article"&&d.items?.[0]) useImported(d.items[0]);
   }
   function useImported(item:ImportedNews){
-    setForm({...empty,category:ordered.find(c=>c.active)?.name||"Goiânia",author:currentUser?.name||"Redação Viralizougoiania",status:"draft",title:item.title,slug:slugify(item.title),excerpt:item.excerpt,image_url:item.image_url,source_name:item.source_name,source_url:item.source_url,content:"Fonte consultada: "+(item.source_name||"fonte externa")+"\n\nRedija aqui a versão da matéria do Viralizougoiania com base nos fatos verificados. Não copie o texto integral da fonte."});
-    setView("form");setMessage("Importada como rascunho. Revise antes de publicar.");
+    const sourceDetails=[
+      "REFERÊNCIA DA FONTE",
+      "Fonte: "+(item.source_name||"fonte externa"),
+      item.source_author?"Autor na fonte: "+item.source_author:"",
+      item.article_section?"Seção na fonte: "+item.article_section:"",
+      item.published_at?"Publicado na fonte em: "+new Date(item.published_at).toLocaleString("pt-BR"):"",
+      item.image_caption?"Legenda/crédito da imagem: "+item.image_caption:"",
+      "Link original: "+item.source_url,
+      item.body_detected
+        ?"Corpo da matéria detectado"+(item.body_paragraphs?" com aproximadamente "+item.body_paragraphs+" parágrafo(s).":".")
+        :"O corpo completo não foi identificado automaticamente.",
+      "",
+      "TEXTO DO VIRALIZOUGOIANIA",
+      "Redija aqui a matéria própria, em parágrafos, conferindo os fatos na fonte original antes de publicar."
+    ].filter(Boolean).join("\n");
+
+    setForm({...empty,category:ordered.find(c=>c.active)?.name||"Goiânia",author:currentUser?.name||"Redação Viralizougoiania",status:"draft",title:item.title,slug:slugify(item.title),excerpt:item.excerpt,image_url:item.image_url,source_name:item.source_name,source_url:item.source_url,content:sourceDetails});
+    setView("form");
+    setMessage(item.body_detected
+      ?"Fonte analisada: o corpo da matéria foi detectado. Título, resumo, imagem e metadados foram preenchidos; revise e escreva o texto da redação antes de publicar."
+      :"Fonte analisada. Título, resumo, imagem e metadados foram preenchidos; revise e escreva o texto da redação antes de publicar.");
   }
 
   async function createCategory(e:FormEvent){
@@ -187,7 +207,7 @@ export default function AdminApp(){
         {view==="import"&&<section className="panel">
           <div className="toolbar"><div><h1>Importar notícias</h1><div style={{color:"#68736e",fontSize:13}}>Cole uma matéria ou feed RSS/Atom e leve os dados ao editor.</div></div><button className="btn secondary" onClick={()=>setView("list")}>Voltar</button></div>
           <div className="importBox"><label>Link da matéria, site ou RSS</label><div className="importRow"><input type="url" value={importUrl} onChange={e=>setImportUrl(e.target.value)} placeholder="https://site.com/noticia ou /feed"/><button className="btn" disabled={busy} onClick={()=>importNews("article")}>Importar matéria</button><button className="btn secondary" disabled={busy} onClick={()=>importNews("feed")}>Carregar RSS</button></div><p>O importador traz título, resumo, imagem e fonte. O texto integral não é copiado automaticamente.</p></div>
-          <div className="importResults">{importItems.map((it,i)=><article className="importCard" key={it.source_url+i}>{it.image_url&&<img src={it.image_url} alt=""/>}<div><span className="storyTag">{it.source_name}</span><h3>{it.title}</h3><p>{it.excerpt}</p><div className="actions"><button className="btn" onClick={()=>useImported(it)}>Usar no editor</button><a className="btn secondary" href={it.source_url} target="_blank" rel="noreferrer">Abrir fonte</a></div></div></article>)}</div>
+          <div className="importResults">{importItems.map((it,i)=><article className="importCard" key={it.source_url+i}>{it.image_url&&<img src={it.image_proxy_url||it.image_url} alt="" loading="lazy"/>}<div><span className="storyTag">{it.source_name}</span><h3>{it.title}</h3><p>{it.excerpt}</p><div className="importMeta">{it.source_author&&<span>✍️ {it.source_author}</span>}{it.article_section&&<span>🗂️ {it.article_section}</span>}{it.body_detected&&<span>📄 Corpo detectado{it.body_paragraphs?" • "+it.body_paragraphs+" parágrafos":""}</span>}{it.image_proxy_url&&<span>⚡ Imagem otimizada por proxy</span>}</div><div className="actions"><button className="btn" onClick={()=>useImported(it)}>Usar no editor</button><a className="btn secondary" href={it.source_url} target="_blank" rel="noreferrer">Abrir fonte</a></div></div></article>)}</div>
         </section>}
 
         {view==="users"&&currentUser?.role==="admin"&&<TeamManager/>}
