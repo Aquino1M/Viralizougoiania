@@ -139,3 +139,11 @@ No painel, administradores têm acesso à aba **Equipe / Usuários**. Nela é po
 As senhas não são gravadas em texto aberto: o sistema usa hash scrypt. Jornalistas podem criar, editar, importar, agendar e publicar notícias. A administração da equipe fica disponível apenas para contas com função de administrador.
 
 Para persistir os usuários na Vercel, execute novamente `supabase/schema.sql` e mantenha `SUPABASE_URL` e `SUPABASE_SERVICE_ROLE_KEY` configuradas no projeto.
+
+## Proxy e otimização de imagens
+
+As imagens exibidas no portal passam pela rota `/api/image-proxy`. O proxy valida o endereço remoto, bloqueia redes privadas, limita o tamanho do arquivo, redimensiona a imagem e entrega WebP com cache de CDN. O endereço original continua salvo na notícia para preservar a referência da fonte.
+
+A assinatura do proxy usa `IMAGE_PROXY_SECRET` quando configurada. Se ela não existir e o Supabase estiver configurado, o backend usa a chave de serviço como segredo. Para separar as duas coisas, defina uma chave aleatória longa em `IMAGE_PROXY_SECRET`.
+
+O importador tenta reconhecer JSON-LD, autor, data, seção, legenda da imagem e se o corpo da matéria está presente. Em conteúdo de terceiros, ele não replica automaticamente o texto integral; cria um rascunho de apuração com a fonte para a redação produzir a própria matéria.

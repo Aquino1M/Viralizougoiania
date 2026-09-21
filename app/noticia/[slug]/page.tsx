@@ -34,7 +34,7 @@ export default async function Article({params}:{params:Promise<{slug:string}>}){
       <div className="articleBreadcrumb"><Link href="/">Início</Link><span>›</span><Link href={`/categoria/${encodeURIComponent(post.category.toLowerCase())}`}>{post.category}</Link></div>
       <div className="kicker">{post.category} • {post.city}</div><h1>{post.title}</h1><p className="lead">{post.excerpt}</p>
       <div className="articleMeta"><span>Por <b>{post.author}</b></span><span>Publicado em {fmt(post.published_at)}</span></div>
-      {post.image_url&&<><img className="articleCover" src={proxyImageUrl(post.image_url,1600)} alt="" fetchPriority="high" decoding="async"/><div className="imageCaption">Imagem de capa da matéria • Viralizougoiania</div></>}
+      {post.image_url&&<><img className="articleCover" src={proxyImageUrl(post.image_url,1600)} alt="" fetchPriority="high" decoding="async"/><div className="imageCaption">{post.source_name?"Imagem de capa • Fonte: "+post.source_name:"Imagem de capa • Viralizougoiania"}</div></>}
       <div className="articleBody">{paras.map((p,i)=><p key={i}>{p}</p>)}</div>
       {sourceUrl&&<div className="sourceBox"><b>Fonte consultada:</b> <a href={sourceUrl} target="_blank" rel="noopener noreferrer nofollow">{post.source_name||new URL(sourceUrl).hostname}</a></div>}
       <div className="articleEnd"><span>V</span><div><b>Viralizougoiania</b><small>Notícia local, rápida e direta.</small></div></div>
