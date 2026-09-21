@@ -20,7 +20,33 @@ type Item = {
   source_name: string;
   source_url: string;
   scope: "goias" | "goiania";
+  published_at?: string | null;
 };
+
+function exactTime(value?:string|null){
+  if(!value)return "";
+  const d=new Date(value);
+  if(Number.isNaN(d.getTime()))return "";
+  const now=new Date();
+  const sameDay=d.toLocaleDateString("pt-BR")===now.toLocaleDateString("pt-BR");
+  const time=d.toLocaleTimeString("pt-BR",{hour:"2-digit",minute:"2-digit"});
+  return sameDay?time:d.toLocaleDateString("pt-BR",{day:"2-digit",month:"2-digit"})+" • "+time;
+}
+
+function elapsed(value?:string|null){
+  if(!value)return "";
+  const d=new Date(value).getTime();
+  if(!Number.isFinite(d))return "";
+  const diff=Math.max(0,Date.now()-d);
+  const min=Math.floor(diff/60000);
+  if(min<1)return "agora";
+  if(min<60)return "há "+min+" min";
+  const hours=Math.floor(min/60);
+  if(hours<24)return "há "+hours+(hours===1?" hora":" horas");
+  const days=Math.floor(hours/24);
+  if(days<7)return "há "+days+(days===1?" dia":" dias");
+  return "";
+}
 
 export default function NewsRadar({ onImport }: { onImport: (item: ImportedNews) => void }) {
   const [sources,setSources]=useState<Source[]>([]);
@@ -28,9 +54,29 @@ export default function NewsRadar({ onImport }: { onImport: (item: ImportedNews)
   const [selected,setSelected]=useState("all");
   const [query,setQuery]=useState("");
   const [loading,setLoading]=useState(true);
+  const [loadingTimes,setLoadingTimes]=useState(false);
   const [importing,setImporting]=useState("");
   const [error,setError]=useState("");
   const [updatedAt,setUpdatedAt]=useState("");
+
+  async function loadTimes(list:Item[]){
+    const missing=list.filter(item=>!item.published_at).map(item=>item.url);
+    if(!missing.length)return;
+    setLoadingTimes(true);
+    try{
+      const r=await fetch("/api/news-radar/times",{
+        method:"POST",
+        headers:{"Content-Type":"application/json"},
+        body:JSON.stringify({urls:missing})
+      });
+      const d=await r.json().catch(()=>({}));
+      if(!r.ok||!Array.isArray(d.items))return;
+      const times=new Map<string,string|null>(d.items.map((x:{url:string;published_at:string|null})=>[x.url,x.published_at]));
+      setItems(current=>current.map(item=>times.has(item.url)?{...item,published_at:times.get(item.url)||null}:item));
+    }finally{
+      setLoadingTimes(false);
+    }
+  }
 
   async function load(){
     setLoading(true);setError("");
@@ -38,9 +84,11 @@ export default function NewsRadar({ onImport }: { onImport: (item: ImportedNews)
     const d=await r.json().catch(()=>({}));
     setLoading(false);
     if(!r.ok){setError(d.error||"Não foi possível carregar o radar.");return;}
+    const nextItems=(d.items||[]) as Item[];
     setSources(d.sources||[]);
-    setItems(d.items||[]);
+    setItems(nextItems);
     setUpdatedAt(d.updated_at||"");
+    void loadTimes(nextItems);
   }
 
   useEffect(()=>{load();},[]);
@@ -84,7 +132,7 @@ export default function NewsRadar({ onImport }: { onImport: (item: ImportedNews)
 
     <div className="radarTools">
       <input value={query} onChange={e=>setQuery(e.target.value)} placeholder="Filtrar as manchetes..."/>
-      <span>{updatedAt?"Atualizado "+new Date(updatedAt).toLocaleTimeString("pt-BR",{hour:"2-digit",minute:"2-digit"}):""}</span>
+      <span>{loadingTimes?"Consultando horários...":updatedAt?"Atualizado "+new Date(updatedAt).toLocaleTimeString("pt-BR",{hour:"2-digit",minute:"2-digit"}):""}</span>
     </div>
 
     {error&&<div className="notice error">{error}</div>}
@@ -98,6 +146,9 @@ export default function NewsRadar({ onImport }: { onImport: (item: ImportedNews)
             <button className="btn" disabled={Boolean(importing)} onClick={()=>importItem(item)}>{importing===item.url?"Capturando página...":"Importar matéria completa"}</button>
             <a className="btn secondary" href={item.url} target="_blank" rel="noreferrer">Abrir fonte</a>
           </div>
+        </div>
+        <div className="radarPublished">
+          {item.published_at?<><span className="radarClock">◷</span><div><b>{exactTime(item.published_at)}</b><small>{elapsed(item.published_at)}</small></div></>:<><span className="radarClock muted">◷</span><div><b className="mutedText">{loadingTimes?"...":"Horário não informado"}</b></div></>}
         </div>
       </article>)}</div>:<div className="empty">Nenhuma manchete encontrada com esse filtro.</div>}
   </section>;

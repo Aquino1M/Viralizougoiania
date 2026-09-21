@@ -137,3 +137,17 @@ main{min-height:65vh}.heroSection{padding:30px 0 25px}.cityEyebrow{font-size:12p
 
 /* Publicações temporárias do navegador */
 .localArticleNotice{margin:26px 0 10px;padding:12px 14px;border:1px solid #f0d28e;background:#fff8e8;color:#725219;border-radius:10px;font-size:11px;line-height:1.5}
+
+
+/* Horário de publicação no Radar */
+.radarItem{grid-template-columns:44px minmax(0,1fr) auto!important}
+.radarPublished{min-width:116px;display:flex;align-items:center;justify-content:flex-end;gap:7px;text-align:right;color:#384557;padding-left:8px}
+.radarPublished .radarClock{width:27px;height:27px;border-radius:50%;background:#fff2e9;color:var(--brand);display:grid;place-items:center;font-size:15px;font-weight:900;flex:none}
+.radarPublished b{display:block;font-size:11px;white-space:nowrap}
+.radarPublished small{display:block;margin-top:3px;color:#8893a1;font-size:9px;white-space:nowrap}
+.radarPublished .muted{background:#f2f4f7;color:#a8b0bb}
+.radarPublished .mutedText{color:#9aa3af;font-size:9px;font-weight:800;white-space:nowrap}
+@media(max-width:760px){
+  .radarItem{grid-template-columns:36px minmax(0,1fr)!important}
+  .radarPublished{grid-column:2;justify-content:flex-start;text-align:left;min-width:0;padding:2px 0 0}
+}
