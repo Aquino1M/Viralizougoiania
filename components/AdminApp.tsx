@@ -148,7 +148,7 @@ export default function AdminApp(){
       <aside className="adminSide">
         <a href="#" onClick={e=>{e.preventDefault();setView("list");}}>📰 Notícias</a>
         <a href="#" onClick={e=>{e.preventDefault();newPost();}}>✍️ Nova postagem</a>
-        <a href="#" onClick={e=>{e.preventDefault();setView("categories");setMessage("");}}>🗂️ Abas / editorias</a>
+        {currentUser?.role==="admin"&&<a href="#" onClick={e=>{e.preventDefault();setView("categories");setMessage("");}}>🗂️ Abas / editorias</a>}
         <a href="#" onClick={e=>{e.preventDefault();setView("import");setMessage("");}}>🔎 Importar notícias</a>
         {currentUser?.role==="admin"&&<a href="#" onClick={e=>{e.preventDefault();setView("users");setMessage("");}}>👥 Equipe / usuários</a>}
         <a href="/" target="_blank">🌐 Abrir portal</a>
@@ -172,7 +172,7 @@ export default function AdminApp(){
           </tbody></table></div>}
         </section>}
 
-        {view==="categories"&&<section className="panel">
+        {view==="categories"&&currentUser?.role==="admin"&&<section className="panel">
           <div className="toolbar"><div><h1>Abas e editorias</h1><div style={{color:"#68736e",fontSize:13}}>Crie, renomeie, reordene ou oculte as abas do menu.</div></div><button className="btn secondary" onClick={()=>setView("list")}>Voltar</button></div>
           <form className="categoryCreate" onSubmit={createCategory}><div><b>Criar nova aba</b><span>Ex.: Saúde, Gastronomia, Concursos...</span></div><input value={categoryName} onChange={e=>setCategoryName(e.target.value)} placeholder="Nome da nova aba"/><button className="btn" disabled={busy}>+ Criar aba</button></form>
           <div className="categoryAdminList">{ordered.map((c,i)=>{const d=drafts[c.id]||{name:c.name,slug:c.slug};return <article className={"categoryAdminRow "+(c.active?"":"inactive")} key={c.id}>

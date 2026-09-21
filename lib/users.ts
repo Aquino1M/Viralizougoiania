@@ -62,14 +62,14 @@ export function publicUser(user: StaffUser): StaffUserPublic {
 
 export function hashPassword(password: string) {
   const salt = crypto.randomBytes(16).toString("hex");
-  const hash = crypto.scryptSync(password, salt, 64).toString("hex");
+  const hash = crypto.scryptSync(password, Buffer.from(salt, "hex"), 64).toString("hex");
   return `scrypt$${salt}$${hash}`;
 }
 
 export function verifyPassword(password: string, stored: string) {
   const [algo, salt, expectedHex] = stored.split("$");
   if (algo !== "scrypt" || !salt || !expectedHex) return false;
-  const actual = crypto.scryptSync(password, salt, 64);
+  const actual = crypto.scryptSync(password, Buffer.from(salt, "hex"), 64);
   const expected = Buffer.from(expectedHex, "hex");
   return actual.length === expected.length && crypto.timingSafeEqual(actual, expected);
 }

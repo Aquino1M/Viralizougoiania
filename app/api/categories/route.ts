@@ -1,16 +1,16 @@
 import { NextResponse } from "next/server";
 import { createCategory, getCategories, storageMode } from "@/lib/storage";
-import { isAdmin } from "@/lib/session";
+import { isAdmin, isSuperAdmin } from "@/lib/session";
 import { slugify } from "@/lib/slug";
 
 export async function GET() {
-  const admin = await isAdmin();
-  const categories = await getCategories({ includeInactive: admin });
+  const staff = await isAdmin();
+  const categories = await getCategories({ includeInactive: staff });
   return NextResponse.json({ categories, mode: storageMode() });
 }
 
 export async function POST(req: Request) {
-  if (!(await isAdmin())) return NextResponse.json({ error: "Não autorizado" }, { status: 401 });
+  if (!(await isSuperAdmin())) return NextResponse.json({ error: "Apenas administradores podem criar editorias." }, { status: 403 });
   try {
     const b = await req.json();
     const name = String(b.name || "").trim();
