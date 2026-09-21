@@ -95,6 +95,7 @@ export default function AdminApp(){
   async function savePost(e:FormEvent){
     e.preventDefault(); setBusy(true); setMessage("");
     if(form.status==="scheduled"&&!form.published_at){setBusy(false);setMessage("Erro: escolha data e hora do agendamento.");return;}
+    if(form.source_content&&form.status!=="draft"&&!form.content.trim()){setBusy(false);setMessage("Erro: gere ou escreva a versão do Viralizougoiania antes de publicar.");return;}
     if(form.source_content&&form.status!=="draft"&&form.review_status!=="reviewed"){
       setBusy(false);setMessage("Erro: marque a matéria importada como revisada pelo jornalista antes de publicar ou agendar.");return;
     }

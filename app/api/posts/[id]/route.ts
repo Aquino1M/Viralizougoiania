@@ -43,6 +43,9 @@ export async function PATCH(req: Request, { params }: { params: Promise<{ id: st
     const sourceContent = String(b.source_content ?? current.source_content ?? "");
     const reviewStatus: ReviewStatus = b.review_status === "reviewed" ? "reviewed" : sourceContent ? "unreviewed" : "not_required";
 
+    if (sourceContent && publishing.status !== "draft" && !String(b.content || "").trim()) {
+      return NextResponse.json({ error: "Gere ou escreva a versão do Viralizougoiania antes de publicar." }, { status: 400 });
+    }
     if (sourceContent && publishing.status !== "draft" && reviewStatus !== "reviewed") {
       return NextResponse.json({ error: "Matérias importadas precisam ser revisadas pelo jornalista antes de publicar ou agendar." }, { status: 400 });
     }

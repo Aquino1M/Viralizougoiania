@@ -36,6 +36,9 @@ export async function POST(req: Request) {
     if (b.status === "scheduled" && !b.published_at) {
       return NextResponse.json({ error: "Escolha a data e a hora do agendamento." }, { status: 400 });
     }
+    if (b.source_content && publishing.status !== "draft" && !String(b.content || "").trim()) {
+      return NextResponse.json({ error: "Gere ou escreva a versão do Viralizougoiania antes de publicar." }, { status: 400 });
+    }
     if (b.source_content && publishing.status !== "draft" && reviewStatus !== "reviewed") {
       return NextResponse.json({ error: "Matérias importadas precisam ser revisadas pelo jornalista antes de publicar ou agendar." }, { status: 400 });
     }
