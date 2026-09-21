@@ -36,6 +36,75 @@ function localDateTime(v:string|null|undefined){
 }
 function statusLabel(s:PostStatus){return s==="draft"?"Rascunho":s==="scheduled"?"Agendada":"Publicada";}
 
+const LOCAL_POSTS_KEY="viralizougoiania.browser-posts.v1";
+
+function readBrowserPosts():Post[]{
+  if(typeof window==="undefined")return [];
+  try{
+    const raw=window.localStorage.getItem(LOCAL_POSTS_KEY);
+    const parsed=raw?JSON.parse(raw):[];
+    return Array.isArray(parsed)?parsed:[];
+  }catch{return [];}
+}
+
+function writeBrowserPosts(posts:Post[]){
+  if(typeof window==="undefined")return;
+  window.localStorage.setItem(LOCAL_POSTS_KEY,JSON.stringify(posts));
+}
+
+function newLocalId(){
+  const id=typeof crypto!=="undefined"&&"randomUUID" in crypto?crypto.randomUUID():Date.now().toString(36)+"-"+Math.random().toString(36).slice(2);
+  return "local-"+id;
+}
+
+function saveBrowserPost(form:FormState):Post{
+  const posts=readBrowserPosts();
+  const existing=form.id?.startsWith("local-")?posts.find(p=>p.id===form.id):undefined;
+  const now=new Date().toISOString();
+  const publishedAt=form.status==="draft"?null:(form.published_at?new Date(form.published_at).toISOString():now);
+  const sourcePublishedAt=form.source_published_at?new Date(form.source_published_at).toISOString():null;
+  const post:Post={
+    id:existing?.id||newLocalId(),
+    slug:form.slug||slugify(form.title),
+    title:form.title,
+    excerpt:form.excerpt,
+    content:form.content,
+    category:form.category,
+    city:form.city,
+    author:form.author,
+    image_url:form.image_url,
+    featured:form.featured,
+    status:form.status,
+    published_at:publishedAt,
+    source_name:form.source_name,
+    source_url:form.source_url,
+    source_title:form.source_title,
+    source_excerpt:form.source_excerpt,
+    source_author:form.source_author,
+    source_published_at:sourcePublishedAt,
+    source_content:form.source_content,
+    source_word_count:form.source_word_count,
+    source_capture_method:form.source_capture_method,
+    source_complete:form.source_complete,
+    article_section:form.article_section,
+    image_credit:form.image_credit,
+    seo_title:form.seo_title,
+    seo_description:form.seo_description,
+    seo_keywords:form.seo_keywords,
+    review_status:form.review_status,
+    rewrite_similarity:form.rewrite_similarity,
+    created_at:existing?.created_at||now,
+    updated_at:now
+  };
+  const next=existing?posts.map(p=>p.id===post.id?post:p):[post,...posts.filter(p=>p.slug!==post.slug)];
+  writeBrowserPosts(next);
+  return post;
+}
+
+function removeBrowserPost(id:string){
+  writeBrowserPosts(readBrowserPosts().filter(p=>p.id!==id));
+}
+
 export default function AdminApp(){
   const [posts,setPosts]=useState<Post[]>([]);
   const [categories,setCategories]=useState<Category[]>([]);
@@ -46,6 +115,7 @@ export default function AdminApp(){
   const [busy,setBusy]=useState(false);
   const [message,setMessage]=useState("");
   const [mode,setMode]=useState("");
+  const [localCount,setLocalCount]=useState(0);
   const [search,setSearch]=useState("");
   const [importUrl,setImportUrl]=useState("");
   const [importItems,setImportItems]=useState<ImportedNews[]>([]);
@@ -62,7 +132,16 @@ export default function AdminApp(){
     ]);
     if(pr.status===401||cr.status===401||mr.status===401){router.push("/admin/login");return;}
     const [pd,cd,md]=await Promise.all([pr.json(),cr.json(),mr.json()]);
-    setPosts(pd.posts||[]);
+    const browserPosts=readBrowserPosts();
+    const browserIds=new Set(browserPosts.map(p=>p.id));
+    const browserSlugs=new Set(browserPosts.map(p=>p.slug));
+    const remotePosts=(pd.posts||[]) as Post[];
+    const mergedPosts=[
+      ...browserPosts,
+      ...remotePosts.filter(p=>!browserIds.has(p.id)&&!browserSlugs.has(p.slug))
+    ];
+    setPosts(mergedPosts);
+    setLocalCount(browserPosts.length);
     setCategories(cd.categories||[]);
     setCurrentUser(md.user||null);
     setMode(pd.mode||cd.mode||"");
@@ -100,6 +179,16 @@ export default function AdminApp(){
       setBusy(false);setMessage("Erro: marque a matéria importada como revisada pelo jornalista antes de publicar ou agendar.");return;
     }
     const payload={...form,slug:form.slug||slugify(form.title),published_at:form.published_at?new Date(form.published_at).toISOString():undefined};
+
+    if(mode==="readonly-demo"||form.id?.startsWith("local-")){
+      saveBrowserPost(form);
+      setBusy(false);
+      setMessage("Salvo neste navegador. A matéria ficará guardada aqui até o Supabase ser configurado; ela ainda não está publicada para outros visitantes.");
+      await load();
+      setView("list");
+      return;
+    }
+
     const endpoint=form.id?"/api/posts/"+form.id:"/api/posts";
     const r=await fetch(endpoint,{method:form.id?"PATCH":"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify(payload)});
     const d=await r.json(); setBusy(false);
@@ -108,8 +197,38 @@ export default function AdminApp(){
   }
   async function deletePost(id:string){
     if(!confirm("Excluir esta notícia?")) return;
+    if(id.startsWith("local-")){
+      removeBrowserPost(id);
+      setMessage("Notícia local excluída deste navegador.");
+      await load();
+      return;
+    }
     const r=await fetch("/api/posts/"+id,{method:"DELETE"}); const d=await r.json();
     if(!r.ok){alert(d.error||"Erro ao excluir");return;} await load(); router.refresh();
+  }
+
+  async function syncLocalPosts(){
+    const locals=readBrowserPosts();
+    if(!locals.length)return;
+    if(mode!=="supabase"){setMessage("Erro: configure o Supabase antes de sincronizar.");return;}
+    if(!confirm("Enviar "+locals.length+" notícia(s) salvas neste navegador para o banco de dados?"))return;
+    setBusy(true);setMessage("");
+    try{
+      for(const local of locals){
+        const {id,created_at,updated_at,...payload}=local;
+        const r=await fetch("/api/posts",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify(payload)});
+        const d=await r.json().catch(()=>({}));
+        if(!r.ok)throw new Error(d.error||"Falha ao sincronizar "+local.title);
+      }
+      writeBrowserPosts([]);
+      setMessage("Notícias locais enviadas para o banco com sucesso.");
+      await load();
+      router.refresh();
+    }catch(e){
+      setMessage("Erro: "+(e instanceof Error?e.message:"não foi possível sincronizar"));
+    }finally{
+      setBusy(false);
+    }
   }
   async function logout(){await fetch("/api/auth/logout",{method:"POST"});router.push("/admin/login");router.refresh();}
 
@@ -211,7 +330,8 @@ export default function AdminApp(){
           <div className="stat"><b>{scheduled}</b><span>Agendadas</span></div>
           <div className="stat"><b>{ordered.filter(c=>c.active).length}</b><span>Abas ativas</span></div>
         </div>
-        {mode==="readonly-demo"&&<div className="notice">Na Vercel, configure o Supabase para salvar notícias, abas e usuários permanentemente.</div>}
+        {mode==="readonly-demo"&&<div className="notice browserSaveNotice"><b>Modo temporário do navegador.</b> Enquanto o Supabase não estiver configurado, novas matérias são salvas somente neste navegador. {localCount>0&&<span>Você tem <b>{localCount}</b> notícia(s) guardada(s) localmente.</span>}</div>}
+        {mode==="supabase"&&localCount>0&&<div className="notice browserSaveNotice"><b>{localCount} notícia(s) local(is) encontrada(s).</b> <button className="btn" disabled={busy} onClick={syncLocalPosts}>Enviar para o banco</button></div>}
         {mode==="local-json"&&<div className="notice">Modo local: notícias, abas e usuários são salvos na pasta <b>data</b>.</div>}
         {message&&<div className={message.startsWith("Erro")?"notice error":"notice"}>{message}</div>}
 
@@ -219,7 +339,7 @@ export default function AdminApp(){
           <div className="toolbar"><div><h1>Notícias</h1><div style={{color:"#68736e",fontSize:13}}>Gerencie publicações, rascunhos e agendamentos.</div></div><button className="btn" onClick={newPost}>+ Nova notícia</button></div>
           <input value={search} onChange={e=>setSearch(e.target.value)} placeholder="Buscar por título, editoria ou região..." style={{width:"100%",padding:11,border:"1px solid #d9e0e6",borderRadius:9,marginBottom:14}}/>
           {loading?<div className="empty">Carregando...</div>:<div style={{overflowX:"auto"}}><table className="postTable"><thead><tr><th>Título</th><th>Editoria</th><th>Status</th><th>Publicação</th><th>Ações</th></tr></thead><tbody>
-            {filtered.map(p=><tr key={p.id}><td><b>{p.title}</b><br/><span style={{color:"#7b858f"}}>{p.city}</span></td><td>{p.category}</td><td><span className={"status "+p.status}>{statusLabel(p.status)}</span></td><td>{p.published_at?new Date(p.published_at).toLocaleString("pt-BR"):"—"}</td><td><div className="actions"><button className="btn secondary" onClick={()=>edit(p)}>Editar</button><button className="btn danger" onClick={()=>deletePost(p.id)}>Excluir</button></div></td></tr>)}
+            {filtered.map(p=><tr key={p.id}><td><b>{p.title}</b>{p.id.startsWith("local-")&&<span className="localOnlyBadge">Só neste navegador</span>}<br/><span style={{color:"#7b858f"}}>{p.city}</span></td><td>{p.category}</td><td><span className={"status "+p.status}>{statusLabel(p.status)}</span></td><td>{p.published_at?new Date(p.published_at).toLocaleString("pt-BR"):"—"}</td><td><div className="actions"><button className="btn secondary" onClick={()=>edit(p)}>Editar</button><button className="btn danger" onClick={()=>deletePost(p.id)}>Excluir</button></div></td></tr>)}
           </tbody></table></div>}
         </section>}
 
