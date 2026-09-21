@@ -1,6 +1,7 @@
 import { NextRequest } from "next/server";
 import { lookup } from "node:dns/promises";
 import { isIP } from "node:net";
+import sharp from "sharp";
 import { verifyImageSignature } from "@/lib/image-proxy";
 
 export const runtime = "nodejs";
@@ -38,23 +39,6 @@ async function safeUrl(raw: string) {
   return url;
 }
 
-function optimizeUpstream(raw: string, width: number) {
-  try {
-    const url = new URL(raw);
-    if (/\.glbimg\.com$/i.test(url.hostname) || /(^|\.)glbimg\.com$/i.test(url.hostname)) {
-      url.pathname = url.pathname.replace(/\/\d+x0\//, `/${width}x0/`);
-      return url.toString();
-    }
-    if (url.hostname.endsWith("unsplash.com")) {
-      url.searchParams.set("w", String(width));
-      url.searchParams.set("q", "78");
-      url.searchParams.set("auto", "format");
-      return url.toString();
-    }
-  } catch {}
-  return raw;
-}
-
 async function fetchImage(raw: string) {
   let current = await safeUrl(raw);
   for (let i = 0; i < 4; i++) {
@@ -78,9 +62,9 @@ async function fetchImage(raw: string) {
     if (!type.toLowerCase().startsWith("image/")) throw new Error("O endereço não é uma imagem");
     const declared = Number(res.headers.get("content-length") || 0);
     if (declared > MAX_BYTES) throw new Error("Imagem muito grande");
-    const bytes = await res.arrayBuffer();
-    if (bytes.byteLength > MAX_BYTES) throw new Error("Imagem muito grande");
-    return { bytes, type };
+    const bytes = Buffer.from(await res.arrayBuffer());
+    if (bytes.length > MAX_BYTES) throw new Error("Imagem muito grande");
+    return bytes;
   }
   throw new Error("Muitos redirecionamentos");
 }
@@ -96,13 +80,18 @@ export async function GET(req: NextRequest) {
   }
 
   try {
-    const optimized = optimizeUpstream(raw, width);
-    const { bytes, type } = await fetchImage(optimized);
-    return new Response(bytes, {
+    const source = await fetchImage(raw);
+    const output = await sharp(source, { failOn: "none" })
+      .rotate()
+      .resize({ width, withoutEnlargement: true })
+      .webp({ quality: 78, effort: 4 })
+      .toBuffer();
+
+    return new Response(output, {
       headers: {
-        "Content-Type": type,
+        "Content-Type": "image/webp",
         "Cache-Control": "public, max-age=86400, s-maxage=2592000, stale-while-revalidate=604800",
-        "Content-Length": String(bytes.byteLength),
+        "Content-Length": String(output.length),
         "X-Content-Type-Options": "nosniff",
       },
     });

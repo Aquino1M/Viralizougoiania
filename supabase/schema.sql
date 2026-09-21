@@ -91,3 +91,28 @@ values (
   true
 )
 on conflict (username) do nothing;
+
+
+-- Campos editoriais privados para importação, reescrita, SEO e revisão
+alter table public.posts add column if not exists source_title text not null default '';
+alter table public.posts add column if not exists source_excerpt text not null default '';
+alter table public.posts add column if not exists source_author text not null default '';
+alter table public.posts add column if not exists source_published_at timestamptz;
+alter table public.posts add column if not exists source_content text not null default '';
+alter table public.posts add column if not exists source_word_count integer not null default 0;
+alter table public.posts add column if not exists source_capture_method text not null default '';
+alter table public.posts add column if not exists source_complete boolean not null default true;
+alter table public.posts add column if not exists article_section text not null default '';
+alter table public.posts add column if not exists image_credit text not null default '';
+alter table public.posts add column if not exists seo_title text not null default '';
+alter table public.posts add column if not exists seo_description text not null default '';
+alter table public.posts add column if not exists seo_keywords text not null default '';
+alter table public.posts add column if not exists review_status text not null default 'not_required';
+alter table public.posts add column if not exists rewrite_similarity double precision;
+
+alter table public.posts drop constraint if exists posts_review_status_check;
+alter table public.posts add constraint posts_review_status_check
+  check (review_status in ('not_required','unreviewed','reviewed'));
+
+comment on column public.posts.source_content is
+  'Texto integral capturado da fonte para referência interna da redação; não deve ser renderizado no site público.';

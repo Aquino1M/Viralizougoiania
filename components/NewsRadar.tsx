@@ -69,11 +69,11 @@ export default function NewsRadar({ onImport }: { onImport: (item: ImportedNews)
 
   return <section className="panel radarPanel">
     <div className="toolbar">
-      <div><h1>Radar Goiás</h1><div style={{color:"#68736e",fontSize:13}}>Acompanhe manchetes de Goiás e Goiânia em vários veículos e leve uma delas direto ao editor.</div></div>
+      <div><h1>Radar Goiás</h1><div style={{color:"#68736e",fontSize:13}}>Acompanhe manchetes de Goiás e Goiânia, capture a matéria completa para a bancada interna e leve tudo direto ao editor.</div></div>
       <button className="btn secondary" onClick={load} disabled={loading}>{loading?"Atualizando...":"↻ Atualizar"}</button>
     </div>
 
-    <div className="radarNotice"><b>Importação com crédito:</b> ao importar, o painel preenche título, resumo, imagem, autor/data quando disponíveis e registra o nome e o link da fonte. A notícia abre como rascunho para revisão editorial.</div>
+    <div className="radarNotice"><b>Importação completa com crédito:</b> o sistema abre a página da fonte, tenta capturar todos os parágrafos da matéria para referência interna, preserva autor/data/imagem/crédito e registra o link original. Depois, a bancada de reescrita cria a versão própria do Viralizougoiania.</div>
 
     <div className="radarSources">
       <button className={selected==="all"?"radarSource active":"radarSource"} onClick={()=>setSelected("all")}><span>Todos</span><b>{items.length}</b></button>
@@ -95,7 +95,7 @@ export default function NewsRadar({ onImport }: { onImport: (item: ImportedNews)
           <div className="radarItemMeta"><span>{item.source_name}</span><span>{item.scope==="goiania"?"Goiânia":"Goiás"}</span></div>
           <h3>{item.title}</h3>
           <div className="actions">
-            <button className="btn" disabled={Boolean(importing)} onClick={()=>importItem(item)}>{importing===item.url?"Importando...":"Importar notícia"}</button>
+            <button className="btn" disabled={Boolean(importing)} onClick={()=>importItem(item)}>{importing===item.url?"Capturando página...":"Importar matéria completa"}</button>
             <a className="btn secondary" href={item.url} target="_blank" rel="noreferrer">Abrir fonte</a>
           </div>
         </div>

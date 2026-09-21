@@ -4,7 +4,8 @@ import { FormEvent, useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 import TeamManager from "@/components/TeamManager";
 import NewsRadar from "@/components/NewsRadar";
-import type { Category, ImportedNews, Post, PostStatus, StaffUserPublic } from "@/lib/types";
+import RewriteWorkbench from "@/components/RewriteWorkbench";
+import type { Category, ImportedNews, Post, PostStatus, ReviewStatus, RewriteResult, StaffUserPublic } from "@/lib/types";
 import { slugify } from "@/lib/slug";
 
 type View = "list" | "form" | "import" | "radar" | "categories" | "users";
@@ -12,12 +13,20 @@ type FormState = {
   id?: string; title:string; slug:string; excerpt:string; content:string; category:string;
   city:string; author:string; image_url:string; featured:boolean; status:PostStatus;
   published_at:string; source_name:string; source_url:string;
+  source_title:string; source_excerpt:string; source_author:string; source_published_at:string;
+  source_content:string; source_word_count:number; source_capture_method:string; source_complete:boolean;
+  article_section:string; image_credit:string; seo_title:string; seo_description:string; seo_keywords:string;
+  review_status:ReviewStatus; rewrite_similarity:number|null;
 };
 
 const empty: FormState = {
   title:"", slug:"", excerpt:"", content:"", category:"Goiânia", city:"Goiânia",
   author:"Redação Viralizougoiania", image_url:"", featured:false, status:"published",
-  published_at:"", source_name:"", source_url:""
+  published_at:"", source_name:"", source_url:"",
+  source_title:"", source_excerpt:"", source_author:"", source_published_at:"",
+  source_content:"", source_word_count:0, source_capture_method:"", source_complete:true,
+  article_section:"", image_credit:"", seo_title:"", seo_description:"", seo_keywords:"",
+  review_status:"not_required", rewrite_similarity:null
 };
 
 function localDateTime(v:string|null|undefined){
@@ -70,12 +79,25 @@ export default function AdminApp(){
     setMessage(""); setView("form");
   }
   function edit(p:Post){
-    setForm({id:p.id,title:p.title,slug:p.slug,excerpt:p.excerpt,content:p.content,category:p.category,city:p.city,author:p.author,image_url:p.image_url,featured:p.featured,status:p.status,published_at:localDateTime(p.published_at),source_name:p.source_name||"",source_url:p.source_url||""});
+    setForm({
+      ...empty,
+      id:p.id,title:p.title,slug:p.slug,excerpt:p.excerpt,content:p.content,category:p.category,city:p.city,author:p.author,
+      image_url:p.image_url,featured:p.featured,status:p.status,published_at:localDateTime(p.published_at),
+      source_name:p.source_name||"",source_url:p.source_url||"",source_title:p.source_title||"",source_excerpt:p.source_excerpt||"",
+      source_author:p.source_author||"",source_published_at:localDateTime(p.source_published_at||null),source_content:p.source_content||"",
+      source_word_count:p.source_word_count||0,source_capture_method:p.source_capture_method||"",source_complete:p.source_complete!==false,
+      article_section:p.article_section||"",image_credit:p.image_credit||"",seo_title:p.seo_title||"",seo_description:p.seo_description||"",
+      seo_keywords:p.seo_keywords||"",review_status:p.review_status||(p.source_content?"unreviewed":"not_required"),
+      rewrite_similarity:p.rewrite_similarity??null
+    });
     setMessage(""); setView("form");
   }
   async function savePost(e:FormEvent){
     e.preventDefault(); setBusy(true); setMessage("");
     if(form.status==="scheduled"&&!form.published_at){setBusy(false);setMessage("Erro: escolha data e hora do agendamento.");return;}
+    if(form.source_content&&form.status!=="draft"&&form.review_status!=="reviewed"){
+      setBusy(false);setMessage("Erro: marque a matéria importada como revisada pelo jornalista antes de publicar ou agendar.");return;
+    }
     const payload={...form,slug:form.slug||slugify(form.title),published_at:form.published_at?new Date(form.published_at).toISOString():undefined};
     const endpoint=form.id?"/api/posts/"+form.id:"/api/posts";
     const r=await fetch(endpoint,{method:form.id?"PATCH":"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify(payload)});
@@ -101,27 +123,33 @@ export default function AdminApp(){
     if(kind==="article"&&d.items?.[0]) useImported(d.items[0]);
   }
   function useImported(item:ImportedNews){
-    const sourceDetails=[
-      "REFERÊNCIA DA FONTE",
-      "Fonte: "+(item.source_name||"fonte externa"),
-      item.source_author?"Autor na fonte: "+item.source_author:"",
-      item.article_section?"Seção na fonte: "+item.article_section:"",
-      item.published_at?"Publicado na fonte em: "+new Date(item.published_at).toLocaleString("pt-BR"):"",
-      item.image_caption?"Legenda/crédito da imagem: "+item.image_caption:"",
-      "Link original: "+item.source_url,
-      item.body_detected
-        ?"Corpo da matéria detectado"+(item.body_paragraphs?" com aproximadamente "+item.body_paragraphs+" parágrafo(s).":".")
-        :"O corpo completo não foi identificado automaticamente.",
-      "",
-      "TEXTO DO VIRALIZOUGOIANIA",
-      "Redija aqui a matéria própria, em parágrafos, conferindo os fatos na fonte original antes de publicar."
-    ].filter(Boolean).join("\n");
-
-    setForm({...empty,category:ordered.find(c=>c.active)?.name||"Goiânia",author:currentUser?.name||"Redação Viralizougoiania",status:"draft",title:item.title,slug:slugify(item.title),excerpt:item.excerpt,image_url:item.image_url,source_name:item.source_name,source_url:item.source_url,content:sourceDetails});
+    setForm({
+      ...empty,
+      category:ordered.find(c=>c.active)?.name||"Goiânia",
+      author:currentUser?.name||"Redação Viralizougoiania",
+      status:"draft",
+      title:item.title,
+      slug:slugify(item.title),
+      excerpt:item.excerpt,
+      image_url:item.image_url,
+      source_name:item.source_name,
+      source_url:item.source_url,
+      source_title:item.title,
+      source_excerpt:item.excerpt,
+      source_author:item.source_author||"",
+      source_published_at:localDateTime(item.source_published_at||item.published_at||null),
+      source_content:item.source_content||"",
+      source_word_count:item.source_word_count||0,
+      source_capture_method:item.source_capture_method||"",
+      source_complete:item.source_complete!==false,
+      article_section:item.article_section||"",
+      image_credit:item.image_caption||item.source_name||"",
+      review_status:item.source_content?"unreviewed":"not_required"
+    });
     setView("form");
-    setMessage(item.body_detected
-      ?"Fonte analisada: o corpo da matéria foi detectado. Título, resumo, imagem e metadados foram preenchidos; revise e escreva o texto da redação antes de publicar."
-      :"Fonte analisada. Título, resumo, imagem e metadados foram preenchidos; revise e escreva o texto da redação antes de publicar.");
+    setMessage(item.source_content
+      ? "Matéria capturada com "+String(item.source_word_count||0)+" palavras. O original ficou na área interna de apuração; use o reescritor e revise antes de publicar."
+      : "Metadados importados, mas o corpo completo não foi identificado. Confira a fonte original.");
   }
 
   async function createCategory(e:FormEvent){
@@ -208,7 +236,7 @@ export default function AdminApp(){
 
         {view==="import"&&<section className="panel">
           <div className="toolbar"><div><h1>Importar notícias</h1><div style={{color:"#68736e",fontSize:13}}>Cole uma matéria ou feed RSS/Atom e leve os dados ao editor.</div></div><button className="btn secondary" onClick={()=>setView("list")}>Voltar</button></div>
-          <div className="importBox"><label>Link da matéria, site ou RSS</label><div className="importRow"><input type="url" value={importUrl} onChange={e=>setImportUrl(e.target.value)} placeholder="https://site.com/noticia ou /feed"/><button className="btn" disabled={busy} onClick={()=>importNews("article")}>Importar matéria</button><button className="btn secondary" disabled={busy} onClick={()=>importNews("feed")}>Carregar RSS</button></div><p>O importador identifica título, resumo, imagem, autor, data e a estrutura do corpo da matéria. Em fontes de terceiros, o texto integral não é copiado automaticamente.</p></div>
+          <div className="importBox"><label>Link da matéria, site ou RSS</label><div className="importRow"><input type="url" value={importUrl} onChange={e=>setImportUrl(e.target.value)} placeholder="https://site.com/noticia ou /feed"/><button className="btn" disabled={busy} onClick={()=>importNews("article")}>Importar matéria</button><button className="btn secondary" disabled={busy} onClick={()=>importNews("feed")}>Carregar RSS</button></div><p>O importador lê a página inteira, captura o corpo da matéria como referência interna e leva os metadados ao editor. O texto original fica restrito ao painel; a publicação usa a versão reescrita e revisada.</p></div>
           <div className="importResults">{importItems.map((it,i)=><article className="importCard" key={it.source_url+i}>{it.image_url&&<img src={it.image_proxy_url||it.image_url} alt="" loading="lazy"/>}<div><span className="storyTag">{it.source_name}</span><h3>{it.title}</h3><p>{it.excerpt}</p><div className="importMeta">{it.source_author&&<span>✍️ {it.source_author}</span>}{it.article_section&&<span>🗂️ {it.article_section}</span>}{it.body_detected&&<span>📄 Corpo detectado{it.body_paragraphs?" • "+it.body_paragraphs+" parágrafos":""}</span>}{it.image_proxy_url&&<span>⚡ Imagem otimizada por proxy</span>}</div><div className="actions"><button className="btn" onClick={()=>useImported(it)}>Usar no editor</button><a className="btn secondary" href={it.source_url} target="_blank" rel="noreferrer">Abrir fonte</a></div></div></article>)}</div>
         </section>}
 
@@ -228,9 +256,50 @@ export default function AdminApp(){
             <div className="field"><label>Status</label><select value={form.status} onChange={e=>setForm({...form,status:e.target.value as PostStatus})}><option value="published">Publicar agora</option><option value="scheduled">Programar publicação</option><option value="draft">Rascunho</option></select></div>
             {form.status==="scheduled"&&<div className="field full scheduleBox"><label>Data e hora programada</label><input required type="datetime-local" value={form.published_at} onChange={e=>setForm({...form,published_at:e.target.value})}/><small>A notícia entra no ar automaticamente quando esse horário chegar.</small></div>}
             <div className="field full"><label>URL da imagem de capa</label><input value={form.image_url} onChange={e=>setForm({...form,image_url:e.target.value})} placeholder="https://..."/>{form.image_url&&<img src={form.image_url} alt="Prévia" style={{maxWidth:340,borderRadius:10,marginTop:8}}/>}</div>
-            <div className="field full"><label>Texto completo</label><textarea className="editorText" required value={form.content} onChange={e=>setForm({...form,content:e.target.value})} placeholder="Separe os parágrafos com uma linha em branco."/></div>
-            <div className="field"><label>Nome da fonte (opcional)</label><input value={form.source_name} onChange={e=>setForm({...form,source_name:e.target.value})}/></div>
-            <div className="field"><label>Link da fonte (opcional)</label><input type="url" value={form.source_url} onChange={e=>setForm({...form,source_url:e.target.value})}/></div>
+            {form.source_content?<div className="field full">
+              <RewriteWorkbench
+                sourceContent={form.source_content}
+                sourceName={form.source_name}
+                sourceUrl={form.source_url}
+                sourceAuthor={form.source_author}
+                sourcePublishedAt={form.source_published_at||undefined}
+                sourceComplete={form.source_complete}
+                sourceWordCount={form.source_word_count}
+                sourceCaptureMethod={form.source_capture_method}
+                sourceTitle={form.source_title||form.title}
+                sourceExcerpt={form.source_excerpt}
+                articleSection={form.article_section}
+                categories={ordered.filter(c=>c.active).map(c=>c.name)}
+                content={form.content}
+                reviewStatus={form.review_status}
+                similarity={form.rewrite_similarity}
+                onContentChange={value=>setForm(prev=>({...prev,content:value}))}
+                onReviewChange={value=>setForm(prev=>({...prev,review_status:value}))}
+                onRewrite={(result:RewriteResult)=>setForm(prev=>({
+                  ...prev,
+                  title:result.title||prev.title,
+                  slug:slugify(result.title||prev.title),
+                  excerpt:result.excerpt||prev.excerpt,
+                  content:result.content,
+                  category:ordered.some(c=>c.name===result.category)?result.category:prev.category,
+                  city:result.city||prev.city,
+                  seo_title:result.seo_title||result.title||prev.seo_title,
+                  seo_description:result.seo_description||result.excerpt||prev.seo_description,
+                  seo_keywords:(result.seo_keywords||[]).join(", "),
+                  rewrite_similarity:result.similarity,
+                  review_status:"unreviewed"
+                }))}
+              />
+            </div>:<div className="field full"><label>Texto completo</label><textarea className="editorText" required value={form.content} onChange={e=>setForm({...form,content:e.target.value})} placeholder="Separe os parágrafos com uma linha em branco."/></div>}
+            <div className="field"><label>Nome da fonte</label><input value={form.source_name} onChange={e=>setForm({...form,source_name:e.target.value})}/></div>
+            <div className="field"><label>Link da fonte</label><input type="url" value={form.source_url} onChange={e=>setForm({...form,source_url:e.target.value})}/></div>
+            <div className="field"><label>Crédito da imagem</label><input value={form.image_credit} onChange={e=>setForm({...form,image_credit:e.target.value})} placeholder="Ex.: Reprodução/G1 ou nome do fotógrafo"/></div>
+            <div className="field"><label>Autor na fonte</label><input value={form.source_author} onChange={e=>setForm({...form,source_author:e.target.value})}/></div>
+            <div className="field full seoBox"><label>SEO</label><div className="seoGrid">
+              <input value={form.seo_title} onChange={e=>setForm({...form,seo_title:e.target.value})} placeholder="Título SEO"/>
+              <input value={form.seo_keywords} onChange={e=>setForm({...form,seo_keywords:e.target.value})} placeholder="Palavras-chave separadas por vírgula"/>
+              <textarea value={form.seo_description} onChange={e=>setForm({...form,seo_description:e.target.value})} placeholder="Descrição SEO"/>
+            </div></div>
             {form.status!=="scheduled"&&<div className="field"><label>Data de publicação (opcional)</label><input type="datetime-local" value={form.published_at} onChange={e=>setForm({...form,published_at:e.target.value})}/></div>}
             <div className="field"><label>Destaque principal</label><div className="checkRow"><input id="featured" type="checkbox" checked={form.featured} onChange={e=>setForm({...form,featured:e.target.checked})}/><label htmlFor="featured">Mostrar como manchete principal</label></div></div>
           </div>

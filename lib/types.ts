@@ -1,4 +1,5 @@
 export type PostStatus = "published" | "draft" | "scheduled";
+export type ReviewStatus = "not_required" | "unreviewed" | "reviewed";
 
 export type Post = {
   id: string;
@@ -15,6 +16,21 @@ export type Post = {
   published_at: string | null;
   source_name?: string;
   source_url?: string;
+  source_title?: string;
+  source_excerpt?: string;
+  source_author?: string;
+  source_published_at?: string | null;
+  source_content?: string;
+  source_word_count?: number;
+  source_capture_method?: string;
+  source_complete?: boolean;
+  article_section?: string;
+  image_credit?: string;
+  seo_title?: string;
+  seo_description?: string;
+  seo_keywords?: string;
+  review_status?: ReviewStatus;
+  rewrite_similarity?: number | null;
   created_at: string;
   updated_at: string;
 };
@@ -30,10 +46,31 @@ export type ImportedNews = {
   source_name: string;
   source_url: string;
   source_author?: string;
+  source_published_at?: string | null;
   article_section?: string;
+  source_content?: string;
+  source_word_count?: number;
+  source_capture_method?: string;
+  source_complete?: boolean;
   body_detected?: boolean;
   body_paragraphs?: number;
   published_at?: string | null;
+};
+
+export type RewriteResult = {
+  title: string;
+  excerpt: string;
+  content: string;
+  category: string;
+  city: string;
+  seo_title: string;
+  seo_description: string;
+  seo_keywords: string[];
+  similarity: number;
+  source_word_count: number;
+  rewrite_word_count: number;
+  completeness_ratio: number;
+  warnings: string[];
 };
 
 export type Category = {
