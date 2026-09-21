@@ -1,0 +1,12 @@
+[
+  {
+    "id": "00000000-0000-0000-0000-000000000001",
+    "username": "aquino",
+    "name": "Aquino",
+    "password_hash": "scrypt$3d1a4330816cf8d062da83e896da4d5e$bcda8494817c077622330604ae568a51967196cfac50658dbca61c5a392061560b87cfedd019031e3bb317ff8a3b158347baa561b0b0cb1ce47bbe70475463ba",
+    "role": "admin",
+    "active": true,
+    "created_at": "2026-09-21T19:55:00.000Z",
+    "updated_at": "2026-09-21T19:55:00.000Z"
+  }
+]

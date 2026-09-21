@@ -40,7 +40,7 @@ As abas ficam em `data/categories.json` no modo local. Na Vercel, elas são salv
 - Editorias locais: Goiânia, Bairros, Trânsito, Segurança, Política, Empregos, Esportes, Eventos, Economia e Serviços.
 - Página individual de cada matéria.
 - Página automática por editoria.
-- Painel administrativo protegido por senha.
+- Painel administrativo com login individual para administradores e jornalistas.
 - Criar, editar e excluir notícias.
 - Publicar na hora, salvar como rascunho ou **programar data e horário**.
 - Marcar uma matéria como destaque da home.
@@ -64,11 +64,8 @@ Abra:
 - Portal: `http://localhost:3000`
 - Admin: `http://localhost:3000/admin`
 
-Se `ADMIN_PASSWORD` não estiver definido no ambiente local, a senha temporária é:
+O painel usa contas individuais de equipe. O administrador inicial é criado pelo projeto e as senhas são armazenadas como hash. Novos jornalistas e administradores podem ser cadastrados em **Equipe / Usuários**.
 
-```text
-admin123
-```
 
 ## Variáveis de ambiente
 
@@ -77,8 +74,6 @@ Para testar no computador, **não é necessário configurar Supabase**. O `ABRIR
 Se quiser usar o Supabase localmente, adicione manualmente ao `.env.local` apenas os dados **reais** do seu projeto:
 
 ```env
-ADMIN_PASSWORD=sua-senha-forte
-SESSION_SECRET=uma-chave-grande-e-aleatoria
 SUPABASE_URL=https://SEU-ID-REAL.supabase.co
 SUPABASE_SERVICE_ROLE_KEY=SUA_CHAVE_REAL
 ```
@@ -113,7 +108,7 @@ git push -u origin main
 
 1. Importe o repositório do GitHub na Vercel.
 2. Framework: **Next.js**.
-3. Cadastre `ADMIN_PASSWORD`, `SESSION_SECRET`, `SUPABASE_URL` e `SUPABASE_SERVICE_ROLE_KEY`.
+3. Cadastre `SUPABASE_URL` e `SUPABASE_SERVICE_ROLE_KEY`.
 4. Faça o deploy.
 
 ## Agendamento
@@ -135,3 +130,12 @@ O importador tenta obter título, descrição, imagem, nome da fonte e link orig
 Nome: **Viralizougoiania**  
 Foco: **notícias locais de Goiânia**  
 Estilo visual: portal moderno, rápido, forte em manchetes e leitura móvel.
+
+
+## Equipe, jornalistas e administradores
+
+No painel, administradores têm acesso à aba **Equipe / Usuários**. Nela é possível criar contas, alterar login e nome, redefinir senha, escolher entre **Jornalista** e **Administrador**, ativar/desativar e excluir acessos.
+
+As senhas não são gravadas em texto aberto: o sistema usa hash scrypt. Jornalistas podem criar, editar, importar, agendar e publicar notícias. A administração da equipe fica disponível apenas para contas com função de administrador.
+
+Para persistir os usuários na Vercel, execute novamente `supabase/schema.sql` e mantenha `SUPABASE_URL` e `SUPABASE_SERVICE_ROLE_KEY` configuradas no projeto.

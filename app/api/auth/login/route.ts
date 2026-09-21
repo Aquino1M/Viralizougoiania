@@ -1,20 +1,28 @@
 import { NextResponse } from "next/server";
+import { authenticateUser, publicUser } from "@/lib/users";
 import { createAdminSession } from "@/lib/session";
 
+const sleep = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
+
 export async function POST(req: Request) {
-  if (process.env.NODE_ENV === "production" && (!process.env.ADMIN_PASSWORD || !process.env.SESSION_SECRET)) {
-    return NextResponse.json(
-      { error: "Configure ADMIN_PASSWORD e SESSION_SECRET nas variáveis de ambiente da Vercel." },
-      { status: 503 },
-    );
-  }
+  try {
+    const body = await req.json();
+    const username = String(body.username || "").trim();
+    const password = String(body.password || "");
 
-  const { password } = await req.json();
-  const expected = process.env.ADMIN_PASSWORD || "admin123";
-  if (password !== expected) {
-    return NextResponse.json({ error: "Senha incorreta" }, { status: 401 });
-  }
+    if (!username || !password) {
+      return NextResponse.json({ error: "Digite o login e a senha." }, { status: 400 });
+    }
 
-  await createAdminSession();
-  return NextResponse.json({ ok: true });
+    const user = await authenticateUser(username, password);
+    if (!user) {
+      await sleep(500);
+      return NextResponse.json({ error: "Login ou senha incorretos." }, { status: 401 });
+    }
+
+    await createAdminSession(user);
+    return NextResponse.json({ ok: true, user: publicUser(user) });
+  } catch {
+    return NextResponse.json({ error: "Não foi possível entrar no painel." }, { status: 500 });
+  }
 }

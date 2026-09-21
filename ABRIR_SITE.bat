@@ -63,7 +63,7 @@ echo Site:  http://localhost:3000
 echo Admin: http://localhost:3000/admin
 echo Senha local padrao: admin123
 echo.
-echo Modo local funciona SEM Supabase usando os arquivos da pasta data.
+echo Modo local funciona SEM Supabase usando os arquivos da pasta data, inclusive usuarios.
 echo Para desligar o servidor, feche esta janela ou pressione CTRL+C.
 echo ======================================================
 

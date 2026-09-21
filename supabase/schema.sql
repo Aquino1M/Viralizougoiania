@@ -62,3 +62,32 @@ insert into public.categories (name, slug, active, sort_order) values
   ('Economia', 'economia', true, 9),
   ('Serviços', 'servicos', true, 10)
 on conflict (slug) do nothing;
+
+
+-- Equipe do painel administrativo
+create table if not exists public.staff_users (
+  id uuid primary key default gen_random_uuid(),
+  username text unique not null,
+  name text not null,
+  password_hash text not null,
+  role text not null default 'journalist',
+  active boolean not null default true,
+  created_at timestamptz not null default now(),
+  updated_at timestamptz not null default now(),
+  constraint staff_users_role_check check (role in ('admin','journalist'))
+);
+
+create index if not exists staff_users_role_active_idx on public.staff_users(role, active);
+alter table public.staff_users enable row level security;
+
+-- Administrador inicial. A senha é armazenada apenas como hash scrypt.
+insert into public.staff_users (id, username, name, password_hash, role, active)
+values (
+  '00000000-0000-0000-0000-000000000001',
+  'aquino',
+  'Aquino',
+  'scrypt$3d1a4330816cf8d062da83e896da4d5e$bcda8494817c077622330604ae568a51967196cfac50658dbca61c5a392061560b87cfedd019031e3bb317ff8a3b158347baa561b0b0cb1ce47bbe70475463ba',
+  'admin',
+  true
+)
+on conflict (username) do nothing;

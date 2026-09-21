@@ -41,3 +41,18 @@ export type Category = {
 };
 
 export type CategoryInput = Omit<Category, "id" | "created_at" | "updated_at">;
+
+export type UserRole = "admin" | "journalist";
+
+export type StaffUser = {
+  id: string;
+  username: string;
+  name: string;
+  password_hash: string;
+  role: UserRole;
+  active: boolean;
+  created_at: string;
+  updated_at: string;
+};
+
+export type StaffUserPublic = Omit<StaffUser, "password_hash">;
