@@ -1,0 +1,12 @@
+[
+  {"id":"cat-goiania","name":"Goiânia","slug":"goiania","active":true,"sort_order":1,"created_at":"2026-09-21T12:00:00.000Z","updated_at":"2026-09-21T12:00:00.000Z"},
+  {"id":"cat-bairros","name":"Bairros","slug":"bairros","active":true,"sort_order":2,"created_at":"2026-09-21T12:00:00.000Z","updated_at":"2026-09-21T12:00:00.000Z"},
+  {"id":"cat-transito","name":"Trânsito","slug":"transito","active":true,"sort_order":3,"created_at":"2026-09-21T12:00:00.000Z","updated_at":"2026-09-21T12:00:00.000Z"},
+  {"id":"cat-seguranca","name":"Segurança","slug":"seguranca","active":true,"sort_order":4,"created_at":"2026-09-21T12:00:00.000Z","updated_at":"2026-09-21T12:00:00.000Z"},
+  {"id":"cat-politica","name":"Política","slug":"politica","active":true,"sort_order":5,"created_at":"2026-09-21T12:00:00.000Z","updated_at":"2026-09-21T12:00:00.000Z"},
+  {"id":"cat-empregos","name":"Empregos","slug":"empregos","active":true,"sort_order":6,"created_at":"2026-09-21T12:00:00.000Z","updated_at":"2026-09-21T12:00:00.000Z"},
+  {"id":"cat-esportes","name":"Esportes","slug":"esportes","active":true,"sort_order":7,"created_at":"2026-09-21T12:00:00.000Z","updated_at":"2026-09-21T12:00:00.000Z"},
+  {"id":"cat-eventos","name":"Eventos","slug":"eventos","active":true,"sort_order":8,"created_at":"2026-09-21T12:00:00.000Z","updated_at":"2026-09-21T12:00:00.000Z"},
+  {"id":"cat-economia","name":"Economia","slug":"economia","active":true,"sort_order":9,"created_at":"2026-09-21T12:00:00.000Z","updated_at":"2026-09-21T12:00:00.000Z"},
+  {"id":"cat-servicos","name":"Serviços","slug":"servicos","active":true,"sort_order":10,"created_at":"2026-09-21T12:00:00.000Z","updated_at":"2026-09-21T12:00:00.000Z"}
+]
