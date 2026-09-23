@@ -40,7 +40,7 @@ As abas ficam em `data/categories.json` no modo local. Na Vercel, elas são salv
 - Editorias locais: Goiânia, Bairros, Trânsito, Segurança, Política, Empregos, Esportes, Eventos, Economia e Serviços.
 - Página individual de cada matéria.
 - Página automática por editoria.
-- Painel administrativo com login individual para administradores e jornalistas.
+- Painel administrativo protegido por senha.
 - Criar, editar e excluir notícias.
 - Publicar na hora, salvar como rascunho ou **programar data e horário**.
 - Marcar uma matéria como destaque da home.
@@ -50,7 +50,7 @@ As abas ficam em `data/categories.json` no modo local. Na Vercel, elas são salv
 - SEO/Open Graph básico.
 - Persistência local em desenvolvimento e suporte a Supabase em produção.
 
-> O importador captura o corpo disponível da matéria como referência interna da redação. Esse texto-fonte não é renderizado no site público. A publicação usa a versão própria do Viralizougoiania, com crédito e link para a fonte.
+> O importador não copia automaticamente o texto integral de outras reportagens. Ele traz metadados e cria uma base de rascunho para a equipe redigir e revisar a publicação, mantendo a fonte original.
 
 ## Rodar no computador
 
@@ -64,21 +64,26 @@ Abra:
 - Portal: `http://localhost:3000`
 - Admin: `http://localhost:3000/admin`
 
-O painel usa contas individuais de equipe. O administrador inicial é criado pelo projeto e as senhas são armazenadas como hash. Novos jornalistas e administradores podem ser cadastrados em **Equipe / Usuários**.
+Se `ADMIN_PASSWORD` não estiver definido no ambiente local, a senha temporária é:
 
+```text
+admin123
+```
 
 ## Variáveis de ambiente
 
-Para testar no computador, **não é necessário configurar Supabase**. O `ABRIR_SITE.bat` usa os arquivos da pasta `data/` para notícias, editorias e usuários.
+Para testar no computador, **não é necessário configurar Supabase**. O `ABRIR_SITE.bat` cria um ambiente local com senha `admin123` e usa os arquivos da pasta `data/`.
 
 Se quiser usar o Supabase localmente, adicione manualmente ao `.env.local` apenas os dados **reais** do seu projeto:
 
 ```env
+ADMIN_PASSWORD=sua-senha-forte
+SESSION_SECRET=uma-chave-grande-e-aleatoria
 SUPABASE_URL=https://SEU-ID-REAL.supabase.co
 SUPABASE_SERVICE_ROLE_KEY=SUA_CHAVE_REAL
 ```
 
-Valores de exemplo como `SEU-PROJETO` são ignorados automaticamente. Sem Supabase, o projeto usa `data/posts.json`, `data/categories.json` e `data/users.json` em desenvolvimento. Na Vercel, configure o Supabase para as publicações ficarem persistentes.
+Valores de exemplo como `SEU-PROJETO` são ignorados automaticamente. Sem Supabase, o projeto usa `data/posts.json` e `data/categories.json` em desenvolvimento. Na Vercel, configure o Supabase para as publicações ficarem persistentes.
 
 ## Banco Supabase
 
@@ -108,7 +113,7 @@ git push -u origin main
 
 1. Importe o repositório do GitHub na Vercel.
 2. Framework: **Next.js**.
-3. Cadastre `SUPABASE_URL`, `SUPABASE_SERVICE_ROLE_KEY` e, para o reescritor automático, `OPENAI_API_KEY`.
+3. Cadastre `ADMIN_PASSWORD`, `SESSION_SECRET`, `SUPABASE_URL` e `SUPABASE_SERVICE_ROLE_KEY`.
 4. Faça o deploy.
 
 ## Agendamento
@@ -130,43 +135,3 @@ O importador tenta obter título, descrição, imagem, nome da fonte e link orig
 Nome: **Viralizougoiania**  
 Foco: **notícias locais de Goiânia**  
 Estilo visual: portal moderno, rápido, forte em manchetes e leitura móvel.
-
-
-## Equipe, jornalistas e administradores
-
-No painel, administradores têm acesso à aba **Equipe / Usuários**. Nela é possível criar contas, alterar login e nome, redefinir senha, escolher entre **Jornalista** e **Administrador**, ativar/desativar e excluir acessos.
-
-As senhas não são gravadas em texto aberto: o sistema usa hash scrypt. Jornalistas podem criar, editar, importar, agendar e publicar notícias. A administração da equipe fica disponível apenas para contas com função de administrador.
-
-Para persistir os usuários na Vercel, execute novamente `supabase/schema.sql` e mantenha `SUPABASE_URL` e `SUPABASE_SERVICE_ROLE_KEY` configuradas no projeto.
-
-## Proxy e otimização de imagens
-
-As imagens exibidas no portal passam pela rota `/api/image-proxy`. O proxy valida o endereço remoto, bloqueia redes privadas, limita o tamanho do arquivo, redimensiona a imagem e entrega WebP com cache de CDN. O endereço original continua salvo na notícia para preservar a referência da fonte.
-
-A assinatura do proxy usa `IMAGE_PROXY_SECRET` quando configurada. Se ela não existir e o Supabase estiver configurado, o backend usa a chave de serviço como segredo. Para separar as duas coisas, defina uma chave aleatória longa em `IMAGE_PROXY_SECRET`.
-
-O importador lê até 8 MB da página, tenta reconstruir todos os parágrafos da matéria por blocos editoriais, tag `article`, JSON-LD e, por último, parágrafos da página inteira. O corpo capturado é guardado apenas como referência interna do painel.
-
-
-## Radar Goiás
-
-O painel administrativo possui a aba **Radar Goiás**, que reúne manchetes das áreas locais do G1 Goiás, Metrópoles (Entorno e Goiás), Mais Goiás, Diário de Goiás e O Popular/Daqui. As fontes gerais passam por filtro regional para evitar notícias que não sejam de Goiás ou Goiânia.
-
-O botão **Importar matéria completa** abre a matéria como rascunho, captura o corpo disponível e preenche título, resumo, imagem, autor, data e créditos. O link original é preservado no post.
-
-## Bancada de reescrita editorial
-
-Matérias importadas abrem uma bancada lado a lado:
-
-- **Texto original da fonte**: referência privada do painel, capturada com os parágrafos disponíveis na página.
-- **Versão Viralizougoiania**: texto que pode ser editado e publicado.
-- **Reescrever matéria completa**: usa a API configurada em `OPENAI_API_KEY` para criar uma reportagem nova que cubra os fatos materiais da fonte sem copiar sua redação.
-- **Conferência automática**: compara sequências de palavras com a fonte, mede o tamanho da cobertura e aponta números, datas ou valores que merecem revisão.
-- **Revisada pelo jornalista**: é obrigatório confirmar essa revisão antes de publicar ou agendar uma matéria importada.
-- **SEO**: gera título SEO, descrição e palavras-chave.
-- **Créditos**: fonte, link original, autor da fonte e crédito da imagem permanecem vinculados à publicação.
-
-A variável opcional `OPENAI_REWRITE_MODEL` escolhe o modelo. Quando não for definida, o projeto usa `gpt-5.6-luna`.
-
-O sistema não tenta contornar paywalls ou áreas autenticadas. Se a página entregue apenas uma versão parcial, o painel marca a captura como possivelmente incompleta para revisão manual.

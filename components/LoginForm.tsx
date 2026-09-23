@@ -1,40 +1,91 @@
 "use client";
+
 import { FormEvent, useState } from "react";
 import { useRouter } from "next/navigation";
 
-export default function LoginForm(){
-  const [username,setUsername]=useState("");
-  const [password,setPassword]=useState("");
-  const [error,setError]=useState("");
-  const [loading,setLoading]=useState(false);
-  const router=useRouter();
+export default function LoginForm() {
+  const [email, setEmail] = useState("");
+  const [password, setPassword] = useState("");
+  const [error, setError] = useState("");
+  const [loading, setLoading] = useState(false);
+  const router = useRouter();
 
-  async function submit(e:FormEvent){
+  async function submit(e: FormEvent) {
     e.preventDefault();
     setLoading(true);
     setError("");
-    const r=await fetch("/api/auth/login",{
-      method:"POST",
-      headers:{"Content-Type":"application/json"},
-      body:JSON.stringify({username,password})
-    });
-    const data=await r.json().catch(()=>({}));
-    setLoading(false);
-    if(!r.ok){setError(data.error||"Não foi possível entrar.");return;}
-    router.push("/admin");
-    router.refresh();
+
+    try {
+      const r = await fetch("/api/auth/login", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ email: email.trim(), password: password.trim() }),
+      });
+      const data = await r.json();
+      setLoading(false);
+
+      if (!r.ok) {
+        setError(data.error || "Erro ao realizar login");
+        return;
+      }
+
+      router.push("/admin");
+      router.refresh();
+    } catch {
+      setLoading(false);
+      setError("Falha de conexão ao autenticar.");
+    }
   }
 
-  return <div className="loginWrap">
-    <form className="loginCard" onSubmit={submit}>
-      <div className="brandLogo"><span className="brandMark" aria-hidden="true"><i></i><i></i><i></i></span><span className="brandWords"><b>Viralizou</b><strong>goiania</strong></span></div>
-      <h1>Painel editorial</h1>
-      <p>Entre com seu usuário da equipe para publicar e gerenciar as notícias de Goiânia.</p>
-      {error&&<div className="notice error">{error}</div>}
-      <div className="field"><label>Login</label><input type="text" value={username} onChange={e=>setUsername(e.target.value)} autoComplete="username" autoFocus required placeholder="Seu usuário"/></div>
-      <div className="field" style={{marginTop:12}}><label>Senha</label><input type="password" value={password} onChange={e=>setPassword(e.target.value)} autoComplete="current-password" required placeholder="Sua senha"/></div>
-      <button className="btn" style={{width:"100%",marginTop:16}} disabled={loading}>{loading?"Entrando...":"Entrar"}</button>
-      <p className="loginHelp">O acesso é individual. Administradores podem cadastrar jornalistas e outros administradores dentro do painel.</p>
-    </form>
-  </div>;
+  return (
+    <div className="loginWrap">
+      <form className="loginCard" onSubmit={submit}>
+        <div className="brandLogo">
+          <span className="brandMark" aria-hidden="true">
+            <i></i><i></i><i></i>
+          </span>
+          <span className="brandWords">
+            <b>Viralizou</b><strong>goiania</strong>
+          </span>
+        </div>
+
+        <h1>Área dos Funcionários</h1>
+        <p>Acesse o painel editorial com sua conta do Supabase ou senha da redação.</p>
+
+        {error && <div className="notice error">{error}</div>}
+
+        <div className="field">
+          <label>E-mail ou Usuário (opcional)</label>
+          <input
+            type="text"
+            placeholder="admin@viralizougoiania.com.br"
+            value={email}
+            onChange={(e) => setEmail(e.target.value)}
+            autoComplete="username"
+          />
+        </div>
+
+        <div className="field" style={{ marginTop: 12 }}>
+          <label>Senha de Acesso</label>
+          <input
+            type="password"
+            placeholder="Sua senha de acesso"
+            value={password}
+            onChange={(e) => setPassword(e.target.value)}
+            autoFocus
+            required
+            autoComplete="current-password"
+          />
+        </div>
+
+        <button className="btn" style={{ width: "100%", marginTop: 18 }} disabled={loading}>
+          {loading ? "Autenticando..." : "Entrar no Painel"}
+        </button>
+
+        <p style={{ fontSize: 12, marginTop: 16, color: "var(--muted)" }}>
+          Acesso integrado com <b>Supabase</b>. Senha padrão da redação: <b>admin123</b>.
+        </p>
+      </form>
+    </div>
+  );
 }

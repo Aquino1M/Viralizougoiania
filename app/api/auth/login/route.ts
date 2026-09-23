@@ -1,28 +1,20 @@
 import { NextResponse } from "next/server";
-import { authenticateUser, publicUser } from "@/lib/users";
 import { createAdminSession } from "@/lib/session";
-
-const sleep = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
+import { verifyAdminCredentials } from "@/lib/storage";
 
 export async function POST(req: Request) {
   try {
     const body = await req.json();
-    const username = String(body.username || "").trim();
-    const password = String(body.password || "");
+    const { password, email } = body;
 
-    if (!username || !password) {
-      return NextResponse.json({ error: "Digite o login e a senha." }, { status: 400 });
+    const result = await verifyAdminCredentials(password, email);
+    if (!result.ok || !result.user) {
+      return NextResponse.json({ error: result.error || "Senha ou login incorreto" }, { status: 401 });
     }
 
-    const user = await authenticateUser(username, password);
-    if (!user) {
-      await sleep(500);
-      return NextResponse.json({ error: "Login ou senha incorretos." }, { status: 401 });
-    }
-
-    await createAdminSession(user);
-    return NextResponse.json({ ok: true, user: publicUser(user) });
-  } catch {
-    return NextResponse.json({ error: "Não foi possível entrar no painel." }, { status: 500 });
+    await createAdminSession({ email: result.user.email, role: result.user.role });
+    return NextResponse.json({ ok: true, user: result.user });
+  } catch (err: any) {
+    return NextResponse.json({ error: err?.message || "Erro ao processar login" }, { status: 500 });
   }
 }

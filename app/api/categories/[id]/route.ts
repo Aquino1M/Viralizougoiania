@@ -1,11 +1,11 @@
 import { NextResponse } from "next/server";
 import { deleteCategory, getCategoryById, updateCategory } from "@/lib/storage";
-import { isSuperAdmin } from "@/lib/session";
+import { isAdmin } from "@/lib/session";
 import { slugify } from "@/lib/slug";
 import type { CategoryInput } from "@/lib/types";
 
 export async function PATCH(req: Request, { params }: { params: Promise<{ id: string }> }) {
-  if (!(await isSuperAdmin())) return NextResponse.json({ error: "Apenas administradores podem editar editorias." }, { status: 403 });
+  if (!(await isAdmin())) return NextResponse.json({ error: "Não autorizado" }, { status: 401 });
   try {
     const { id } = await params;
     const current = await getCategoryById(id);
@@ -30,7 +30,7 @@ export async function PATCH(req: Request, { params }: { params: Promise<{ id: st
 }
 
 export async function DELETE(_: Request, { params }: { params: Promise<{ id: string }> }) {
-  if (!(await isSuperAdmin())) return NextResponse.json({ error: "Apenas administradores podem excluir editorias." }, { status: 403 });
+  if (!(await isAdmin())) return NextResponse.json({ error: "Não autorizado" }, { status: 401 });
   try {
     const { id } = await params;
     await deleteCategory(id);

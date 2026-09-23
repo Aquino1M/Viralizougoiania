@@ -34,6 +34,8 @@ if exist ".env.local" (
   echo [OK] Configuracao local verificada.
 ) else (
   echo # Configuracao local do Viralizougoiania> ".env.local"
+  echo ADMIN_PASSWORD=admin123>> ".env.local"
+  echo SESSION_SECRET=viralizougoiania-local-dev-secret>> ".env.local"
   echo.>> ".env.local"
   echo # Supabase e opcional no computador. Configure apenas com dados REAIS.>> ".env.local"
   echo # SUPABASE_URL=https://SEU-ID-REAL.supabase.co>> ".env.local"
@@ -59,9 +61,9 @@ echo [2/2] Iniciando o Viralizougoiania...
 echo.
 echo Site:  http://localhost:3000
 echo Admin: http://localhost:3000/admin
+echo Senha local padrao: admin123
 echo.
-echo Modo local funciona SEM Supabase usando os arquivos da pasta data, inclusive usuarios.
-echo O reescritor automatico exige OPENAI_API_KEY no .env.local.
+echo Modo local funciona SEM Supabase usando os arquivos da pasta data.
 echo Para desligar o servidor, feche esta janela ou pressione CTRL+C.
 echo ======================================================
 
