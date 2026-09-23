@@ -218,3 +218,32 @@ Use o painel para atualizar manchetes e destacar uma matéria em momentos de mai
 A fonte original pode ser registrada no próprio editor do painel administrativo.', 
    'Segurança', 'Goiânia', 'Redação Viralizougoiania', 'https://images.unsplash.com/photo-1453873531674-2151bcd01707?auto=format&fit=crop&w=1600&q=85', false, 'published', now())
 on conflict (slug) do nothing;
+
+-- =========================================================
+-- AUTOMAÇÃO 24 HORAS NO SUPABASE (pg_cron)
+-- Libera automaticamente matérias agendadas na fila a cada
+-- 1 minuto, rodando 24 horas por dia no próprio servidor!
+-- =========================================================
+
+-- 1. Ativa a extensão pg_cron nativa do Supabase
+create extension if not exists pg_cron;
+
+-- 2. Agenda a liberação automática a cada minuto
+do $$
+begin
+  if exists (select 1 from cron.job where jobname = 'publicar-fila-viralizougoiania') then
+    perform cron.unschedule('publicar-fila-viralizougoiania');
+  end if;
+end $$;
+
+select cron.schedule(
+  'publicar-fila-viralizougoiania',
+  '* * * * *',
+  $cron$
+    update public.posts
+    set status = 'published', updated_at = now()
+    where status = 'scheduled'
+      and published_at is not null
+      and published_at <= now();
+  $cron$
+);
