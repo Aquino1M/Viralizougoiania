@@ -178,25 +178,26 @@ export default function AdminApp() {
     [posts],
   );
 
-  // Calcula o próximo horário livre na fila
+  // Calcula o próximo horário livre na fila (mínimo de 10 minutos)
   function getNextQueueTime(intervalMin = queueInterval): string {
+    const effectiveInterval = Math.max(10, intervalMin);
     const future = queuedPosts.filter((p) => p.published_at && new Date(p.published_at).getTime() > Date.now());
     let baseTime = Date.now();
     if (future.length > 0) {
       const last = future[future.length - 1];
       baseTime = Math.max(Date.now(), new Date(last.published_at!).getTime());
     }
-    const next = new Date(baseTime + intervalMin * 60 * 1000);
+    const next = new Date(baseTime + effectiveInterval * 60 * 1000);
     return next.toISOString();
   }
 
-  // Verifica periodicamente se chegou a hora de liberar matérias da fila
+  // Verifica periodicamente a cada 10 minutos se chegou a hora de liberar matérias da fila (economiza recursos)
   useEffect(() => {
     const intervalTimer = setInterval(() => {
       fetch("/api/posts/publish-due")
         .then(() => load())
         .catch(() => {});
-    }, 30000);
+    }, 10 * 60 * 1000);
     return () => clearInterval(intervalTimer);
   }, []);
 
@@ -1357,17 +1358,17 @@ export default function AdminApp() {
                     <select
                       value={queueInterval}
                       onChange={(e) => {
-                        const val = Number(e.target.value);
+                        const val = Math.max(10, Number(e.target.value));
                         setQueueInterval(val);
                       }}
                     >
-                      <option value={5}>A cada 5 minutos</option>
-                      <option value={10}>A cada 10 minutos (Padrão)</option>
+                      <option value={10}>A cada 10 minutos (Mínimo recomendado)</option>
                       <option value={15}>A cada 15 minutos</option>
                       <option value={20}>A cada 20 minutos</option>
                       <option value={30}>A cada 30 minutos</option>
                       <option value={45}>A cada 45 minutos</option>
                       <option value={60}>A cada 1 hora</option>
+                      <option value={120}>A cada 2 horas</option>
                     </select>
                   </div>
 

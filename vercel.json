@@ -3,7 +3,7 @@
   "crons": [
     {
       "path": "/api/posts/publish-due",
-      "schedule": "* * * * *"
+      "schedule": "*/10 * * * *"
     }
   ]
 }
