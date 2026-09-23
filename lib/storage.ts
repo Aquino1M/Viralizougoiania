@@ -191,7 +191,13 @@ export async function getPostById(id: string) {
 
 export async function createPost(input: PostInput) {
   const now = new Date().toISOString();
-  const post: Post = { ...input, id: randomUUID(), created_at: now, updated_at: now };
+  let author = input.author || "Redação";
+  if ((!input.author || input.author.toLowerCase() === "aquino") && (input.source_author || input.source_name)) {
+    author = input.source_author
+      ? (input.source_name ? `${input.source_author} | ${input.source_name}` : input.source_author)
+      : (input.source_name || "Redação");
+  }
+  const post: Post = { ...input, author, id: randomUUID(), created_at: now, updated_at: now };
   if (hasSupabaseConfig()) {
     try {
       let rows: any;
@@ -234,7 +240,17 @@ export async function createPost(input: PostInput) {
 }
 
 export async function updatePost(id: string, input: Partial<PostInput>) {
-  const patch = { ...input, updated_at: new Date().toISOString() };
+  let patchInput = { ...input };
+  if (
+    patchInput.author &&
+    patchInput.author.toLowerCase() === "aquino" &&
+    (patchInput.source_author || patchInput.source_name)
+  ) {
+    patchInput.author = patchInput.source_author
+      ? (patchInput.source_name ? `${patchInput.source_author} | ${patchInput.source_name}` : patchInput.source_author)
+      : (patchInput.source_name || "Redação");
+  }
+  const patch = { ...patchInput, updated_at: new Date().toISOString() };
   if (hasSupabaseConfig()) {
     try {
       let rows: any;

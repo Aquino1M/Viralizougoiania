@@ -353,6 +353,10 @@ export default function AdminApp() {
 
       const nextSlot = getNextQueueTime();
 
+      const computedAuthor = activeItem.source_author
+        ? (activeItem.source_name ? `${activeItem.source_author} | ${activeItem.source_name}` : activeItem.source_author)
+        : (activeItem.source_name || "Redação");
+
       const payload = {
         title: activeItem.title,
         slug: slugify(activeItem.title),
@@ -361,9 +365,9 @@ export default function AdminApp() {
         source_content: rawSource,
         category: targetCategory,
         city: "Goiânia",
-        author: "Aquino",
+        author: computedAuthor,
         image_url: activeItem.image_url || "",
-        image_credit: activeItem.image_credit || (activeItem.source_author ? `Reportagem: ${activeItem.source_author}` : `Foto: Reprodução / ${activeItem.source_name || "Divulgação"}`),
+        image_credit: activeItem.image_credit || (activeItem.source_author ? `Reportagem: ${activeItem.source_author}${activeItem.source_name ? ` | ${activeItem.source_name}` : ""}` : `Foto: Reprodução / ${activeItem.source_name || "Divulgação"}`),
         video_url: activeItem.video_url || "",
         featured: false,
         status: "scheduled" as PostStatus,
@@ -478,6 +482,10 @@ export default function AdminApp() {
         sourceName: item.source_name,
       });
 
+      const computedAuthor = item.source_author
+        ? (item.source_name ? `${item.source_author} | ${item.source_name}` : item.source_author)
+        : (item.source_name || "Redação");
+
       const payload = {
         title: item.title,
         slug: slugify(item.title),
@@ -486,9 +494,9 @@ export default function AdminApp() {
         source_content: rawSource,
         category: targetCategory,
         city: "Goiânia",
-        author: "Aquino",
+        author: computedAuthor,
         image_url: item.image_url || "",
-        image_credit: item.image_credit || (item.source_author ? `Reportagem: ${item.source_author}` : `Foto: Reprodução / ${item.source_name || "Divulgação"}`),
+        image_credit: item.image_credit || (item.source_author ? `Reportagem: ${item.source_author}${item.source_name ? ` | ${item.source_name}` : ""}` : `Foto: Reprodução / ${item.source_name || "Divulgação"}`),
         video_url: item.video_url || "",
         featured: false,
         status: "scheduled" as PostStatus,
@@ -614,14 +622,19 @@ export default function AdminApp() {
       sourceName: activeItem.source_name,
     });
 
+    const importedAuthor = activeItem.source_author
+      ? (activeItem.source_name ? `${activeItem.source_author} | ${activeItem.source_name}` : activeItem.source_author)
+      : (activeItem.source_name || "Redação");
+
     setForm({
       ...blank,
       category: targetCategory,
+      author: importedAuthor,
       title: activeItem.title,
       slug: slugify(activeItem.title),
       excerpt: activeItem.excerpt || activeItem.title,
       image_url: activeItem.image_url,
-      image_credit: activeItem.image_credit || (activeItem.source_author ? `Reportagem: ${activeItem.source_author} • Fonte: ${activeItem.source_name}` : `Foto: Reprodução / ${activeItem.source_name || "Divulgação"}`),
+      image_credit: activeItem.image_credit || (activeItem.source_author ? `Reportagem: ${activeItem.source_author}${activeItem.source_name ? ` | ${activeItem.source_name}` : ""}` : `Foto: Reprodução / ${activeItem.source_name || "Divulgação"}`),
       video_url: activeItem.video_url || "",
       status: "published",
       published_at: localDateTime(activeItem.published_at || new Date().toISOString()),
@@ -1244,6 +1257,21 @@ export default function AdminApp() {
                       {item.image_url ? (
                         <div style={{ position: "relative" }}>
                           <img src={item.image_url} alt="" />
+                          <div
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              toggleSelectRadar(item.source_url);
+                            }}
+                            className={`imageSelectBadge ${isSelected ? "selected" : ""}`}
+                            title="Clique para selecionar"
+                          >
+                            <input
+                              type="checkbox"
+                              checked={isSelected}
+                              onChange={() => toggleSelectRadar(item.source_url)}
+                            />
+                            <span>{isSelected ? "SELECIONADA" : "SELECIONAR"}</span>
+                          </div>
                           {item.video_url && (
                             <span style={{ position: "absolute", bottom: 6, right: 6, background: "rgba(0,0,0,0.8)", color: "#fff", padding: "2px 6px", borderRadius: 4, fontSize: 10, fontWeight: 800 }}>
                               🎬 VÍDEO
@@ -1251,7 +1279,22 @@ export default function AdminApp() {
                           )}
                         </div>
                       ) : (
-                        <div className="importPlaceholder">
+                        <div className="importPlaceholder" style={{ position: "relative" }}>
+                          <div
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              toggleSelectRadar(item.source_url);
+                            }}
+                            className={`imageSelectBadge ${isSelected ? "selected" : ""}`}
+                            title="Clique para selecionar"
+                          >
+                            <input
+                              type="checkbox"
+                              checked={isSelected}
+                              onChange={() => toggleSelectRadar(item.source_url)}
+                            />
+                            <span>{isSelected ? "SELECIONADA" : "SELECIONAR"}</span>
+                          </div>
                           {item.video_url ? "🎬 Notícia com Vídeo" : "Sem Imagem"}
                         </div>
                       )}
@@ -1269,7 +1312,7 @@ export default function AdminApp() {
                                 checked={isSelected}
                                 onChange={() => toggleSelectRadar(item.source_url)}
                               />
-                              <span>{isSelected ? "Marcada" : "Selecionar"}</span>
+                              <span>{isSelected ? "✅ Marcada p/ Fila" : "⬜ Selecionar"}</span>
                             </label>
                             <span className="kicker">{item.source_name}</span>
                             {item.category && (
@@ -1304,7 +1347,14 @@ export default function AdminApp() {
 
                         <h3 style={{ fontSize: 18, lineHeight: 1.25, margin: "4px 0 8px" }}>{item.title}</h3>
                         {item.excerpt && <p style={{ fontSize: 13, color: "#64748b", margin: "0 0 12px" }}>{item.excerpt}</p>}
-                        <div className="actions" style={{ marginTop: 10, display: "flex", gap: 8, flexWrap: "wrap" }}>
+                        <div className="actions" style={{ marginTop: 10, display: "flex", gap: 8, flexWrap: "wrap", alignItems: "center" }}>
+                          <button
+                            type="button"
+                            className={isSelected ? "btnSelectActive" : "btnSelect"}
+                            onClick={() => toggleSelectRadar(item.source_url)}
+                          >
+                            {isSelected ? "✅ Selecionada (Desmarcar)" : "☑️ Selecionar Notícia"}
+                          </button>
                           <button className="btn" onClick={() => useImported(item)}>
                             {isAlreadyPosted ? "⚡ Postar Novamente" : `⚡ Postar Agora (Aba: ${item.category || "Goiânia"})`}
                           </button>

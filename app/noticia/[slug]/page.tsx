@@ -184,14 +184,32 @@ export default async function Article({
 
           <div className="articleMeta">
             <div style={{ display: "flex", flexDirection: "column", gap: 3 }}>
-              <span>
-                Por <b>{post.author}</b>
-                {post.source_author && (
-                  <span style={{ color: "#047857", marginLeft: 6, fontWeight: 700 }}>
-                    • Reportagem: <b>{post.source_author}</b>
+              {post.source_author ? (
+                <span style={{ fontSize: 14, color: "#1e293b" }}>
+                  <span style={{ color: "#047857", fontWeight: 700 }}>
+                    Reportagem: <b>{post.source_author}</b>
                   </span>
-                )}
-              </span>
+                  {post.source_name && (
+                    <span style={{ color: "#475569", fontWeight: 700 }}> | {post.source_name}</span>
+                  )}
+                </span>
+              ) : post.source_name ? (
+                <span style={{ fontSize: 14, color: "#1e293b" }}>
+                  <span style={{ color: "#047857", fontWeight: 700 }}>
+                    Reportagem: <b>{post.source_name}</b>
+                  </span>
+                </span>
+              ) : post.source_url ? (
+                <span style={{ fontSize: 14, color: "#1e293b" }}>
+                  <span style={{ color: "#047857", fontWeight: 700 }}>
+                    Fonte: <b>{new URL(post.source_url).hostname.replace(/^www\./, "")}</b>
+                  </span>
+                </span>
+              ) : (
+                <span style={{ fontSize: 14, color: "#1e293b" }}>
+                  Por <b>{post.author || "Redação"}</b>
+                </span>
+              )}
               <span style={{ fontSize: 13, color: "#64748b" }}>
                 Publicado em {fmt(post.published_at)}
               </span>
@@ -252,6 +270,7 @@ export default async function Article({
               {post.source_author && (
                 <div style={{ marginBottom: 6, color: "#1e293b", fontSize: 13 }}>
                   <b>Créditos da apuração / Reportagem original:</b> {post.source_author}
+                  {post.source_name && ` | ${post.source_name}`}
                 </div>
               )}
               {sourceUrl && (

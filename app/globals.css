@@ -162,3 +162,10 @@ main{min-height:65vh}.heroSection{padding:30px 0 25px}.cityEyebrow{font-size:12p
 .cardSelectCheckbox:hover{background:#e2e8f0;border-color:#94a3b8}
 .cardSelectCheckbox input{width:16px;height:16px;accent-color:#0284c7;cursor:pointer}
 .importCard.selected{border-color:#0284c7 !important;box-shadow:0 0 0 2px rgba(2,132,199,.3),0 4px 12px rgba(0,0,0,.08);background:#f0f9ff}
+.imageSelectBadge{position:absolute;top:8px;left:8px;background:rgba(15,23,42,.78);color:#ffffff;border-radius:6px;padding:3px 8px;font-size:10px;font-weight:800;display:flex;align-items:center;gap:6px;cursor:pointer;box-shadow:0 2px 6px rgba(0,0,0,.3);transition:background .15s ease}
+.imageSelectBadge.selected{background:#0284c7}
+.imageSelectBadge input{cursor:pointer;width:14px;height:14px;margin:0}
+.btnSelect{background:#f1f5f9;color:#0f172a;border:1.5px solid #cbd5e1;font-weight:700;font-size:12px;padding:8px 12px;border-radius:8px;cursor:pointer;display:inline-flex;align-items:center;gap:6px;transition:all .15s ease}
+.btnSelect:hover{background:#e2e8f0;border-color:#94a3b8}
+.btnSelectActive{background:#0284c7;color:#ffffff;border:1.5px solid #0284c7;font-weight:800;font-size:12px;padding:8px 12px;border-radius:8px;cursor:pointer;display:inline-flex;align-items:center;gap:6px;box-shadow:0 2px 8px rgba(2,132,199,.3)}
+.btnSelectActive:hover{background:#0369a1}
