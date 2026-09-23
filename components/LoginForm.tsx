@@ -82,8 +82,8 @@ export default function LoginForm() {
           {loading ? "Autenticando..." : "Entrar no Painel"}
         </button>
 
-        <p style={{ fontSize: 12, marginTop: 16, color: "var(--muted)" }}>
-          Acesso integrado com <b>Supabase</b>. Senha padrão da redação: <b>admin123</b>.
+        <p style={{ fontSize: 12, marginTop: 16, color: "var(--muted)", textAlign: "center" }}>
+          Painel restrito para colaboradores e administradores autorizados.
         </p>
       </form>
     </div>
