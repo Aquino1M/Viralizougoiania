@@ -153,6 +153,9 @@ export default function AdminApp() {
   const [radarRegion, setRadarRegion] = useState<"goias" | "brasil">("goias");
   const [activeSourceUrl, setActiveSourceUrl] = useState<string>("https://g1.globo.com/rss/g1/go/goias/");
   const [queueInterval, setQueueInterval] = useState<number>(10);
+  const [selectedUrls, setSelectedUrls] = useState<string[]>([]);
+  const [batchQueueing, setBatchQueueing] = useState(false);
+  const [batchProgress, setBatchProgress] = useState("");
   const [admins, setAdmins] = useState<AdminUser[]>([]);
   const [adminLoading, setAdminLoading] = useState(false);
   const [adminMessage, setAdminMessage] = useState("");
@@ -394,6 +397,128 @@ export default function AdminApp() {
     }
   }
 
+  function isItemAlreadyPosted(item: ImportedNews) {
+    return posts.some((p) => {
+      // 1. Slug idêntico
+      if (p.slug && item.title && p.slug === slugify(item.title)) return true;
+
+      // 2. URL original igual (ignorando http/https, query params e barra final)
+      if (p.source_url && item.source_url) {
+        const cleanP = p.source_url.split("?")[0].replace(/^https?:\/\//, "").replace(/\/$/, "").toLowerCase();
+        const cleanItem = item.source_url.split("?")[0].replace(/^https?:\/\//, "").replace(/\/$/, "").toLowerCase();
+        if (cleanP === cleanItem) return true;
+      }
+
+      // 3. Título igual ou similar
+      if (p.title && item.title) {
+        const cleanPTitle = p.title.trim().toLowerCase().replace(/[^\w\s]/g, "");
+        const cleanItemTitle = item.title.trim().toLowerCase().replace(/[^\w\s]/g, "");
+        if (cleanPTitle === cleanItemTitle) return true;
+        if (cleanPTitle.length > 20 && cleanItemTitle.length > 20) {
+          if (cleanPTitle.includes(cleanItemTitle) || cleanItemTitle.includes(cleanPTitle)) return true;
+        }
+      }
+      return false;
+    });
+  }
+
+  function toggleSelectRadar(url: string) {
+    setSelectedUrls((prev) =>
+      prev.includes(url) ? prev.filter((u) => u !== url) : [...prev, url]
+    );
+  }
+
+  function selectAllRadar() {
+    if (selectedUrls.length === importItems.length) {
+      setSelectedUrls([]);
+    } else {
+      setSelectedUrls(importItems.map((item) => item.source_url));
+    }
+  }
+
+  function selectUnpostedRadar() {
+    const unposted = importItems.filter((item) => !isItemAlreadyPosted(item));
+    setSelectedUrls(unposted.map((item) => item.source_url));
+  }
+
+  async function queueSelectedFromRadar() {
+    const selectedItems = importItems.filter((item) => selectedUrls.includes(item.source_url));
+    if (selectedItems.length === 0) return;
+    setBatchQueueing(true);
+    setBatchProgress(`Iniciando agendamento em lote de ${selectedItems.length} matérias...`);
+
+    let countSuccess = 0;
+    let baseTime = Date.now();
+    const future = queuedPosts.filter((p) => p.published_at && new Date(p.published_at).getTime() > Date.now());
+    if (future.length > 0) {
+      const last = future[future.length - 1];
+      baseTime = Math.max(Date.now(), new Date(last.published_at!).getTime());
+    }
+
+    for (let i = 0; i < selectedItems.length; i++) {
+      const item = selectedItems[i];
+      setBatchProgress(`Enviando para a Fila (${i + 1} de ${selectedItems.length}): "${item.title.slice(0, 32)}..."`);
+
+      const slotTime = new Date(baseTime + (i + 1) * queueInterval * 60 * 1000).toISOString();
+
+      let targetCategory = "Goiânia";
+      if (item.category) {
+        const match = categories.find((c) => c.name.toLowerCase() === item.category!.toLowerCase());
+        targetCategory = match ? match.name : item.category;
+      } else {
+        targetCategory = orderedCategories.find((c) => c.active)?.name || "Goiânia";
+      }
+
+      const rawSource = item.source_content || item.content || item.excerpt || item.title;
+      const formatted = formatViralizouArticle({
+        title: item.title,
+        excerpt: item.excerpt,
+        sourceText: rawSource,
+        sourceName: item.source_name,
+      });
+
+      const payload = {
+        title: item.title,
+        slug: slugify(item.title),
+        excerpt: item.excerpt || item.title,
+        content: formatted,
+        source_content: rawSource,
+        category: targetCategory,
+        city: "Goiânia",
+        author: "Aquino",
+        image_url: item.image_url || "",
+        image_credit: item.image_credit || (item.source_author ? `Reportagem: ${item.source_author}` : `Foto: Reprodução / ${item.source_name || "Divulgação"}`),
+        video_url: item.video_url || "",
+        featured: false,
+        status: "scheduled" as PostStatus,
+        published_at: slotTime,
+        source_name: item.source_name,
+        source_url: item.source_url,
+        source_author: item.source_author || "",
+        seo_title: item.title,
+        seo_description: item.excerpt || item.title,
+        seo_keywords: `Goiânia, ${targetCategory}`,
+      };
+
+      try {
+        const res = await fetch("/api/posts", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(payload),
+        });
+        if (res.ok) countSuccess++;
+      } catch (err) {
+        console.warn("Erro ao agendar item em lote:", err);
+      }
+    }
+
+    await load();
+    setSelectedUrls([]);
+    setBatchQueueing(false);
+    setBatchProgress("");
+    setImportMessage(`🎉 ${countSuccess} matérias agendadas com sucesso na Fila! Intervalo de ${queueInterval} minutos entre cada publicação.`);
+  }
+
   async function reorderQueue(intervalMin = queueInterval) {
     if (queuedPosts.length === 0) return;
     setLoading(true);
@@ -572,6 +697,7 @@ export default function AdminApp() {
     setImporting(true);
     setImportMessage("");
     setImportItems([]);
+    setSelectedUrls([]);
     const r = await fetch("/api/import-news", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
@@ -1048,33 +1174,72 @@ export default function AdminApp() {
                   </div>
                 )}
 
+                {/* Barra de Seleção em Lote */}
+                {importItems.length > 0 && (
+                  <div className="radarBulkBar">
+                    <div style={{ display: "flex", alignItems: "center", gap: 10, flexWrap: "wrap" }}>
+                      <label className="radarSelectAllLabel">
+                        <input
+                          type="checkbox"
+                          checked={selectedUrls.length > 0 && selectedUrls.length === importItems.length}
+                          onChange={selectAllRadar}
+                        />
+                        <b>Selecionar Todas ({importItems.length})</b>
+                      </label>
+                      <button
+                        type="button"
+                        className="btn secondary"
+                        style={{ fontSize: 12, padding: "5px 12px" }}
+                        onClick={selectUnpostedRadar}
+                      >
+                        ✨ Selecionar Apenas Novas
+                      </button>
+                      {selectedUrls.length > 0 && (
+                        <button
+                          type="button"
+                          className="btn secondary"
+                          style={{ fontSize: 12, padding: "5px 10px" }}
+                          onClick={() => setSelectedUrls([])}
+                        >
+                          Limpar Seleção
+                        </button>
+                      )}
+                    </div>
+
+                    <div style={{ display: "flex", alignItems: "center", gap: 10, flexWrap: "wrap" }}>
+                      {selectedUrls.length > 0 && (
+                        <span style={{ fontSize: 13, fontWeight: 800, color: "#0284c7" }}>
+                          📌 {selectedUrls.length} selecionada(s)
+                        </span>
+                      )}
+                      <button
+                        type="button"
+                        className="btnQueue"
+                        style={{ padding: "8px 16px", fontSize: 13 }}
+                        disabled={batchQueueing || selectedUrls.length === 0}
+                        onClick={queueSelectedFromRadar}
+                      >
+                        {batchQueueing
+                          ? "⏳ Agendando na Fila..."
+                          : `🕒 Enviar ${selectedUrls.length ? `${selectedUrls.length} ` : ""}p/ Fila (+${queueInterval}m cada)`}
+                      </button>
+                    </div>
+                  </div>
+                )}
+
+                {batchProgress && (
+                  <div className="notice" style={{ background: "#e0f2fe", borderColor: "#7dd3fc", color: "#0369a1", marginBottom: 14 }}>
+                    ⏳ {batchProgress}
+                  </div>
+                )}
+
                 <div className="importResults">
                   {importItems.map((item, i) => {
-                    const isAlreadyPosted = posts.some((p) => {
-                      // 1. Slug idêntico
-                      if (p.slug && item.title && p.slug === slugify(item.title)) return true;
-
-                      // 2. URL original igual (ignorando http/https, query params e barra final)
-                      if (p.source_url && item.source_url) {
-                        const cleanP = p.source_url.split("?")[0].replace(/^https?:\/\//, "").replace(/\/$/, "").toLowerCase();
-                        const cleanItem = item.source_url.split("?")[0].replace(/^https?:\/\//, "").replace(/\/$/, "").toLowerCase();
-                        if (cleanP === cleanItem) return true;
-                      }
-
-                      // 3. Título igual ou similar
-                      if (p.title && item.title) {
-                        const cleanPTitle = p.title.trim().toLowerCase().replace(/[^\w\s]/g, "");
-                        const cleanItemTitle = item.title.trim().toLowerCase().replace(/[^\w\s]/g, "");
-                        if (cleanPTitle === cleanItemTitle) return true;
-                        if (cleanPTitle.length > 20 && cleanItemTitle.length > 20) {
-                          if (cleanPTitle.includes(cleanItemTitle) || cleanItemTitle.includes(cleanPTitle)) return true;
-                        }
-                      }
-                      return false;
-                    });
+                    const isAlreadyPosted = isItemAlreadyPosted(item);
+                    const isSelected = selectedUrls.includes(item.source_url);
 
                     return (
-                    <article className={`importCard ${isAlreadyPosted ? "alreadyPosted" : ""}`} key={`${item.source_url}-${i}`}>
+                    <article className={`importCard ${isAlreadyPosted ? "alreadyPosted" : ""} ${isSelected ? "selected" : ""}`} key={`${item.source_url}-${i}`}>
                       {item.image_url ? (
                         <div style={{ position: "relative" }}>
                           <img src={item.image_url} alt="" />
@@ -1090,9 +1255,21 @@ export default function AdminApp() {
                         </div>
                       )}
                       <div>
-                        {/* Linha superior: Fonte, Aba, Badges e Horário de Postagem no canto direito */}
+                        {/* Linha superior: Checkbox de Seleção, Fonte, Aba, Badges e Horário de Postagem */}
                         <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 6, flexWrap: "wrap", gap: 8 }}>
                           <div style={{ display: "flex", gap: 8, alignItems: "center", flexWrap: "wrap" }}>
+                            <label
+                              className="cardSelectCheckbox"
+                              onClick={(e) => e.stopPropagation()}
+                              title="Marcar notícia para enviar em lote para a fila"
+                            >
+                              <input
+                                type="checkbox"
+                                checked={isSelected}
+                                onChange={() => toggleSelectRadar(item.source_url)}
+                              />
+                              <span>{isSelected ? "Marcada" : "Selecionar"}</span>
+                            </label>
                             <span className="kicker">{item.source_name}</span>
                             {item.category && (
                               <span className="radarCategoryBadge">
