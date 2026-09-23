@@ -414,13 +414,22 @@ export default function AdminApp() {
   async function publishNow(p: Post) {
     setLoading(true);
     const now = new Date().toISOString();
-    await fetch(`/api/posts/${p.id}`, {
-      method: "PATCH",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ status: "published", published_at: now }),
-    });
+    try {
+      const res = await fetch(`/api/posts/${p.id}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ status: "published", published_at: now }),
+      });
+      if (res.ok) {
+        setMessage(`Matéria "${p.title.slice(0, 35)}..." publicada agora mesmo no portal!`);
+      } else {
+        const err = await res.json();
+        setMessage(`Erro ao publicar: ${err.error || "Não foi possível liberar a matéria."}`);
+      }
+    } catch (e: any) {
+      setMessage(`Erro: ${e.message}`);
+    }
     await load();
-    setMessage(`Matéria "${p.title.slice(0, 35)}..." publicada agora mesmo no portal!`);
   }
 
   async function adjustQueueTime(p: Post, minutesOffset: number) {
@@ -1042,8 +1051,25 @@ export default function AdminApp() {
                 <div className="importResults">
                   {importItems.map((item, i) => {
                     const isAlreadyPosted = posts.some((p) => {
-                      if (p.source_url && item.source_url && (p.source_url === item.source_url || p.source_url.replace(/\/$/, "") === item.source_url.replace(/\/$/, ""))) return true;
-                      if (p.title && item.title && p.title.trim().toLowerCase() === item.title.trim().toLowerCase()) return true;
+                      // 1. Slug idêntico
+                      if (p.slug && item.title && p.slug === slugify(item.title)) return true;
+
+                      // 2. URL original igual (ignorando http/https, query params e barra final)
+                      if (p.source_url && item.source_url) {
+                        const cleanP = p.source_url.split("?")[0].replace(/^https?:\/\//, "").replace(/\/$/, "").toLowerCase();
+                        const cleanItem = item.source_url.split("?")[0].replace(/^https?:\/\//, "").replace(/\/$/, "").toLowerCase();
+                        if (cleanP === cleanItem) return true;
+                      }
+
+                      // 3. Título igual ou similar
+                      if (p.title && item.title) {
+                        const cleanPTitle = p.title.trim().toLowerCase().replace(/[^\w\s]/g, "");
+                        const cleanItemTitle = item.title.trim().toLowerCase().replace(/[^\w\s]/g, "");
+                        if (cleanPTitle === cleanItemTitle) return true;
+                        if (cleanPTitle.length > 20 && cleanItemTitle.length > 20) {
+                          if (cleanPTitle.includes(cleanItemTitle) || cleanItemTitle.includes(cleanPTitle)) return true;
+                        }
+                      }
                       return false;
                     });
 

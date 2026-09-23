@@ -26,31 +26,34 @@ export async function PATCH(req: Request, { params }: { params: Promise<{ id: st
     const b = await req.json();
     const current = await getPostById(id);
     if (!current) return NextResponse.json({ error: "Não encontrada" }, { status: 404 });
-    if (b.status === "scheduled" && !b.published_at) {
+    if (b.status === "scheduled" && !b.published_at && !current.published_at) {
       return NextResponse.json({ error: "Escolha a data e a hora do agendamento." }, { status: 400 });
     }
-    const publishing = normalizePublishing(b.status, b.published_at, current.published_at);
+    const nextStatus = b.status !== undefined ? b.status : current.status;
+    const nextPublishedAt = b.published_at !== undefined ? b.published_at : current.published_at;
+    const publishing = normalizePublishing(nextStatus, nextPublishedAt, current.published_at);
+
     const post = await updatePost(id, {
-      slug: slugify(b.slug || b.title),
-      title: b.title,
-      excerpt: b.excerpt,
-      content: b.content,
-      category: b.category,
-      city: b.city,
-      author: b.author,
-      image_url: b.image_url,
-      image_credit: b.image_credit,
-      video_url: b.video_url,
-      featured: Boolean(b.featured),
+      slug: b.slug !== undefined ? slugify(b.slug) : b.title !== undefined ? slugify(b.title) : current.slug,
+      title: b.title !== undefined ? b.title : current.title,
+      excerpt: b.excerpt !== undefined ? b.excerpt : current.excerpt,
+      content: b.content !== undefined ? b.content : current.content,
+      category: b.category !== undefined ? b.category : current.category,
+      city: b.city !== undefined ? b.city : current.city,
+      author: b.author !== undefined ? b.author : current.author,
+      image_url: b.image_url !== undefined ? b.image_url : current.image_url,
+      image_credit: b.image_credit !== undefined ? b.image_credit : current.image_credit,
+      video_url: b.video_url !== undefined ? b.video_url : current.video_url,
+      featured: b.featured !== undefined ? Boolean(b.featured) : current.featured,
       status: publishing.status,
       published_at: publishing.published_at,
-      source_name: b.source_name || "",
-      source_url: b.source_url || "",
-      source_author: b.source_author || "",
-      source_content: b.source_content || "",
-      seo_title: b.seo_title || "",
-      seo_description: b.seo_description || "",
-      seo_keywords: b.seo_keywords || "",
+      source_name: b.source_name !== undefined ? b.source_name : current.source_name,
+      source_url: b.source_url !== undefined ? b.source_url : current.source_url,
+      source_author: b.source_author !== undefined ? b.source_author : current.source_author,
+      source_content: b.source_content !== undefined ? b.source_content : current.source_content,
+      seo_title: b.seo_title !== undefined ? b.seo_title : current.seo_title,
+      seo_description: b.seo_description !== undefined ? b.seo_description : current.seo_description,
+      seo_keywords: b.seo_keywords !== undefined ? b.seo_keywords : current.seo_keywords,
     });
     return NextResponse.json(post);
   } catch (e) {

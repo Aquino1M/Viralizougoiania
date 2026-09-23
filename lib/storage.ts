@@ -1,7 +1,7 @@
 import fs from "node:fs/promises";
 import path from "node:path";
 import { randomUUID } from "node:crypto";
-import type { AdminUser, Category, CategoryInput, Post, PostInput, SiteSettings } from "@/lib/types";
+import type { AdminUser, Category, CategoryInput, Post, PostInput, PostStatus, SiteSettings } from "@/lib/types";
 import { slugify } from "@/lib/slug";
 
 const localFile = path.join(process.cwd(), "data", "posts.json");
@@ -97,8 +97,9 @@ export async function publishDuePosts() {
         method: "PATCH",
         body: JSON.stringify({ status: "published", updated_at: now }),
       });
-      return;
-    } catch {}
+    } catch (err: any) {
+      console.warn("Erro ao liberar agendamentos no Supabase:", err.message);
+    }
   }
   try {
     const posts = await readLocal();
@@ -110,13 +111,19 @@ export async function publishDuePosts() {
         changed = true;
       }
     }
-    if (changed) await writeLocal(posts);
+    if (changed) {
+      try {
+        await writeLocal(posts);
+      } catch {}
+    }
   } catch {}
 }
 
 export async function getPosts(opts: { includeDrafts?: boolean; category?: string; limit?: number } = {}) {
   await publishDuePosts();
   const { includeDrafts = false, category, limit } = opts;
+
+  let postsList: Post[] = [];
 
   if (hasSupabaseConfig()) {
     try {
@@ -125,14 +132,28 @@ export async function getPosts(opts: { includeDrafts?: boolean; category?: strin
       if (category) filters.push(`category=eq.${encodeURIComponent(category)}`);
       if (limit) filters.push(`limit=${limit}`);
       const posts: Post[] = await sb(`posts?${filters.join("&")}`);
-      if (Array.isArray(posts) && posts.length > 0) return posts;
+      if (Array.isArray(posts) && posts.length > 0) {
+        postsList = posts;
+      }
     } catch (err: any) {
       console.warn("Aviso ao ler posts do Supabase (fallback local acionado):", err.message);
     }
   }
 
-  const posts = await readLocal();
-  let result = posts;
+  if (postsList.length === 0) {
+    postsList = await readLocal();
+  }
+
+  // Garantia absoluta: qualquer matéria agendada cujo horário já chegou passa a ser tratada como 'published'
+  const nowMs = Date.now();
+  postsList = postsList.map((p) => {
+    if (p.status === "scheduled" && p.published_at && new Date(p.published_at).getTime() <= nowMs) {
+      return { ...p, status: "published" as PostStatus };
+    }
+    return p;
+  });
+
+  let result = postsList;
   if (!includeDrafts) result = result.filter((p) => p.status === "published");
   if (category) result = result.filter((p) => p.category.toLowerCase() === category.toLowerCase());
   result = result.sort((a, b) => +new Date(b.published_at || b.created_at) - +new Date(a.published_at || a.created_at));
