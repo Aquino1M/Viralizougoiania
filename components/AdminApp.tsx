@@ -427,6 +427,22 @@ export default function AdminApp() {
     });
   }
 
+  // Contagem de matérias que ainda não foram postadas e sem repetição no feed atual
+  const unpostedItemsCount = useMemo(() => {
+    const seenUrls = new Set<string>();
+    const seenSlugs = new Set<string>();
+    return importItems.filter((item) => {
+      if (isItemAlreadyPosted(item)) return false;
+      const cleanUrl = item.source_url ? item.source_url.split("?")[0].replace(/^https?:\/\//, "").replace(/\/$/, "").toLowerCase() : "";
+      const slug = slugify(item.title);
+      if (cleanUrl && seenUrls.has(cleanUrl)) return false;
+      if (slug && seenSlugs.has(slug)) return false;
+      if (cleanUrl) seenUrls.add(cleanUrl);
+      if (slug) seenSlugs.add(slug);
+      return true;
+    }).length;
+  }, [importItems, posts]);
+
   function toggleSelectRadar(url: string) {
     setSelectedUrls((prev) =>
       prev.includes(url) ? prev.filter((u) => u !== url) : [...prev, url]
@@ -442,15 +458,59 @@ export default function AdminApp() {
   }
 
   function selectUnpostedRadar() {
-    const unposted = importItems.filter((item) => !isItemAlreadyPosted(item));
-    setSelectedUrls(unposted.map((item) => item.source_url));
+    const seenUrls = new Set<string>();
+    const seenSlugs = new Set<string>();
+    const unpostedUrls: string[] = [];
+
+    for (const item of importItems) {
+      if (isItemAlreadyPosted(item)) continue;
+      const cleanUrl = item.source_url ? item.source_url.split("?")[0].replace(/^https?:\/\//, "").replace(/\/$/, "").toLowerCase() : "";
+      const slug = slugify(item.title);
+      if (cleanUrl && seenUrls.has(cleanUrl)) continue;
+      if (slug && seenSlugs.has(slug)) continue;
+      if (cleanUrl) seenUrls.add(cleanUrl);
+      if (slug) seenSlugs.add(slug);
+      unpostedUrls.push(item.source_url);
+    }
+    setSelectedUrls(unpostedUrls);
   }
 
-  async function queueSelectedFromRadar() {
-    const selectedItems = importItems.filter((item) => selectedUrls.includes(item.source_url));
-    if (selectedItems.length === 0) return;
+  // Enfileiramento em lote com garantia de ordenação pelas mais recentes e sem repetição
+  async function queueItemsInBatch(rawItems: ImportedNews[], batchTypeLabel: string) {
+    if (rawItems.length === 0) return;
+
+    // 1. Filtrar matérias que já existem no banco (publicadas, rascunhos ou agendadas)
+    const notInDb = rawItems.filter((item) => !isItemAlreadyPosted(item));
+
+    // 2. Não pode repetir notícia no mesmo lote (deduplicação estrita por slug e URL base)
+    const seenUrls = new Set<string>();
+    const seenSlugs = new Set<string>();
+    const uniqueItems: ImportedNews[] = [];
+
+    for (const item of notInDb) {
+      const cleanUrl = item.source_url ? item.source_url.split("?")[0].replace(/^https?:\/\//, "").replace(/\/$/, "").toLowerCase() : "";
+      const slug = slugify(item.title);
+      if (cleanUrl && seenUrls.has(cleanUrl)) continue;
+      if (slug && seenSlugs.has(slug)) continue;
+      if (cleanUrl) seenUrls.add(cleanUrl);
+      if (slug) seenSlugs.add(slug);
+      uniqueItems.push(item);
+    }
+
+    if (uniqueItems.length === 0) {
+      setImportMessage("⚠️ Todas as notícias selecionadas já foram publicadas ou já estão na fila de postagem!");
+      return;
+    }
+
+    // 3. "tem que ser as mais recentes": Ordenar rigorosamente da mais recente para a mais antiga
+    uniqueItems.sort((a, b) => {
+      const timeA = a.published_at ? new Date(a.published_at).getTime() : 0;
+      const timeB = b.published_at ? new Date(b.published_at).getTime() : 0;
+      return timeB - timeA; // Descendente: mais nova primeiro
+    });
+
     setBatchQueueing(true);
-    setBatchProgress(`Iniciando agendamento em lote de ${selectedItems.length} matérias...`);
+    setBatchProgress(`Iniciando agendamento na fila de ${uniqueItems.length} matérias mais recentes...`);
 
     let countSuccess = 0;
     let baseTime = Date.now();
@@ -460,10 +520,11 @@ export default function AdminApp() {
       baseTime = Math.max(Date.now(), new Date(last.published_at!).getTime());
     }
 
-    for (let i = 0; i < selectedItems.length; i++) {
-      const item = selectedItems[i];
-      setBatchProgress(`Enviando para a Fila (${i + 1} de ${selectedItems.length}): "${item.title.slice(0, 32)}..."`);
+    for (let i = 0; i < uniqueItems.length; i++) {
+      const item = uniqueItems[i];
+      setBatchProgress(`Enviando para a Fila (${i + 1} de ${uniqueItems.length}): "${item.title.slice(0, 34)}..."`);
 
+      // A matéria mais recente entra no primeiro slot livre (+10m), a seguinte (+20m), etc.
       const slotTime = new Date(baseTime + (i + 1) * queueInterval * 60 * 1000).toISOString();
 
       let targetCategory = "Goiânia";
@@ -525,7 +586,24 @@ export default function AdminApp() {
     setSelectedUrls([]);
     setBatchQueueing(false);
     setBatchProgress("");
-    setImportMessage(`🎉 ${countSuccess} matérias agendadas com sucesso na Fila! Intervalo de ${queueInterval} minutos entre cada publicação.`);
+    setImportMessage(`🎉 ${countSuccess} matérias mais recentes adicionadas com sucesso à Fila! Intervalo de ${queueInterval} minutos entre cada uma. Nenhuma notícia repetida foi incluída.`);
+  }
+
+  // 1. Enviar notícias marcadas manualmente pelo usuário
+  async function queueSelectedFromRadar() {
+    const selectedItems = importItems.filter((item) => selectedUrls.includes(item.source_url));
+    if (selectedItems.length === 0) return;
+    await queueItemsInBatch(selectedItems, "selecionadas");
+  }
+
+  // 2. Postar todas as notícias do Radar que ainda não foram postadas (mais recentes primeiro, sem repetição)
+  async function queueAllUnpostedFromRadar() {
+    const unposted = importItems.filter((item) => !isItemAlreadyPosted(item));
+    if (unposted.length === 0) {
+      setImportMessage("⚠️ Todas as notícias carregadas no Radar já foram postadas ou já estão na fila de postagem!");
+      return;
+    }
+    await queueItemsInBatch(unposted, "todas as não postadas");
   }
 
   async function reorderQueue(intervalMin = queueInterval) {
@@ -1094,10 +1172,21 @@ export default function AdminApp() {
                       Puxe as últimas notícias dos principais jornais de Goiânia/Goiás e de todo o Brasil. Imagens e vídeos vêm via link original (economizando espaço).
                     </div>
                   </div>
-                  <div style={{ display: "flex", gap: 8 }}>
+                  <div style={{ display: "flex", gap: 8, flexWrap: "wrap", alignItems: "center" }}>
+                    {importItems.length > 0 && (
+                      <button
+                        type="button"
+                        className="btnQueueAllHeader"
+                        disabled={batchQueueing || unpostedItemsCount === 0}
+                        onClick={queueAllUnpostedFromRadar}
+                        title="Adiciona todas as matérias ainda não postadas na fila (+10m cada), da mais recente para a mais antiga e sem repetir nenhuma matéria"
+                      >
+                        {batchQueueing ? "⏳ Agendando..." : `🚀 Postar Todas Não Postadas (${unpostedItemsCount})`}
+                      </button>
+                    )}
                     <button
                       className="btn"
-                      disabled={importing}
+                      disabled={importing || batchQueueing}
                       onClick={() => importNews("feed", activeSourceUrl)}
                     >
                       {importing ? "Carregando..." : "🔄 Atualizar Notícias"}
@@ -1188,10 +1277,10 @@ export default function AdminApp() {
                   </div>
                 )}
 
-                {/* Barra de Seleção em Lote */}
+                {/* Barra de Seleção em Lote e Postagem em Massa */}
                 {importItems.length > 0 && (
                   <div className="radarBulkBar">
-                    <div style={{ display: "flex", alignItems: "center", gap: 10, flexWrap: "wrap" }}>
+                    <div style={{ display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap" }}>
                       <label className="radarSelectAllLabel">
                         <input
                           type="checkbox"
@@ -1205,8 +1294,9 @@ export default function AdminApp() {
                         className="btn secondary"
                         style={{ fontSize: 12, padding: "5px 12px" }}
                         onClick={selectUnpostedRadar}
+                        title="Marca apenas as matérias que ainda não foram postadas"
                       >
-                        ✨ Selecionar Apenas Novas
+                        ✨ Selecionar Apenas Novas ({unpostedItemsCount})
                       </button>
                       {selectedUrls.length > 0 && (
                         <button
@@ -1218,24 +1308,38 @@ export default function AdminApp() {
                           Limpar Seleção
                         </button>
                       )}
-                    </div>
-
-                    <div style={{ display: "flex", alignItems: "center", gap: 10, flexWrap: "wrap" }}>
                       {selectedUrls.length > 0 && (
                         <span style={{ fontSize: 13, fontWeight: 800, color: "#0284c7" }}>
                           📌 {selectedUrls.length} selecionada(s)
                         </span>
                       )}
+                    </div>
+
+                    <div style={{ display: "flex", alignItems: "center", gap: 10, flexWrap: "wrap" }}>
+                      {selectedUrls.length > 0 && (
+                        <button
+                          type="button"
+                          className="btnQueue"
+                          style={{ padding: "8px 16px", fontSize: 13 }}
+                          disabled={batchQueueing}
+                          onClick={queueSelectedFromRadar}
+                          title="Envia as notícias selecionadas para a fila, agendadas pelas mais recentes a cada 10 min"
+                        >
+                          {batchQueueing
+                            ? "⏳ Agendando na Fila..."
+                            : `🕒 Enviar ${selectedUrls.length} Selecionada(s) p/ Fila`}
+                        </button>
+                      )}
                       <button
                         type="button"
-                        className="btnQueue"
-                        style={{ padding: "8px 16px", fontSize: 13 }}
-                        disabled={batchQueueing || selectedUrls.length === 0}
-                        onClick={queueSelectedFromRadar}
+                        className="btnQueueAll"
+                        disabled={batchQueueing || unpostedItemsCount === 0}
+                        onClick={queueAllUnpostedFromRadar}
+                        title="Posta todas as notícias não postadas na fila (+10m cada), ordenando da mais recente para a mais antiga e sem repetir nenhuma notícia"
                       >
                         {batchQueueing
                           ? "⏳ Agendando na Fila..."
-                          : `🕒 Enviar ${selectedUrls.length ? `${selectedUrls.length} ` : ""}p/ Fila (+${queueInterval}m cada)`}
+                          : `🚀 Postar Todas Não Postadas na Fila (${unpostedItemsCount})`}
                       </button>
                     </div>
                   </div>
@@ -1303,7 +1407,7 @@ export default function AdminApp() {
                         <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 6, flexWrap: "wrap", gap: 8 }}>
                           <div style={{ display: "flex", gap: 8, alignItems: "center", flexWrap: "wrap" }}>
                             <label
-                              className="cardSelectCheckbox"
+                              className={`cardSelectCheckbox ${isSelected ? "checked" : ""}`}
                               onClick={(e) => e.stopPropagation()}
                               title="Marcar notícia para enviar em lote para a fila"
                             >
@@ -1312,7 +1416,7 @@ export default function AdminApp() {
                                 checked={isSelected}
                                 onChange={() => toggleSelectRadar(item.source_url)}
                               />
-                              <span>{isSelected ? "✅ Marcada p/ Fila" : "⬜ Selecionar"}</span>
+                              <span>{isSelected ? "✅ Selecionada" : "⬜ Selecionar"}</span>
                             </label>
                             <span className="kicker">{item.source_name}</span>
                             {item.category && (
@@ -1337,7 +1441,7 @@ export default function AdminApp() {
                             )}
                           </div>
 
-                          {/* Hora da publicação (exatamente onde solicitado) */}
+                          {/* Hora da publicação */}
                           {item.published_at && (
                             <span className="radarTimeBadge" title={new Date(item.published_at).toLocaleString("pt-BR")}>
                               🕒 {formatRadarDate(item.published_at)}
@@ -1352,8 +1456,9 @@ export default function AdminApp() {
                             type="button"
                             className={isSelected ? "btnSelectActive" : "btnSelect"}
                             onClick={() => toggleSelectRadar(item.source_url)}
+                            title={isSelected ? "Clique para desmarcar da seleção" : "Clique para selecionar para enviar em massa à fila"}
                           >
-                            {isSelected ? "✅ Selecionada (Desmarcar)" : "☑️ Selecionar Notícia"}
+                            {isSelected ? "✅ Selecionada (Desmarcar)" : "☑️ Selecionar p/ Fila"}
                           </button>
                           <button className="btn" onClick={() => useImported(item)}>
                             {isAlreadyPosted ? "⚡ Postar Novamente" : `⚡ Postar Agora (Aba: ${item.category || "Goiânia"})`}
@@ -1361,7 +1466,7 @@ export default function AdminApp() {
                           <button
                             type="button"
                             className="btnQueue"
-                            disabled={importing}
+                            disabled={importing || batchQueueing}
                             onClick={() => queueFromRadar(item)}
                             title="Programa esta matéria para ser postada automaticamente na ordem da fila"
                           >

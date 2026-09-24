@@ -155,17 +155,26 @@ main{min-height:65vh}.heroSection{padding:30px 0 25px}.cityEyebrow{font-size:12p
 }
 
 /* Barra de Seleção em Lote do Radar */
-.radarBulkBar{position:sticky;top:10px;z-index:90;background:#ffffff;border:2px solid #0284c7;border-radius:12px;padding:12px 18px;margin-bottom:16px;display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:12px;box-shadow:0 8px 20px rgba(2,132,199,.15)}
+.radarBulkBar{position:sticky;top:10px;z-index:90;background:#ffffff;border:2px solid #0284c7;border-radius:12px;padding:12px 18px;margin-bottom:16px;display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:12px;box-shadow:0 8px 24px rgba(2,132,199,.15)}
 .radarSelectAllLabel{display:flex;align-items:center;gap:8px;font-size:13px;color:#0f172a;cursor:pointer;user-select:none}
 .radarSelectAllLabel input{width:18px;height:18px;accent-color:#0284c7;cursor:pointer}
-.cardSelectCheckbox{display:inline-flex;align-items:center;gap:6px;background:#f1f5f9;border:1px solid #cbd5e1;padding:4px 8px;border-radius:6px;font-size:11px;font-weight:700;color:#334155;cursor:pointer;user-select:none;transition:all .15s ease}
+.cardSelectCheckbox{display:inline-flex;align-items:center;gap:6px;background:#f1f5f9;border:1.5px solid #cbd5e1;padding:4px 10px;border-radius:6px;font-size:11px;font-weight:750;color:#334155;cursor:pointer;user-select:none;transition:all .15s ease}
 .cardSelectCheckbox:hover{background:#e2e8f0;border-color:#94a3b8}
+.cardSelectCheckbox.checked{background:#e0f2fe;border-color:#0284c7;color:#0284c7}
 .cardSelectCheckbox input{width:16px;height:16px;accent-color:#0284c7;cursor:pointer}
-.importCard.selected{border-color:#0284c7 !important;box-shadow:0 0 0 2px rgba(2,132,199,.3),0 4px 12px rgba(0,0,0,.08);background:#f0f9ff}
+.importCard.selected{border-color:#0284c7 !important;box-shadow:0 0 0 2px rgba(2,132,199,.35),0 4px 14px rgba(0,0,0,.08);background:#f0f9ff}
+.importCard img{width:100%;height:112px;object-fit:cover;border-radius:8px;background:#edf0f3;display:block}
 .imageSelectBadge{position:absolute;top:8px;left:8px;background:rgba(15,23,42,.78);color:#ffffff;border-radius:6px;padding:3px 8px;font-size:10px;font-weight:800;display:flex;align-items:center;gap:6px;cursor:pointer;box-shadow:0 2px 6px rgba(0,0,0,.3);transition:background .15s ease}
 .imageSelectBadge.selected{background:#0284c7}
 .imageSelectBadge input{cursor:pointer;width:14px;height:14px;margin:0}
-.btnSelect{background:#f1f5f9;color:#0f172a;border:1.5px solid #cbd5e1;font-weight:700;font-size:12px;padding:8px 12px;border-radius:8px;cursor:pointer;display:inline-flex;align-items:center;gap:6px;transition:all .15s ease}
-.btnSelect:hover{background:#e2e8f0;border-color:#94a3b8}
-.btnSelectActive{background:#0284c7;color:#ffffff;border:1.5px solid #0284c7;font-weight:800;font-size:12px;padding:8px 12px;border-radius:8px;cursor:pointer;display:inline-flex;align-items:center;gap:6px;box-shadow:0 2px 8px rgba(2,132,199,.3)}
-.btnSelectActive:hover{background:#0369a1}
+.btnSelect{background:#f1f5f9;color:#0f172a;border:1.5px solid #cbd5e1;font-weight:750;font-size:12px;padding:8px 14px;border-radius:8px;cursor:pointer;display:inline-flex;align-items:center;gap:6px;transition:all .15s ease}
+.btnSelect:hover{background:#e2e8f0;border-color:#0284c7;color:#0284c7}
+.btnSelectActive{background:#0284c7;color:#ffffff;border:1.5px solid #0284c7;font-weight:800;font-size:12px;padding:8px 14px;border-radius:8px;cursor:pointer;display:inline-flex;align-items:center;gap:6px;box-shadow:0 2px 8px rgba(2,132,199,.3)}
+.btnSelectActive:hover{background:#0369a1;border-color:#0369a1}
+.btnQueueAll{background:linear-gradient(135deg,#10b981 0%,#059669 100%);color:#ffffff;border-radius:8px;font-weight:850;font-size:13px;padding:8px 16px;border:none;cursor:pointer;transition:all .15s ease;display:inline-flex;align-items:center;gap:7px;box-shadow:0 4px 14px rgba(16,185,129,.35)}
+.btnQueueAll:hover:not(:disabled){background:linear-gradient(135deg,#059669 0%,#047857 100%);transform:translateY(-1px);box-shadow:0 6px 18px rgba(16,185,129,.45)}
+.btnQueueAll:disabled{opacity:.55;cursor:not-allowed;box-shadow:none;transform:none}
+.btnQueueAllHeader{background:linear-gradient(135deg,#10b981 0%,#059669 100%);color:#ffffff;border-radius:9px;font-weight:850;font-size:12px;padding:10px 14px;border:none;cursor:pointer;transition:all .15s ease;display:inline-flex;align-items:center;gap:6px;box-shadow:0 4px 12px rgba(16,185,129,.3)}
+.btnQueueAllHeader:hover:not(:disabled){background:linear-gradient(135deg,#059669 0%,#047857 100%)}
+.btnQueueAllHeader:disabled{opacity:.55;cursor:not-allowed}
+
