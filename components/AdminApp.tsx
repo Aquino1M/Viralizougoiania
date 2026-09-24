@@ -178,6 +178,7 @@ export default function AdminApp() {
   });
   const [autoPilotCountdown, setAutoPilotCountdown] = useState<number>(600);
   const [autoPilotRunning, setAutoPilotRunning] = useState<boolean>(false);
+  const [deduplicatingQueue, setDeduplicatingQueue] = useState<boolean>(false);
 
   // Persiste preferências no navegador
   useEffect(() => {
@@ -438,6 +439,49 @@ export default function AdminApp() {
     }
   }
 
+  // Stop words para análise semântica de similaridade de matérias
+  const STOP_WORDS_SET = new Set([
+    "de", "a", "o", "que", "e", "do", "da", "em", "um", "para", "com", "nao", "uma", "os", "no", "se", "na", "por", "mais",
+    "as", "dos", "como", "mas", "foi", "ao", "ele", "das", "tem", "seu", "sua", "ou", "ser", "quando", "muito", "ha",
+    "nos", "ja", "esta", "eu", "tambem", "so", "pelo", "pela", "ate", "isso", "ela", "entre", "era", "depois", "sem", "mesmo",
+    "aos", "ter", "seus", "quem", "nas", "me", "esse", "eles", "estao", "voce", "tinha", "foram", "essa", "num", "nem", "suas",
+    "meu", "minha", "numa", "pelos", "elas", "havia", "seja", "qual", "sera", "tenho", "lhe", "deles", "essas",
+    "esses", "pelas", "este", "fosse", "dele", "apos", "diz", "sobre", "novo", "nova", "novos", "novas", "durante", "fazer", "pode", "apenas"
+  ]);
+
+  function getKeywords(text: string): Set<string> {
+    const words = text
+      .toLowerCase()
+      .normalize("NFD")
+      .replace(/[\u0300-\u036f]/g, "")
+      .replace(/[^\w\s]/g, " ")
+      .split(/\s+/)
+      .filter((w) => w.length > 3 && !STOP_WORDS_SET.has(w));
+    return new Set(words);
+  }
+
+  function areTitlesSimilar(titleA: string, titleB: string): boolean {
+    if (!titleA || !titleB) return false;
+    const cleanA = titleA.trim().toLowerCase().replace(/[^\w\s]/g, "");
+    const cleanB = titleB.trim().toLowerCase().replace(/[^\w\s]/g, "");
+    if (cleanA === cleanB) return true;
+    if (cleanA.length > 20 && cleanB.length > 20) {
+      if (cleanA.includes(cleanB) || cleanB.includes(cleanA)) return true;
+    }
+
+    const kwA = getKeywords(titleA);
+    const kwB = getKeywords(titleB);
+    if (kwA.size < 2 || kwB.size < 2) return false;
+
+    let intersection = 0;
+    for (const w of kwA) {
+      if (kwB.has(w)) intersection++;
+    }
+    const union = new Set([...kwA, ...kwB]).size;
+    const jaccard = intersection / union;
+    return jaccard >= 0.38;
+  }
+
   function isItemAlreadyPosted(item: ImportedNews, postList: Post[] = posts) {
     return postList.some((p) => {
       // 1. Slug idêntico
@@ -450,15 +494,20 @@ export default function AdminApp() {
         if (cleanP === cleanItem) return true;
       }
 
-      // 3. Título igual ou similar
-      if (p.title && item.title) {
-        const cleanPTitle = p.title.trim().toLowerCase().replace(/[^\w\s]/g, "");
-        const cleanItemTitle = item.title.trim().toLowerCase().replace(/[^\w\s]/g, "");
-        if (cleanPTitle === cleanItemTitle) return true;
-        if (cleanPTitle.length > 20 && cleanItemTitle.length > 20) {
-          if (cleanPTitle.includes(cleanItemTitle) || cleanItemTitle.includes(cleanPTitle)) return true;
+      // 3. Mesma imagem de capa (mesma foto = mesma matéria)
+      if (p.image_url && item.image_url) {
+        const cleanImgP = p.image_url.split("?")[0].replace(/^https?:\/\//, "").toLowerCase();
+        const cleanImgItem = item.image_url.split("?")[0].replace(/^https?:\/\//, "").toLowerCase();
+        if (cleanImgP === cleanImgItem && !cleanImgP.includes("logo") && !cleanImgP.includes("placeholder")) {
+          return true;
         }
       }
+
+      // 4. Título idêntico ou similaridade temática (mesmo fato/notícia)
+      if (p.title && item.title && areTitlesSimilar(p.title, item.title)) {
+        return true;
+      }
+
       return false;
     });
   }
@@ -467,22 +516,26 @@ export default function AdminApp() {
   function deduplicateImportedItems(rawItems: ImportedNews[]): ImportedNews[] {
     const seenUrls = new Set<string>();
     const seenSlugs = new Set<string>();
-    const seenTitles = new Set<string>();
+    const seenImages = new Set<string>();
     const result: ImportedNews[] = [];
 
     for (const it of rawItems) {
       if (!it.title) continue;
       const cleanUrl = it.source_url ? it.source_url.split("?")[0].replace(/^https?:\/\//, "").replace(/\/$/, "").toLowerCase() : "";
       const slug = slugify(it.title);
-      const cleanTitle = it.title.trim().toLowerCase().replace(/[^\w\s]/g, "");
+      const cleanImg = it.image_url ? it.image_url.split("?")[0].replace(/^https?:\/\//, "").toLowerCase() : "";
 
       if (cleanUrl && seenUrls.has(cleanUrl)) continue;
       if (slug && seenSlugs.has(slug)) continue;
-      if (cleanTitle && seenTitles.has(cleanTitle)) continue;
+      if (cleanImg && !cleanImg.includes("logo") && seenImages.has(cleanImg)) continue;
+
+      // Verifica se já existe matéria cobrindo o mesmo assunto neste lote
+      const isTopicDupe = result.some((prev) => areTitlesSimilar(prev.title, it.title));
+      if (isTopicDupe) continue;
 
       if (cleanUrl) seenUrls.add(cleanUrl);
       if (slug) seenSlugs.add(slug);
-      if (cleanTitle) seenTitles.add(cleanTitle);
+      if (cleanImg && !cleanImg.includes("logo")) seenImages.add(cleanImg);
 
       result.push(it);
     }
@@ -580,18 +633,8 @@ export default function AdminApp() {
 
   // Contagem de matérias que ainda não foram postadas e sem repetição no feed atual
   const unpostedItemsCount = useMemo(() => {
-    const seenUrls = new Set<string>();
-    const seenSlugs = new Set<string>();
-    return importItems.filter((item) => {
-      if (isItemAlreadyPosted(item)) return false;
-      const cleanUrl = item.source_url ? item.source_url.split("?")[0].replace(/^https?:\/\//, "").replace(/\/$/, "").toLowerCase() : "";
-      const slug = slugify(item.title);
-      if (cleanUrl && seenUrls.has(cleanUrl)) return false;
-      if (slug && seenSlugs.has(slug)) return false;
-      if (cleanUrl) seenUrls.add(cleanUrl);
-      if (slug) seenSlugs.add(slug);
-      return true;
-    }).length;
+    const notInDb = importItems.filter((item) => !isItemAlreadyPosted(item, posts));
+    return deduplicateImportedItems(notInDb).length;
   }, [importItems, posts]);
 
   function toggleSelectRadar(url: string) {
@@ -609,21 +652,9 @@ export default function AdminApp() {
   }
 
   function selectUnpostedRadar() {
-    const seenUrls = new Set<string>();
-    const seenSlugs = new Set<string>();
-    const unpostedUrls: string[] = [];
-
-    for (const item of importItems) {
-      if (isItemAlreadyPosted(item)) continue;
-      const cleanUrl = item.source_url ? item.source_url.split("?")[0].replace(/^https?:\/\//, "").replace(/\/$/, "").toLowerCase() : "";
-      const slug = slugify(item.title);
-      if (cleanUrl && seenUrls.has(cleanUrl)) continue;
-      if (slug && seenSlugs.has(slug)) continue;
-      if (cleanUrl) seenUrls.add(cleanUrl);
-      if (slug) seenSlugs.add(slug);
-      unpostedUrls.push(item.source_url);
-    }
-    setSelectedUrls(unpostedUrls);
+    const notInDb = importItems.filter((item) => !isItemAlreadyPosted(item, posts));
+    const deduped = deduplicateImportedItems(notInDb);
+    setSelectedUrls(deduped.map((item) => item.source_url));
   }
 
   // Rotina de execução do ciclo do Piloto Automático (Varre TODOS os sites, não apenas 1)
@@ -692,32 +723,13 @@ export default function AdminApp() {
     // 1. Filtrar matérias que já existem no banco (publicadas, rascunhos ou agendadas)
     const notInDb = rawItems.filter((item) => !isItemAlreadyPosted(item));
 
-    // 2. Não pode repetir notícia no mesmo lote (deduplicação estrita por slug e URL base)
-    const seenUrls = new Set<string>();
-    const seenSlugs = new Set<string>();
-    const uniqueItems: ImportedNews[] = [];
-
-    for (const item of notInDb) {
-      const cleanUrl = item.source_url ? item.source_url.split("?")[0].replace(/^https?:\/\//, "").replace(/\/$/, "").toLowerCase() : "";
-      const slug = slugify(item.title);
-      if (cleanUrl && seenUrls.has(cleanUrl)) continue;
-      if (slug && seenSlugs.has(slug)) continue;
-      if (cleanUrl) seenUrls.add(cleanUrl);
-      if (slug) seenSlugs.add(slug);
-      uniqueItems.push(item);
-    }
+    // 2. Não pode repetir notícia no mesmo lote (deduplicação estrita por slug, URL base, imagem e similaridade temática)
+    const uniqueItems = deduplicateImportedItems(notInDb);
 
     if (uniqueItems.length === 0) {
       setImportMessage("⚠️ Todas as notícias selecionadas já foram publicadas ou já estão na fila de postagem!");
       return;
     }
-
-    // 3. "tem que ser as mais recentes": Ordenar rigorosamente da mais recente para a mais antiga
-    uniqueItems.sort((a, b) => {
-      const timeA = a.published_at ? new Date(a.published_at).getTime() : 0;
-      const timeB = b.published_at ? new Date(b.published_at).getTime() : 0;
-      return timeB - timeA; // Descendente: mais nova primeiro
-    });
 
     // 4. Planejamento de horários conforme o ritmo escolhido (1 por slot, 2 por slot, 3 por slot ou 1 por Aba/Editoria)
     let plannedSchedule: { item: ImportedNews; slotMinutes: number }[] = [];
@@ -968,7 +980,22 @@ export default function AdminApp() {
     await load();
   }
 
-    async function useImported(item: ImportedNews) {
+  async function runDeduplicateQueue() {
+    setDeduplicatingQueue(true);
+    try {
+      const res = await fetch("/api/posts/deduplicate", { method: "POST" });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || "Erro ao limpar duplicidades");
+      setMessage(data.message || "Fila deduplicada e reorganizada com sucesso!");
+      await load();
+    } catch (err: any) {
+      setMessage(`Erro: ${err.message}`);
+    } finally {
+      setDeduplicatingQueue(false);
+    }
+  }
+
+  async function useImported(item: ImportedNews) {
     let activeItem = item;
     // Se o item veio de feed RSS e tem URL original, busca a matéria completa com todos os parágrafos
     if (
@@ -2027,18 +2054,32 @@ export default function AdminApp() {
                     </select>
                   </div>
 
-                  <div style={{ fontSize: 12, color: "#475569", fontWeight: 700 }}>
-                    {queuedPosts.length === 0 ? (
-                      "Nenhuma matéria na fila de espera."
-                    ) : (
-                      <span>
-                        📦 <b>{queuedPosts.length}</b> notícia(s) na fila • Próxima sai:{" "}
-                        <b>
-                          {queuedPosts[0]?.published_at
-                            ? new Date(queuedPosts[0].published_at).toLocaleTimeString("pt-BR", { hour: "2-digit", minute: "2-digit" })
-                            : "—"}
-                        </b>
-                      </span>
+                  <div style={{ display: "flex", gap: 12, alignItems: "center", flexWrap: "wrap" }}>
+                    <div style={{ fontSize: 12, color: "#475569", fontWeight: 700 }}>
+                      {queuedPosts.length === 0 ? (
+                        "Nenhuma matéria na fila de espera."
+                      ) : (
+                        <span>
+                          📦 <b>{queuedPosts.length}</b> notícia(s) na fila • Próxima sai:{" "}
+                          <b>
+                            {queuedPosts[0]?.published_at
+                              ? new Date(queuedPosts[0].published_at).toLocaleTimeString("pt-BR", { hour: "2-digit", minute: "2-digit" })
+                              : "—"}
+                          </b>
+                        </span>
+                      )}
+                    </div>
+                    {queuedPosts.length > 1 && (
+                      <button
+                        type="button"
+                        className="btn secondary"
+                        style={{ padding: "5px 12px", fontSize: 11, background: "#f8fafc", borderColor: "#cbd5e1", borderRadius: 6, fontWeight: 700 }}
+                        disabled={deduplicatingQueue}
+                        onClick={runDeduplicateQueue}
+                        title="Varre a fila inteira, remove matérias repetidas ou do mesmo assunto e reorganiza os horários"
+                      >
+                        {deduplicatingQueue ? "🧹 Limpando..." : "🧹 Limpar Duplicidades"}
+                      </button>
                     )}
                   </div>
                 </div>
