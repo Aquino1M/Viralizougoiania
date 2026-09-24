@@ -361,13 +361,19 @@ function extractAuthorFromHtml(html: string, ld?: Record<string, unknown> | null
 }
 
 function extractVideoFromHtml(html: string, ld?: Record<string, unknown> | null): string {
-  const ytMatch = html.match(/https?:\/\/(?:www\.)?(?:youtube\.com\/(?:watch\?v=|embed\/)|youtu\.be\/)([a-zA-Z0-9_-]{11})/i);
+  const ytMatch = html.match(/https?:\/\/(?:www\.)?(?:youtube\.com\/(?:watch\?v=|embed\/|shorts\/)|youtu\.be\/)([a-zA-Z0-9_-]{11})/i);
   if (ytMatch) return `https://www.youtube.com/watch?v=${ytMatch[1]}`;
 
   const globoPlayMatch = html.match(/https?:\/\/globoplay\.globo\.com\/v\/(\d+)/i) ||
                          html.match(/data-video-id=["'](\d+)["']/i) ||
                          html.match(/"video_id":\s*"?(\d+)"?/i);
   if (globoPlayMatch) return `https://globoplay.globo.com/v/${globoPlayMatch[1]}/`;
+
+  const vimeoMatch = html.match(/https?:\/\/(?:player\.)?vimeo\.com\/(?:video\/)?(\d+)/i);
+  if (vimeoMatch) return `https://vimeo.com/${vimeoMatch[1]}`;
+
+  const iframeSrcMatch = html.match(/<iframe\b[^>]*src=["']([^"']*(?:youtube|globo|vimeo|dailymotion|instagram\.com\/reel|instagram\.com\/p\/|tiktok\.com)[^"']*)["']/i);
+  if (iframeSrcMatch) return iframeSrcMatch[1];
 
   if (ld?.video && typeof ld.video === "object") {
     const vid = ld.video as Record<string, unknown>;
@@ -385,12 +391,107 @@ function extractVideoFromHtml(html: string, ld?: Record<string, unknown> | null)
   return "";
 }
 
+function extractImageFromHtml(html: string, pageUrl: string): string {
+  // 1. Meta tags (OpenGraph, Twitter, itemprop)
+  const ogImg =
+    metaContent(html, "og:image") ||
+    metaContent(html, "og:image:url") ||
+    metaContent(html, "og:image:secure_url") ||
+    metaContent(html, "twitter:image") ||
+    metaContent(html, "twitter:image:src") ||
+    metaContent(html, "image");
+  if (ogImg && !ogImg.includes("blank.gif") && !ogImg.includes("default-avatar") && !ogImg.includes("favicon")) {
+    return absoluteUrl(ogImg, pageUrl);
+  }
+
+  // 2. JSON-LD Image
+  const ld = extractJsonLd(html);
+  const ldImg = jsonImage(ld?.image);
+  if (ldImg && !ldImg.includes("favicon") && !ldImg.includes("default")) {
+    return absoluteUrl(ldImg, pageUrl);
+  }
+
+  // 3. Link rel="image_src"
+  const linkImg = html.match(/<link\b[^>]*?rel=["']image_src["'][^>]*?href=["']([^"']+)["']/i)?.[1];
+  if (linkImg && !linkImg.includes("favicon")) return absoluteUrl(linkImg, pageUrl);
+
+  // 4. Wrappers de imagem destacada (WordPress themes como Goiás 24 Horas, Portal 6, Curta Mais, etc.)
+  const featuredWrapperMatch =
+    html.match(/<div\b[^>]*class=["'][^"']*(?:jl_sifea_img|featured-media|featured-image|post-thumbnail|entry-media|post-thumb|materia-foto|imagem-destaque)[^"']*["'][^>]*>([\s\S]*?)<\/div>/i) ||
+    html.match(/<figure\b[^>]*class=["'][^"']*(?:featured|post-thumbnail|entry-thumb|foto-destaque)[^"']*["'][^>]*>([\s\S]*?)<\/figure>/i);
+  if (featuredWrapperMatch) {
+    const imgInside =
+      featuredWrapperMatch[1].match(/<img\b[^>]*src=["']([^"']+)["']/i)?.[1] ||
+      featuredWrapperMatch[1].match(/<img\b[^>]*data-src=["']([^"']+)["']/i)?.[1] ||
+      featuredWrapperMatch[1].match(/<img\b[^>]*data-lazy-src=["']([^"']+)["']/i)?.[1];
+    if (imgInside && !imgInside.includes("logo") && !imgInside.includes("banner")) {
+      return absoluteUrl(imgInside, pageUrl);
+    }
+  }
+
+  // 5. Imagem com classe wp-post-image (padrão de matérias em sites WordPress)
+  const wpPostImgs = html.match(/<img\b[^>]*class=["'][^"']*wp-post-image[^"']*["'][^>]*>/gi) ||
+                     html.match(/<img\b[^>]*src=["'][^"']+["'][^>]*class=["'][^"']*wp-post-image[^"']*["']/gi) || [];
+  for (const wpTag of wpPostImgs) {
+    const width = parseInt(wpTag.match(/width=["'](\d+)["']/i)?.[1] || "0", 10);
+    const src = wpTag.match(/src=["']([^"']+)["']/i)?.[1] ||
+                wpTag.match(/data-src=["']([^"']+)["']/i)?.[1] ||
+                wpTag.match(/data-lazy-src=["']([^"']+)["']/i)?.[1];
+    if (src && (width === 0 || width >= 300) && !src.includes("logo") && !src.includes("banner")) {
+      return absoluteUrl(src, pageUrl);
+    }
+  }
+  if (wpPostImgs.length > 0) {
+    const fallbackSrc = wpPostImgs[wpPostImgs.length - 1].match(/src=["']([^"']+)["']/i)?.[1];
+    if (fallbackSrc) return absoluteUrl(fallbackSrc, pageUrl);
+  }
+
+  // 6. Primeira imagem relevante dentro do artigo
+  const contentImgs = html.match(/<img\b[^>]+(?:src|data-src|data-lazy-src)=["']([^"']+)["'][^>]*>/gi) || [];
+  for (const imgTag of contentImgs) {
+    const srcMatch = imgTag.match(/(?:src|data-src|data-lazy-src)=["']([^"']+)["']/i);
+    if (!srcMatch) continue;
+    const src = srcMatch[1];
+    const low = src.toLowerCase();
+    if (low.includes("logo") || low.includes("avatar") || low.includes("icon") || low.includes("banner") || low.includes("pixel") || low.includes("gravatar") || low.includes("emoji")) continue;
+    if (low.includes("wp-content/uploads") || low.includes("/fotos/") || low.includes("/images/") || low.includes("/noticias/") || low.includes("/materia/") || low.includes("/conteudo/")) {
+      return absoluteUrl(src, pageUrl);
+    }
+  }
+
+  return "";
+}
+
+async function fetchMissingMedia(link: string): Promise<{ image: string; video: string }> {
+  try {
+    const res = await fetch(link, {
+      headers: {
+        "User-Agent":
+          "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36",
+        Accept: "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
+        "Accept-Language": "pt-BR,pt;q=0.9,en-US;q=0.8,en;q=0.7",
+      },
+      signal: AbortSignal.timeout(5000),
+    });
+    if (!res.ok) return { image: "", video: "" };
+    const html = await res.text();
+    const image = extractImageFromHtml(html, link);
+    const video = extractVideoFromHtml(html, extractJsonLd(html));
+    return {
+      image,
+      video: video ? absoluteUrl(video, link) : "",
+    };
+  } catch {
+    return { image: "", video: "" };
+  }
+}
+
 function extractArticle(html: string, finalUrl: string): ImportedNews {
   const ld = extractJsonLd(html);
   const htmlTitle = cleanText(html.match(/<title\b[^>]*>([\s\S]*?)<\/title>/i)?.[1] || "");
   const title = cleanText(metaContent(html, "og:title") || String(ld?.headline || ld?.name || "") || htmlTitle);
   const excerpt = cleanText(metaContent(html, "og:description") || metaContent(html, "description") || String(ld?.description || ""));
-  const image = metaContent(html, "og:image") || metaContent(html, "twitter:image") || jsonImage(ld?.image);
+  const image = extractImageFromHtml(html, finalUrl);
   const sourceName = cleanText(metaContent(html, "og:site_name") || String((ld?.publisher as Record<string, unknown> | undefined)?.name || "") || new URL(finalUrl).hostname.replace(/^www\./, ""));
   
   const published = metaContent(html, "article:published_time") ||
@@ -418,7 +519,7 @@ function extractArticle(html: string, finalUrl: string): ImportedNews {
     content: formattedContent,
     source_content: fullText || excerpt,
     category: autoCategory,
-    image_url: absoluteUrl(image, finalUrl),
+    image_url: image ? absoluteUrl(image, finalUrl) : "",
     image_credit: author ? `Reportagem: ${author} (${sourceName})` : `Fonte original: ${sourceName}`,
     video_url: video ? absoluteUrl(video, finalUrl) : undefined,
     source_name: sourceName,
@@ -460,28 +561,6 @@ function feedImage(block: string): string {
   ];
   const found = candidates.find((c) => Boolean(c && typeof c === "string" && c.trim().length > 5));
   return found ? decodeEntities(found.trim()) : "";
-}
-
-async function fetchOgImage(link: string): Promise<string> {
-  try {
-    const res = await fetch(link, {
-      headers: {
-        "User-Agent":
-          "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36",
-        Accept: "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
-      },
-      signal: AbortSignal.timeout(3000),
-    });
-    if (!res.ok) return "";
-    const html = (await res.text()).slice(0, 150_000);
-    const og =
-      metaContent(html, "og:image") ||
-      metaContent(html, "twitter:image") ||
-      metaContent(html, "image");
-    return og ? absoluteUrl(og, link) : "";
-  } catch {
-    return "";
-  }
 }
 
 function feedVideo(block: string): string {
@@ -541,15 +620,20 @@ async function parseFeed(xml: string, feedUrl: string): Promise<ImportedNews[]> 
     };
   }).filter((item) => item.title && item.source_url);
 
-  // Para jornais que não enviam imagem no feed XML, busca o og:image da matéria em paralelo
-  const missingImg = parsed.filter((it) => !it.image_url && it.source_url);
-  if (missingImg.length > 0) {
-    await Promise.allSettled(
-      missingImg.slice(0, 15).map(async (item) => {
-        const og = await fetchOgImage(item.source_url);
-        if (og) item.image_url = og;
-      })
-    );
+  // Para jornais que não enviam imagem ou vídeo no feed XML, busca da matéria em lote controlado
+  const missingMedia = parsed.filter((it) => (!it.image_url || !it.video_url) && it.source_url);
+  if (missingMedia.length > 0) {
+    const batchSize = 4;
+    for (let i = 0; i < Math.min(missingMedia.length, 25); i += batchSize) {
+      const slice = missingMedia.slice(i, i + batchSize);
+      await Promise.allSettled(
+        slice.map(async (item) => {
+          const media = await fetchMissingMedia(item.source_url);
+          if (media.image && !item.image_url) item.image_url = media.image;
+          if (media.video && !item.video_url) item.video_url = media.video;
+        })
+      );
+    }
   }
 
   return parsed;

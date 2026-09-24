@@ -356,7 +356,7 @@ export default function AdminApp() {
       let activeItem = item;
       if (
         item.source_url &&
-        (!item.source_content || item.source_content.split("\n\n").length < 2 || item.source_content.length < 300)
+        (!item.image_url || !item.video_url || !item.source_content || item.source_content.split("\n\n").length < 2 || item.source_content.length < 300)
       ) {
         try {
           const r = await fetch("/api/import-news", {
@@ -761,11 +761,11 @@ export default function AdminApp() {
       }
 
       let rawSource = item.source_content || item.content || item.excerpt || item.title;
-      // Se a notícia vier com texto curto (resumo) ou truncado com cortes, busca a matéria completa da URL original
-      if (item.source_url && (rawSource.split("\n\n").length < 2 || rawSource.length < 320)) {
+      // Se a matéria estiver sem foto, sem vídeo ou com texto truncado, busca a matéria completa da URL original
+      if (item.source_url && (!item.image_url || !item.video_url || rawSource.split("\n\n").length < 2 || rawSource.length < 320)) {
         try {
           const controller = new AbortController();
-          const timeoutId = setTimeout(() => controller.abort(), 5000);
+          const timeoutId = setTimeout(() => controller.abort(), 6000);
           const fetchRes = await fetch("/api/import-news", {
             method: "POST",
             headers: { "Content-Type": "application/json" },
@@ -775,11 +775,11 @@ export default function AdminApp() {
           clearTimeout(timeoutId);
           if (fetchRes.ok) {
             const fetchedData = await fetchRes.json();
-            if (fetchedData.items?.[0]?.source_content) {
-              rawSource = fetchedData.items[0].source_content;
-              if (fetchedData.items[0].image_url && !item.image_url) {
-                item.image_url = fetchedData.items[0].image_url;
-              }
+            if (fetchedData.items?.[0]) {
+              const art = fetchedData.items[0];
+              if (art.source_content) rawSource = art.source_content;
+              if (art.image_url && !item.image_url) item.image_url = art.image_url;
+              if (art.video_url && !item.video_url) item.video_url = art.video_url;
             }
           }
         } catch {}
@@ -869,17 +869,46 @@ export default function AdminApp() {
     if (queuedPosts.length === 0) return;
     setLoading(true);
     let startTime = Date.now();
-    for (let i = 0; i < queuedPosts.length; i++) {
-      const p = queuedPosts[i];
-      const newTime = new Date(startTime + (i + 1) * intervalMin * 60 * 1000).toISOString();
-      await fetch(`/api/posts/${p.id}`, {
+
+    let planned: { post: Post; slotMinutes: number }[] = [];
+    if (queueScheduleMode === "1_per_category") {
+      const byCat: Record<string, Post[]> = {};
+      for (const p of queuedPosts) {
+        const cat = p.category || "Goiânia";
+        if (!byCat[cat]) byCat[cat] = [];
+        byCat[cat].push(p);
+      }
+      let step = 1;
+      let hasMore = true;
+      while (hasMore) {
+        hasMore = false;
+        for (const c of Object.keys(byCat)) {
+          if (byCat[c].length > 0) {
+            const nextP = byCat[c].shift()!;
+            planned.push({ post: nextP, slotMinutes: step * intervalMin });
+            hasMore = true;
+          }
+        }
+        if (hasMore) step++;
+      }
+    } else {
+      const perSlot = queueScheduleMode === "3_per_10m" ? 3 : queueScheduleMode === "2_per_10m" ? 2 : 1;
+      planned = queuedPosts.map((post, idx) => ({
+        post,
+        slotMinutes: (Math.floor(idx / perSlot) + 1) * intervalMin,
+      }));
+    }
+
+    for (const item of planned) {
+      const newTime = new Date(startTime + item.slotMinutes * 60 * 1000).toISOString();
+      await fetch(`/api/posts/${item.post.id}`, {
         method: "PATCH",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ published_at: newTime }),
       });
     }
     await load();
-    setMessage(`Fila reorganizada com sucesso! ${queuedPosts.length} matérias distribuídas a cada ${intervalMin} minutos.`);
+    setMessage(`Fila reorganizada com sucesso! ${queuedPosts.length} matérias distribuídas no ritmo configurado.`);
   }
 
   async function publishNow(p: Post) {
@@ -920,10 +949,10 @@ export default function AdminApp() {
     // Se o item veio de feed RSS e tem URL original, busca a matéria completa com todos os parágrafos
     if (
       item.source_url &&
-      (!item.source_content || item.source_content.split("\n\n").length < 2 || item.source_content.length < 300)
+      (!item.image_url || !item.video_url || !item.source_content || item.source_content.split("\n\n").length < 2 || item.source_content.length < 300)
     ) {
       setImporting(true);
-      setImportMessage("Carregando matéria completa da fonte original...");
+      setImportMessage("Carregando matéria completa, fotos e vídeos da fonte original...");
       try {
         const r = await fetch("/api/import-news", {
           method: "POST",
@@ -1351,7 +1380,7 @@ export default function AdminApp() {
             <a href="#" onClick={(e) => { e.preventDefault(); create(); }}>✍️ Nova postagem</a>
             <a href="#" onClick={(e) => { e.preventDefault(); openRadar(); }}>📡 Radar Notícias</a>
             <a href="#" onClick={(e) => { e.preventDefault(); setView("queue"); setMessage(""); }} style={{ display: "flex", alignItems: "center" }}>
-              🕒 Fila de Postagem
+              🕒 Fila de Postagem Automática
               {queuedPosts.length > 0 && <span className="sidebarBadge">{queuedPosts.length}</span>}
             </a>
             <a href="#" onClick={(e) => { e.preventDefault(); setView("categories"); setCategoryMessage(""); }}>🗂️ Abas / editorias</a>
@@ -1663,42 +1692,19 @@ export default function AdminApp() {
                       )}
                     </div>
 
-                    {/* Seletor de Ritmo de Postagem na Fila */}
-                    <div className="radarPaceGroup" title="Escolha quantas matérias liberar a cada 10 minutos na fila">
-                      <span style={{ fontSize: 11, fontWeight: 800, color: "#334155" }}>
-                        ⏱️ Ritmo da Fila:
+                    {/* Indicador do Ritmo da Fila Ativo */}
+                    <div style={{ display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap" }}>
+                      <span style={{ fontSize: 12, fontWeight: 700, color: "#475569" }}>
+                        ⏱️ Ritmo da Fila: <b style={{ color: "#0284c7" }}>{queueScheduleMode === "1_per_category" ? "🌟 1 por Aba do Jornal" : queueScheduleMode === "2_per_10m" ? "2 a cada 10m" : queueScheduleMode === "3_per_10m" ? "3 a cada 10m" : "1 a cada 10m"}</b>
                       </span>
                       <button
                         type="button"
-                        className={`radarPaceBtn ${queueScheduleMode === "1_per_10m" ? "active" : ""}`}
-                        onClick={() => setQueueScheduleMode("1_per_10m")}
-                        title="Programa 1 matéria a cada 10 minutos (+10m, +20m, +30m...)"
+                        className="btn secondary"
+                        style={{ padding: "4px 10px", fontSize: 11, fontWeight: 700 }}
+                        onClick={() => setView("queue")}
+                        title="Configurar ritmo e intervalos na aba 🕒 Fila de Postagem Automática"
                       >
-                        1 a cada 10m
-                      </button>
-                      <button
-                        type="button"
-                        className={`radarPaceBtn ${queueScheduleMode === "2_per_10m" ? "active" : ""}`}
-                        onClick={() => setQueueScheduleMode("2_per_10m")}
-                        title="Programa 2 matérias juntas a cada 10 minutos"
-                      >
-                        2 a cada 10m
-                      </button>
-                      <button
-                        type="button"
-                        className={`radarPaceBtn ${queueScheduleMode === "3_per_10m" ? "active" : ""}`}
-                        onClick={() => setQueueScheduleMode("3_per_10m")}
-                        title="Programa 3 matérias juntas a cada 10 minutos"
-                      >
-                        3 a cada 10m
-                      </button>
-                      <button
-                        type="button"
-                        className={`radarPaceBtn special ${queueScheduleMode === "1_per_category" ? "active" : ""}`}
-                        onClick={() => setQueueScheduleMode("1_per_category")}
-                        title="🌟 1 matéria de cada aba do jornal a cada 10 minutos (Segurança, Goiânia, Trânsito, etc.)"
-                      >
-                        🌟 1 por Aba do Jornal
+                        ⚙️ Configurar Ritmo na Fila
                       </button>
                     </div>
 
@@ -1889,7 +1895,89 @@ export default function AdminApp() {
                   </div>
                 </div>
 
-                {message && <div className={message.includes("Erro") ? "notice error" : "notice"}>{message}</div>}
+                {/* Configuração do Ritmo da Fila Automática */}
+                <div style={{ background: "#ffffff", border: "1px solid #e2e8f0", borderRadius: 12, padding: "16px 20px", marginBottom: 18, boxShadow: "0 2px 6px rgba(0,0,0,0.04)" }}>
+                  <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", flexWrap: "wrap", gap: 14 }}>
+                    <div>
+                      <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+                        <span style={{ fontSize: 18 }}>⏱️</span>
+                        <h3 style={{ margin: 0, fontSize: 15, fontWeight: 800, color: "#0f172a" }}>
+                          Ritmo da Fila de Postagem Automática
+                        </h3>
+                      </div>
+                      <p style={{ margin: "4px 0 0", fontSize: 12, color: "#64748b" }}>
+                        Configure quantas postagens devem ser liberadas a cada intervalo e a distribuição por editoria:
+                      </p>
+                    </div>
+
+                    {/* Botões de Seleção do Ritmo */}
+                    <div className="radarPaceGroup">
+                      <button
+                        type="button"
+                        className={`radarPaceBtn ${queueScheduleMode === "1_per_10m" ? "active" : ""}`}
+                        onClick={() => {
+                          setQueueScheduleMode("1_per_10m");
+                          localStorage.setItem("viralizou_radar_schedule_mode", "1_per_10m");
+                        }}
+                        title="Programa 1 matéria a cada 10 minutos (+10m, +20m, +30m...)"
+                      >
+                        1 a cada 10m
+                      </button>
+                      <button
+                        type="button"
+                        className={`radarPaceBtn ${queueScheduleMode === "2_per_10m" ? "active" : ""}`}
+                        onClick={() => {
+                          setQueueScheduleMode("2_per_10m");
+                          localStorage.setItem("viralizou_radar_schedule_mode", "2_per_10m");
+                        }}
+                        title="Programa 2 matérias juntas a cada 10 minutos"
+                      >
+                        2 a cada 10m
+                      </button>
+                      <button
+                        type="button"
+                        className={`radarPaceBtn ${queueScheduleMode === "3_per_10m" ? "active" : ""}`}
+                        onClick={() => {
+                          setQueueScheduleMode("3_per_10m");
+                          localStorage.setItem("viralizou_radar_schedule_mode", "3_per_10m");
+                        }}
+                        title="Programa 3 matérias juntas a cada 10 minutos"
+                      >
+                        3 a cada 10m
+                      </button>
+                      <button
+                        type="button"
+                        className={`radarPaceBtn special ${queueScheduleMode === "1_per_category" ? "active" : ""}`}
+                        onClick={() => {
+                          setQueueScheduleMode("1_per_category");
+                          localStorage.setItem("viralizou_radar_schedule_mode", "1_per_category");
+                        }}
+                        title="🌟 Inteligente: 1 matéria por Aba/Editoria do jornal a cada 10 minutos (Segurança, Goiânia, Trânsito, etc.)"
+                      >
+                        🌟 1 por Aba do Jornal
+                      </button>
+                    </div>
+                  </div>
+
+                  {/* Descrição do Ritmo Ativo */}
+                  <div style={{ marginTop: 12, padding: "8px 12px", background: "#f8fafc", border: "1px solid #e2e8f0", borderRadius: 8, fontSize: 12, color: "#334155", display: "flex", alignItems: "center", gap: 8 }}>
+                    <span>💡</span>
+                    <span>
+                      {queueScheduleMode === "1_per_category" && (
+                        <><b>Modo Inteligente Ativo:</b> O sistema alterna as matérias enviando 1 de cada Aba/Editoria (Goiânia, Segurança, Política, Esportes...) a cada 10 minutos, mantendo a capa do portal equilibrada e diversificada.</>
+                      )}
+                      {queueScheduleMode === "1_per_10m" && (
+                        <><b>Modo 1 por Slot:</b> O portal publica rigorosamente 1 matéria a cada 10 minutos de forma contínua.</>
+                      )}
+                      {queueScheduleMode === "2_per_10m" && (
+                        <><b>Modo 2 por Slot:</b> O portal publica 2 matérias juntas a cada 10 minutos.</>
+                      )}
+                      {queueScheduleMode === "3_per_10m" && (
+                        <><b>Modo 3 por Slot:</b> O portal publica 3 matérias juntas a cada 10 minutos (ritmo acelerado).</>
+                      )}
+                    </span>
+                  </div>
+                </div>
 
                 {/* Toolbar de Controle da Fila */}
                 <div className="queueToolbar">
