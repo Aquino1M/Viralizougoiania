@@ -151,7 +151,7 @@ export default function AdminApp() {
   const [importItems, setImportItems] = useState<ImportedNews[]>([]);
   const [importMessage, setImportMessage] = useState("");
   const [radarRegion, setRadarRegion] = useState<"goias" | "brasil">("goias");
-  const [activeSourceUrl, setActiveSourceUrl] = useState<string>("https://g1.globo.com/rss/g1/go/goias/");
+  const [activeSourceUrl, setActiveSourceUrl] = useState<string>("ALL");
   const [queueInterval, setQueueInterval] = useState<number>(10);
   const [selectedUrls, setSelectedUrls] = useState<string[]>([]);
   const [batchQueueing, setBatchQueueing] = useState(false);
@@ -438,8 +438,8 @@ export default function AdminApp() {
     }
   }
 
-  function isItemAlreadyPosted(item: ImportedNews) {
-    return posts.some((p) => {
+  function isItemAlreadyPosted(item: ImportedNews, postList: Post[] = posts) {
+    return postList.some((p) => {
       // 1. Slug idêntico
       if (p.slug && item.title && p.slug === slugify(item.title)) return true;
 
@@ -461,6 +461,97 @@ export default function AdminApp() {
       }
       return false;
     });
+  }
+
+  // Deduplicação estrita de notícias vindas de múltiplos jornais simultâneos
+  function deduplicateImportedItems(rawItems: ImportedNews[]): ImportedNews[] {
+    const seenUrls = new Set<string>();
+    const seenSlugs = new Set<string>();
+    const seenTitles = new Set<string>();
+    const result: ImportedNews[] = [];
+
+    for (const it of rawItems) {
+      if (!it.title) continue;
+      const cleanUrl = it.source_url ? it.source_url.split("?")[0].replace(/^https?:\/\//, "").replace(/\/$/, "").toLowerCase() : "";
+      const slug = slugify(it.title);
+      const cleanTitle = it.title.trim().toLowerCase().replace(/[^\w\s]/g, "");
+
+      if (cleanUrl && seenUrls.has(cleanUrl)) continue;
+      if (slug && seenSlugs.has(slug)) continue;
+      if (cleanTitle && seenTitles.has(cleanTitle)) continue;
+
+      if (cleanUrl) seenUrls.add(cleanUrl);
+      if (slug) seenSlugs.add(slug);
+      if (cleanTitle) seenTitles.add(cleanTitle);
+
+      result.push(it);
+    }
+
+    // Ordena rigorosamente da mais recente para a mais antiga
+    result.sort((a, b) => {
+      const timeA = a.published_at ? new Date(a.published_at).getTime() : 0;
+      const timeB = b.published_at ? new Date(b.published_at).getTime() : 0;
+      return timeB - timeA;
+    });
+
+    return result;
+  }
+
+  // Busca e agrega notícias de TODOS os jornais da região selecionada simultaneamente em paralelo
+  async function fetchRadarFeeds(region: "goias" | "brasil" | "all" = radarRegion): Promise<ImportedNews[]> {
+    const targetSources = region === "all"
+      ? RADAR_SOURCES
+      : RADAR_SOURCES.filter((s) => s.region === region);
+
+    const promises = targetSources.map(async (src) => {
+      try {
+        const res = await fetch("/api/import-news", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ url: src.url, mode: "feed" }),
+        });
+        if (!res.ok) return [];
+        const data = await res.json();
+        const items = (data.items || []) as ImportedNews[];
+        return items.map((it) => ({
+          ...it,
+          source_name: it.source_name || src.name,
+        }));
+      } catch (err) {
+        console.warn(`Aviso ao carregar feed ${src.name}:`, err);
+        return [];
+      }
+    });
+
+    const results = await Promise.allSettled(promises);
+    const combined: ImportedNews[] = [];
+    for (const r of results) {
+      if (r.status === "fulfilled" && Array.isArray(r.value)) {
+        combined.push(...r.value);
+      }
+    }
+
+    return deduplicateImportedItems(combined);
+  }
+
+  // Carrega na tela do Radar as notícias de TODOS os jornais da região selecionada
+  async function importAllFeeds(region: "goias" | "brasil" = radarRegion) {
+    setImporting(true);
+    setImportMessage("");
+    setImportItems([]);
+    setSelectedUrls([]);
+    try {
+      const items = await fetchRadarFeeds(region);
+      setImportItems(items);
+      const siteCount = RADAR_SOURCES.filter((s) => s.region === region).length;
+      setImportMessage(
+        `📡 Radar: ${items.length} notícias recolhidas simultaneamente de todos os ${siteCount} sites de ${region === "goias" ? "Goiás" : "Brasil"}! Ordenadas das mais recentes.`
+      );
+    } catch (err: any) {
+      setImportMessage(`Erro ao buscar notícias de todos os sites: ${err.message}`);
+    } finally {
+      setImporting(false);
+    }
   }
 
   // Contagem de matérias que ainda não foram postadas e sem repetição no feed atual
@@ -511,34 +602,39 @@ export default function AdminApp() {
     setSelectedUrls(unpostedUrls);
   }
 
-  // Rotina de execução do ciclo do Piloto Automático
+  // Rotina de execução do ciclo do Piloto Automático (Varre TODOS os sites, não apenas 1)
   async function runAutoPilotCycle() {
     if (autoPilotRunning || batchQueueing) return;
     setAutoPilotRunning(true);
-    setImportMessage("🤖 Piloto Automático: Verificando novos feeds e notícias em tempo real...");
+    const siteCount = RADAR_SOURCES.filter((s) => s.region === radarRegion).length;
+    const regionLabel = radarRegion === "goias" ? `todos os ${siteCount} sites de Goiás` : `todos os jornais do Brasil`;
+    setImportMessage(`🤖 Piloto Automático: Varrendo simultaneamente ${regionLabel} em tempo real...`);
     try {
       // 1. Libera publicações cujo horário já venceu
       await fetch("/api/posts/publish-due").catch(() => {});
 
-      // 2. Busca notícias da fonte ativa atual
-      const res = await fetch("/api/import-news", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ url: activeSourceUrl, mode: "feed" }),
-      });
-
-      if (res.ok) {
-        const data = await res.json();
-        const incoming: ImportedNews[] = data.items || [];
-        setImportItems(incoming);
-
-        // 3. Filtra apenas as não postadas
-        const unposted = incoming.filter((it) => !isItemAlreadyPosted(it));
-        if (unposted.length > 0) {
-          await queueItemsInBatch(unposted, "Piloto Automático");
-        } else {
-          setImportMessage("🤖 Piloto Automático: Nenhuma notícia nova nesta rodada. Próxima checagem em 10 minutos.");
+      // 2. Atualiza lista de posts mais recentes do banco para evitar duplicatas com 100% de precisão
+      const postsRes = await fetch("/api/posts", { cache: "no-store" }).catch(() => null);
+      let freshPosts = posts;
+      if (postsRes && postsRes.ok) {
+        const pData = await postsRes.json();
+        if (Array.isArray(pData.posts)) {
+          freshPosts = pData.posts;
+          setPosts(freshPosts);
         }
+      }
+
+      // 3. Varre simultaneamente TODOS os sites da região
+      const allNews = await fetchRadarFeeds(radarRegion);
+      setImportItems(allNews);
+
+      // 4. Filtra apenas as notícias que ainda não foram postadas (sem duplicatas no banco nem entre si)
+      const unposted = allNews.filter((it) => !isItemAlreadyPosted(it, freshPosts));
+      if (unposted.length > 0) {
+        setImportMessage(`🤖 Piloto Automático: Encontradas ${unposted.length} notícias inéditas em todos os ${siteCount} sites! Agendando na fila...`);
+        await queueItemsInBatch(unposted, "Piloto Automático (Todos os Sites)");
+      } else {
+        setImportMessage(`🤖 Piloto Automático: Verificou ${allNews.length} notícias de todos os ${siteCount} sites. Nenhuma notícia nova pendente. Próxima checagem em 10 minutos.`);
       }
       await load();
     } catch (err: any) {
@@ -554,6 +650,7 @@ export default function AdminApp() {
     if (!autoPilot) return;
     const pilotTimer = setInterval(() => {
       setAutoPilotCountdown((prev) => {
+        if (autoPilotRunning || batchQueueing) return prev;
         if (prev <= 1) {
           runAutoPilotCycle();
           return 600;
@@ -562,7 +659,7 @@ export default function AdminApp() {
       });
     }, 1000);
     return () => clearInterval(pilotTimer);
-  }, [autoPilot, activeSourceUrl, posts, batchQueueing, autoPilotRunning, queueScheduleMode]);
+  }, [autoPilot, autoPilotRunning, batchQueueing, radarRegion, queueScheduleMode]);
 
   // Enfileiramento em lote com garantia de ordenação pelas mais recentes, sem repetição e com ritmo configurável
   async function queueItemsInBatch(rawItems: ImportedNews[], batchTypeLabel: string) {
@@ -667,11 +764,15 @@ export default function AdminApp() {
       // Se a notícia vier com texto curto (resumo) ou truncado com cortes, busca a matéria completa da URL original
       if (item.source_url && (rawSource.split("\n\n").length < 2 || rawSource.length < 320)) {
         try {
+          const controller = new AbortController();
+          const timeoutId = setTimeout(() => controller.abort(), 5000);
           const fetchRes = await fetch("/api/import-news", {
             method: "POST",
             headers: { "Content-Type": "application/json" },
             body: JSON.stringify({ url: item.source_url, mode: "article" }),
+            signal: controller.signal,
           });
+          clearTimeout(timeoutId);
           if (fetchRes.ok) {
             const fetchedData = await fetchRes.json();
             if (fetchedData.items?.[0]?.source_content) {
@@ -931,7 +1032,11 @@ export default function AdminApp() {
     setView("import");
     setImportMessage("");
     if (importItems.length === 0) {
-      importNews("feed", activeSourceUrl || "https://g1.globo.com/rss/g1/go/goias/");
+      if (activeSourceUrl === "ALL") {
+        importAllFeeds(radarRegion);
+      } else {
+        importNews("feed", activeSourceUrl || "https://g1.globo.com/rss/g1/go/goias/");
+      }
     }
   }
 
@@ -1345,7 +1450,13 @@ export default function AdminApp() {
                     <button
                       className="btn"
                       disabled={importing || batchQueueing}
-                      onClick={() => importNews("feed", activeSourceUrl)}
+                      onClick={() => {
+                        if (activeSourceUrl === "ALL") {
+                          importAllFeeds(radarRegion);
+                        } else {
+                          importNews("feed", activeSourceUrl);
+                        }
+                      }}
                     >
                       {importing ? "Carregando..." : "🔄 Atualizar Notícias"}
                     </button>
@@ -1367,8 +1478,8 @@ export default function AdminApp() {
                     )}
                     <span>
                       {autoPilot
-                        ? `Varrendo e adicionando notícias novas à fila a cada 10 min • Próximo envio em ${Math.floor(autoPilotCountdown / 60).toString().padStart(2, "0")}:${(autoPilotCountdown % 60).toString().padStart(2, "0")}`
-                        : "Posta as matérias não postadas automaticamente na fila a cada 10 minutos sem repetir."}
+                        ? `Varrendo TODOS os ${radarRegion === "goias" ? "7 sites de Goiás" : "jornais"} e adicionando à fila a cada 10 min • Próximo envio em ${Math.floor(autoPilotCountdown / 60).toString().padStart(2, "0")}:${(autoPilotCountdown % 60).toString().padStart(2, "0")}`
+                        : `Varre todos os sites simultaneamente a cada 10 minutos e adiciona as matérias inéditas à fila sem repetir.`}
                     </span>
                   </div>
                   <div style={{ display: "flex", gap: 8, alignItems: "center", flexWrap: "wrap" }}>
@@ -1379,9 +1490,9 @@ export default function AdminApp() {
                         style={{ padding: "6px 12px", fontSize: 11, fontWeight: 700 }}
                         disabled={autoPilotRunning || batchQueueing}
                         onClick={runAutoPilotCycle}
-                        title="Executa agora mesmo o ciclo de busca e agendamento sem esperar os 10 minutos"
+                        title="Executa agora mesmo o ciclo de busca em todos os sites e agendamento sem esperar os 10 minutos"
                       >
-                        {autoPilotRunning ? "⏳ Rodando..." : "⚡ Executar Agora"}
+                        {autoPilotRunning ? "⏳ Varrendo Todos os Sites..." : "⚡ Executar Agora (Todos os Sites)"}
                       </button>
                     )}
                     <button
@@ -1389,7 +1500,7 @@ export default function AdminApp() {
                       className={`btnAutoPilotToggle ${!autoPilot ? "btnAutoPilotOff" : ""}`}
                       onClick={() => setAutoPilot((prev) => !prev)}
                     >
-                      {autoPilot ? "⏸️ Pausar Piloto Automático" : "🚀 Ligar Piloto Automático (a cada 10m)"}
+                      {autoPilot ? "⏸️ Pausar Piloto Automático" : "🚀 Ligar Piloto Automático (Todos os Sites)"}
                     </button>
                   </div>
                 </div>
@@ -1401,10 +1512,14 @@ export default function AdminApp() {
                     className={`radarRegionBtn ${radarRegion === "goias" ? "active" : ""}`}
                     onClick={() => {
                       setRadarRegion("goias");
-                      const firstGo = RADAR_SOURCES.find((s) => s.region === "goias");
-                      if (firstGo && activeSourceUrl !== firstGo.url) {
-                        setActiveSourceUrl(firstGo.url);
-                        importNews("feed", firstGo.url);
+                      if (activeSourceUrl === "ALL") {
+                        importAllFeeds("goias");
+                      } else {
+                        const firstGo = RADAR_SOURCES.find((s) => s.region === "goias");
+                        if (firstGo && activeSourceUrl !== firstGo.url) {
+                          setActiveSourceUrl(firstGo.url);
+                          importNews("feed", firstGo.url);
+                        }
                       }
                     }}
                   >
@@ -1415,10 +1530,14 @@ export default function AdminApp() {
                     className={`radarRegionBtn ${radarRegion === "brasil" ? "active" : ""}`}
                     onClick={() => {
                       setRadarRegion("brasil");
-                      const firstBr = RADAR_SOURCES.find((s) => s.region === "brasil");
-                      if (firstBr && activeSourceUrl !== firstBr.url) {
-                        setActiveSourceUrl(firstBr.url);
-                        importNews("feed", firstBr.url);
+                      if (activeSourceUrl === "ALL") {
+                        importAllFeeds("brasil");
+                      } else {
+                        const firstBr = RADAR_SOURCES.find((s) => s.region === "brasil");
+                        if (firstBr && activeSourceUrl !== firstBr.url) {
+                          setActiveSourceUrl(firstBr.url);
+                          importNews("feed", firstBr.url);
+                        }
                       }
                     }}
                   >
@@ -1428,6 +1547,36 @@ export default function AdminApp() {
 
                 {/* Botões de Fontes de Notícias */}
                 <div style={{ display: "flex", gap: 8, flexWrap: "wrap", marginBottom: 16 }}>
+                  {/* Botão de Todos os Sites Simultâneos */}
+                  <button
+                    type="button"
+                    className={`radarSourceBtn ${activeSourceUrl === "ALL" ? "active" : ""}`}
+                    style={
+                      activeSourceUrl === "ALL"
+                        ? {
+                            background: "linear-gradient(135deg, #ea580c, #c2410c)",
+                            color: "#fff",
+                            borderColor: "#ea580c",
+                            boxShadow: "0 2px 8px rgba(234, 88, 12, 0.4)",
+                            fontWeight: 800,
+                          }
+                        : {
+                            fontWeight: 700,
+                            borderColor: "#fdba74",
+                            background: "#fff7ed",
+                            color: "#9a3412",
+                          }
+                    }
+                    disabled={importing || batchQueueing}
+                    onClick={() => {
+                      setActiveSourceUrl("ALL");
+                      importAllFeeds(radarRegion);
+                    }}
+                  >
+                    ⚡ <b>Todos os {radarRegion === "goias" ? "7 Sites de Goiás" : "Jornais"}</b>
+                    <span style={{ opacity: 0.85, fontSize: 10 }}>(Simultâneo)</span>
+                  </button>
+
                   {RADAR_SOURCES.filter((s) => s.region === radarRegion).map((src) => {
                     const isActive = activeSourceUrl === src.url;
                     return (
@@ -1435,7 +1584,7 @@ export default function AdminApp() {
                         key={src.name + src.url}
                         type="button"
                         className={`radarSourceBtn ${isActive ? "active" : ""}`}
-                        disabled={importing}
+                        disabled={importing || batchQueueing}
                         onClick={() => {
                           setActiveSourceUrl(src.url);
                           importNews("feed", src.url);
