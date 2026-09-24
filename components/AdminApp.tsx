@@ -73,7 +73,7 @@ const RADAR_SOURCES: RadarSource[] = [
   { name: "Diário de Goiás", url: "https://diariodegoias.com.br/feed/", label: "Diário de Goiás", region: "goias", tag: "Notícias & Política" },
   { name: "Curta Mais", url: "https://curtamais.com.br/goiania/feed/", label: "Curta Mais Goiânia", region: "goias", tag: "Eventos & Gastronomia" },
   { name: "Dia Online", url: "https://diaonline.ig.com.br/feed/", label: "Dia Online", region: "goias", tag: "Goiás" },
-  { name: "Portal 6", url: "https://portal6.com.br/feed/", label: "Portal 6 Goiás", region: "goias", tag: "Interior" },
+  { name: "Metrópoles Goiás", url: "https://www.metropoles.com/distrito-federal/entorno/feed", label: "Metrópoles Goiás", region: "goias", tag: "Goiás & Região" },
   { name: "Goiás 24 Horas", url: "https://goias24horas.com.br/feed/", label: "Goiás 24 Horas", region: "goias", tag: "Notícias" },
 
   // GRANDES JORNAIS DO BRASIL
