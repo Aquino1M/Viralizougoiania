@@ -471,11 +471,31 @@ async function fetchMissingMedia(link: string): Promise<{ image: string; video: 
         Accept: "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
         "Accept-Language": "pt-BR,pt;q=0.9,en-US;q=0.8,en;q=0.7",
       },
-      signal: AbortSignal.timeout(5000),
+      signal: AbortSignal.timeout(6000),
     });
     if (!res.ok) return { image: "", video: "" };
     const html = await res.text();
-    const image = extractImageFromHtml(html, link);
+    let image = extractImageFromHtml(html, link);
+    if (!image) {
+      try {
+        const urlObj = new URL(link);
+        const segments = urlObj.pathname.split("/").filter(Boolean);
+        const slug = segments[segments.length - 1];
+        if (slug) {
+          const wpRes = await fetch(`${urlObj.origin}/wp-json/wp/v2/posts?slug=${encodeURIComponent(slug)}&_embed=1`, {
+            headers: { "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64)" },
+            signal: AbortSignal.timeout(3500),
+          });
+          if (wpRes.ok) {
+            const wpData = await wpRes.json();
+            if (Array.isArray(wpData) && wpData[0]) {
+              const media = wpData[0]._embedded?.["wp:featuredmedia"]?.[0]?.source_url;
+              if (media) image = media;
+            }
+          }
+        }
+      } catch {}
+    }
     const video = extractVideoFromHtml(html, extractJsonLd(html));
     return {
       image,
@@ -651,9 +671,10 @@ async function parseFeed(xml: string, feedUrl: string): Promise<ImportedNews[]> 
       headers: {
         "User-Agent":
           "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36",
-        Accept: "application/json",
+        Accept: "application/json, text/plain, */*",
+        "Accept-Language": "pt-BR,pt;q=0.9,en-US;q=0.8,en;q=0.7",
       },
-      signal: AbortSignal.timeout(3500),
+      signal: AbortSignal.timeout(6000),
     });
     if (wpRes.ok) {
       const wpPosts = await wpRes.json();
@@ -663,13 +684,15 @@ async function parseFeed(xml: string, feedUrl: string): Promise<ImportedNews[]> 
           if (!featuredMedia) continue;
           const wpLink = (wp.link || "").replace(/\/$/, "");
           const wpId = String(wp.id);
+          const wpTitleClean = cleanText(wp.title?.rendered || "");
           for (const item of parsed) {
             if (!item.image_url) {
               const cleanSource = (item.source_url || "").replace(/\/$/, "");
               if (
                 cleanSource === wpLink ||
                 cleanSource.includes(`p=${wpId}`) ||
-                (wp.slug && cleanSource.includes(wp.slug))
+                (wp.slug && cleanSource.includes(wp.slug)) ||
+                (wpTitleClean && item.title && (item.title.includes(wpTitleClean.slice(0, 25)) || wpTitleClean.includes(item.title.slice(0, 25))))
               ) {
                 item.image_url = featuredMedia;
               }

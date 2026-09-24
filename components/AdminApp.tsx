@@ -543,6 +543,7 @@ export default function AdminApp() {
     try {
       const items = await fetchRadarFeeds(region);
       setImportItems(items);
+      autoHealMissingImages(items);
       const siteCount = RADAR_SOURCES.filter((s) => s.region === region).length;
       setImportMessage(
         `📡 Radar: ${items.length} notícias recolhidas simultaneamente de todos os ${siteCount} sites de ${region === "goias" ? "Goiás" : "Brasil"}! Ordenadas das mais recentes.`
@@ -552,6 +553,29 @@ export default function AdminApp() {
     } finally {
       setImporting(false);
     }
+  }
+
+  function autoHealMissingImages(incomingItems: ImportedNews[]) {
+    const missing = incomingItems.filter((it) => !it.image_url && it.source_url);
+    if (!missing.length) return;
+    missing.slice(0, 15).forEach(async (it) => {
+      try {
+        const res = await fetch("/api/import-news", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ url: it.source_url, mode: "article" }),
+        });
+        if (res.ok) {
+          const data = await res.json();
+          const foundImg = data.items?.[0]?.image_url;
+          if (foundImg) {
+            setImportItems((prev) =>
+              prev.map((p) => (p.source_url === it.source_url ? { ...p, image_url: foundImg } : p))
+            );
+          }
+        }
+      } catch {}
+    });
   }
 
   // Contagem de matérias que ainda não foram postadas e sem repetição no feed atual
@@ -1095,6 +1119,7 @@ export default function AdminApp() {
     }
     const items = (d.items || []) as ImportedNews[];
     setImportItems(items);
+    autoHealMissingImages(items);
     setImportMessage(
       importMode === "feed"
         ? `📡 Radar Goiás: ${items.length} notícias encontradas e categorizadas.`
