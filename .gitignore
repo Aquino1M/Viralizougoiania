@@ -13,3 +13,5 @@ tsconfig.tsbuildinfo
 supabase/.temp/
 .agents/
 skills-lock.json
+
+.vercel

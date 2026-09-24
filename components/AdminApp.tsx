@@ -1753,7 +1753,7 @@ export default function AdminApp() {
                     <article className={`importCard ${isAlreadyPosted ? "alreadyPosted" : ""} ${isSelected ? "selected" : ""}`} key={`${item.source_url}-${i}`}>
                       {item.image_url ? (
                         <div style={{ position: "relative" }}>
-                          <img src={item.image_url} alt="" />
+                          <img src={item.image_url} alt="" referrerPolicy="no-referrer" />
                           <div
                             onClick={(e) => {
                               e.stopPropagation();
@@ -2046,6 +2046,7 @@ export default function AdminApp() {
                             <img
                               src={p.image_url}
                               alt=""
+                              referrerPolicy="no-referrer"
                               style={{ width: 85, height: 60, objectFit: "cover", borderRadius: 8, border: "1px solid #e2e8f0" }}
                             />
                           ) : (
@@ -2564,6 +2565,7 @@ export default function AdminApp() {
                         <img
                           src={form.image_url}
                           alt="Prévia da capa"
+                          referrerPolicy="no-referrer"
                           style={{ maxWidth: 360, maxHeight: 220, objectFit: "cover", borderRadius: 12, border: "1px solid #e2e8f0" }}
                         />
                       </div>

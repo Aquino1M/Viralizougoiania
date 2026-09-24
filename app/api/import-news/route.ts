@@ -486,12 +486,36 @@ async function fetchMissingMedia(link: string): Promise<{ image: string; video: 
   }
 }
 
-function extractArticle(html: string, finalUrl: string): ImportedNews {
+async function extractArticle(html: string, finalUrl: string): Promise<ImportedNews> {
   const ld = extractJsonLd(html);
   const htmlTitle = cleanText(html.match(/<title\b[^>]*>([\s\S]*?)<\/title>/i)?.[1] || "");
   const title = cleanText(metaContent(html, "og:title") || String(ld?.headline || ld?.name || "") || htmlTitle);
   const excerpt = cleanText(metaContent(html, "og:description") || metaContent(html, "description") || String(ld?.description || ""));
-  const image = extractImageFromHtml(html, finalUrl);
+  let image = extractImageFromHtml(html, finalUrl);
+  if (!image) {
+    try {
+      const urlObj = new URL(finalUrl);
+      const segments = urlObj.pathname.split("/").filter(Boolean);
+      const slug = segments[segments.length - 1];
+      if (slug) {
+        const wpRes = await fetch(`${urlObj.origin}/wp-json/wp/v2/posts?slug=${encodeURIComponent(slug)}&_embed=1`, {
+          headers: {
+            "User-Agent":
+              "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36",
+            Accept: "application/json",
+          },
+          signal: AbortSignal.timeout(3000),
+        });
+        if (wpRes.ok) {
+          const wpData = await wpRes.json();
+          if (Array.isArray(wpData) && wpData[0]) {
+            const media = wpData[0]._embedded?.["wp:featuredmedia"]?.[0]?.source_url;
+            if (media) image = media;
+          }
+        }
+      }
+    } catch {}
+  }
   const sourceName = cleanText(metaContent(html, "og:site_name") || String((ld?.publisher as Record<string, unknown> | undefined)?.name || "") || new URL(finalUrl).hostname.replace(/^www\./, ""));
   
   const published = metaContent(html, "article:published_time") ||
@@ -620,20 +644,52 @@ async function parseFeed(xml: string, feedUrl: string): Promise<ImportedNews[]> 
     };
   }).filter((item) => item.title && item.source_url);
 
-  // Para jornais que não enviam imagem ou vídeo no feed XML, busca da matéria em lote controlado
+  // 1. Para sites WordPress (Portal 6, A Redação, Diário de Goiás, etc.), busca fotos destacadas via REST API oficial (/wp-json)
+  try {
+    const origin = new URL(feedUrl).origin;
+    const wpRes = await fetch(`${origin}/wp-json/wp/v2/posts?per_page=20&_embed=1`, {
+      headers: {
+        "User-Agent":
+          "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36",
+        Accept: "application/json",
+      },
+      signal: AbortSignal.timeout(3500),
+    });
+    if (wpRes.ok) {
+      const wpPosts = await wpRes.json();
+      if (Array.isArray(wpPosts)) {
+        for (const wp of wpPosts) {
+          const featuredMedia = wp._embedded?.["wp:featuredmedia"]?.[0]?.source_url;
+          if (!featuredMedia) continue;
+          const wpLink = (wp.link || "").replace(/\/$/, "");
+          const wpId = String(wp.id);
+          for (const item of parsed) {
+            if (!item.image_url) {
+              const cleanSource = (item.source_url || "").replace(/\/$/, "");
+              if (
+                cleanSource === wpLink ||
+                cleanSource.includes(`p=${wpId}`) ||
+                (wp.slug && cleanSource.includes(wp.slug))
+              ) {
+                item.image_url = featuredMedia;
+              }
+            }
+          }
+        }
+      }
+    }
+  } catch {}
+
+  // 2. Para itens que ainda ficarem sem imagem ou vídeo, busca na página da matéria em paralelo direto
   const missingMedia = parsed.filter((it) => (!it.image_url || !it.video_url) && it.source_url);
   if (missingMedia.length > 0) {
-    const batchSize = 4;
-    for (let i = 0; i < Math.min(missingMedia.length, 25); i += batchSize) {
-      const slice = missingMedia.slice(i, i + batchSize);
-      await Promise.allSettled(
-        slice.map(async (item) => {
-          const media = await fetchMissingMedia(item.source_url);
-          if (media.image && !item.image_url) item.image_url = media.image;
-          if (media.video && !item.video_url) item.video_url = media.video;
-        })
-      );
-    }
+    await Promise.allSettled(
+      missingMedia.slice(0, 15).map(async (item) => {
+        const media = await fetchMissingMedia(item.source_url);
+        if (media.image && !item.image_url) item.image_url = media.image;
+        if (media.video && !item.video_url) item.video_url = media.video;
+      })
+    );
   }
 
   return parsed;
@@ -660,7 +716,7 @@ export async function POST(req: Request) {
 
     const first = await safeFetch(url);
     if (mode === "article") {
-      return NextResponse.json({ items: [extractArticle(first.text, first.url)] });
+      return NextResponse.json({ items: [await extractArticle(first.text, first.url)] });
     }
 
     let feedText = first.text;
