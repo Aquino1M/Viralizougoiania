@@ -156,6 +156,42 @@ export default function AdminApp() {
   const [selectedUrls, setSelectedUrls] = useState<string[]>([]);
   const [batchQueueing, setBatchQueueing] = useState(false);
   const [batchProgress, setBatchProgress] = useState("");
+
+  // Ritmo de postagem na fila (1 por slot, 2 por slot, 3 por slot, ou 1 por Aba/Editoria)
+  type QueueScheduleMode = "1_per_10m" | "2_per_10m" | "3_per_10m" | "1_per_category";
+  const [queueScheduleMode, setQueueScheduleMode] = useState<QueueScheduleMode>(() => {
+    if (typeof window !== "undefined") {
+      const saved = localStorage.getItem("viralizou_radar_schedule_mode");
+      if (saved === "1_per_10m" || saved === "2_per_10m" || saved === "3_per_10m" || saved === "1_per_category") {
+        return saved as QueueScheduleMode;
+      }
+    }
+    return "1_per_category"; // Padrão inteligente: 1 por aba do jornal a cada 10 min!
+  });
+
+  // Piloto Automático do Radar (executa a cada 10 min de forma contínua)
+  const [autoPilot, setAutoPilot] = useState<boolean>(() => {
+    if (typeof window !== "undefined") {
+      return localStorage.getItem("viralizou_radar_autopilot") === "true";
+    }
+    return false;
+  });
+  const [autoPilotCountdown, setAutoPilotCountdown] = useState<number>(600);
+  const [autoPilotRunning, setAutoPilotRunning] = useState<boolean>(false);
+
+  // Persiste preferências no navegador
+  useEffect(() => {
+    if (typeof window !== "undefined") {
+      localStorage.setItem("viralizou_radar_autopilot", String(autoPilot));
+    }
+  }, [autoPilot]);
+
+  useEffect(() => {
+    if (typeof window !== "undefined") {
+      localStorage.setItem("viralizou_radar_schedule_mode", queueScheduleMode);
+    }
+  }, [queueScheduleMode]);
+
   const [admins, setAdmins] = useState<AdminUser[]>([]);
   const [adminLoading, setAdminLoading] = useState(false);
   const [adminMessage, setAdminMessage] = useState("");
@@ -475,7 +511,60 @@ export default function AdminApp() {
     setSelectedUrls(unpostedUrls);
   }
 
-  // Enfileiramento em lote com garantia de ordenação pelas mais recentes e sem repetição
+  // Rotina de execução do ciclo do Piloto Automático
+  async function runAutoPilotCycle() {
+    if (autoPilotRunning || batchQueueing) return;
+    setAutoPilotRunning(true);
+    setImportMessage("🤖 Piloto Automático: Verificando novos feeds e notícias em tempo real...");
+    try {
+      // 1. Libera publicações cujo horário já venceu
+      await fetch("/api/posts/publish-due").catch(() => {});
+
+      // 2. Busca notícias da fonte ativa atual
+      const res = await fetch("/api/import-news", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ url: activeSourceUrl, mode: "feed" }),
+      });
+
+      if (res.ok) {
+        const data = await res.json();
+        const incoming: ImportedNews[] = data.items || [];
+        setImportItems(incoming);
+
+        // 3. Filtra apenas as não postadas
+        const unposted = incoming.filter((it) => !isItemAlreadyPosted(it));
+        if (unposted.length > 0) {
+          await queueItemsInBatch(unposted, "Piloto Automático");
+        } else {
+          setImportMessage("🤖 Piloto Automático: Nenhuma notícia nova nesta rodada. Próxima checagem em 10 minutos.");
+        }
+      }
+      await load();
+    } catch (err: any) {
+      console.warn("Aviso no ciclo do Piloto Automático:", err.message);
+    } finally {
+      setAutoPilotRunning(false);
+      setAutoPilotCountdown(600);
+    }
+  }
+
+  // Timer do Piloto Automático (a cada segundo decrementa até disparar em 0)
+  useEffect(() => {
+    if (!autoPilot) return;
+    const pilotTimer = setInterval(() => {
+      setAutoPilotCountdown((prev) => {
+        if (prev <= 1) {
+          runAutoPilotCycle();
+          return 600;
+        }
+        return prev - 1;
+      });
+    }, 1000);
+    return () => clearInterval(pilotTimer);
+  }, [autoPilot, activeSourceUrl, posts, batchQueueing, autoPilotRunning, queueScheduleMode]);
+
+  // Enfileiramento em lote com garantia de ordenação pelas mais recentes, sem repetição e com ritmo configurável
   async function queueItemsInBatch(rawItems: ImportedNews[], batchTypeLabel: string) {
     if (rawItems.length === 0) return;
 
@@ -509,8 +598,48 @@ export default function AdminApp() {
       return timeB - timeA; // Descendente: mais nova primeiro
     });
 
+    // 4. Planejamento de horários conforme o ritmo escolhido (1 por slot, 2 por slot, 3 por slot ou 1 por Aba/Editoria)
+    let plannedSchedule: { item: ImportedNews; slotMinutes: number }[] = [];
+
+    if (queueScheduleMode === "1_per_category") {
+      // 🌟 Modo inteligente: 1 notícia por Aba do Jornal a cada 10 minutos
+      const byCategory: Record<string, ImportedNews[]> = {};
+      for (const it of uniqueItems) {
+        const cat = it.category || "Goiânia";
+        if (!byCategory[cat]) byCategory[cat] = [];
+        byCategory[cat].push(it);
+      }
+
+      let currentStep = 1;
+      let hasMore = true;
+      while (hasMore) {
+        hasMore = false;
+        for (const cat of Object.keys(byCategory)) {
+          if (byCategory[cat].length > 0) {
+            const nextItem = byCategory[cat].shift()!;
+            plannedSchedule.push({
+              item: nextItem,
+              slotMinutes: currentStep * queueInterval,
+            });
+            hasMore = true;
+          }
+        }
+        if (hasMore) currentStep++;
+      }
+    } else {
+      // Modos numéricos: 1, 2 ou 3 postagens por slot de 10 min
+      const perSlot = queueScheduleMode === "3_per_10m" ? 3 : queueScheduleMode === "2_per_10m" ? 2 : 1;
+      plannedSchedule = uniqueItems.map((item, idx) => {
+        const slotStep = Math.floor(idx / perSlot) + 1;
+        return {
+          item,
+          slotMinutes: slotStep * queueInterval,
+        };
+      });
+    }
+
     setBatchQueueing(true);
-    setBatchProgress(`Iniciando agendamento na fila de ${uniqueItems.length} matérias mais recentes...`);
+    setBatchProgress(`Iniciando agendamento na fila de ${plannedSchedule.length} matérias mais recentes...`);
 
     let countSuccess = 0;
     let baseTime = Date.now();
@@ -520,12 +649,11 @@ export default function AdminApp() {
       baseTime = Math.max(Date.now(), new Date(last.published_at!).getTime());
     }
 
-    for (let i = 0; i < uniqueItems.length; i++) {
-      const item = uniqueItems[i];
-      setBatchProgress(`Enviando para a Fila (${i + 1} de ${uniqueItems.length}): "${item.title.slice(0, 34)}..."`);
+    for (let i = 0; i < plannedSchedule.length; i++) {
+      const { item, slotMinutes } = plannedSchedule[i];
+      setBatchProgress(`Enviando para a Fila (${i + 1} de ${plannedSchedule.length}): "${item.title.slice(0, 32)}..." (+${slotMinutes}m)`);
 
-      // A matéria mais recente entra no primeiro slot livre (+10m), a seguinte (+20m), etc.
-      const slotTime = new Date(baseTime + (i + 1) * queueInterval * 60 * 1000).toISOString();
+      const slotTime = new Date(baseTime + slotMinutes * 60 * 1000).toISOString();
 
       let targetCategory = "Goiânia";
       if (item.category) {
@@ -535,7 +663,27 @@ export default function AdminApp() {
         targetCategory = orderedCategories.find((c) => c.active)?.name || "Goiânia";
       }
 
-      const rawSource = item.source_content || item.content || item.excerpt || item.title;
+      let rawSource = item.source_content || item.content || item.excerpt || item.title;
+      // Se a notícia vier com texto curto (resumo) ou truncado com cortes, busca a matéria completa da URL original
+      if (item.source_url && (rawSource.split("\n\n").length < 2 || rawSource.length < 320)) {
+        try {
+          const fetchRes = await fetch("/api/import-news", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ url: item.source_url, mode: "article" }),
+          });
+          if (fetchRes.ok) {
+            const fetchedData = await fetchRes.json();
+            if (fetchedData.items?.[0]?.source_content) {
+              rawSource = fetchedData.items[0].source_content;
+              if (fetchedData.items[0].image_url && !item.image_url) {
+                item.image_url = fetchedData.items[0].image_url;
+              }
+            }
+          }
+        } catch {}
+      }
+
       const formatted = formatViralizouArticle({
         title: item.title,
         excerpt: item.excerpt,
@@ -586,7 +734,17 @@ export default function AdminApp() {
     setSelectedUrls([]);
     setBatchQueueing(false);
     setBatchProgress("");
-    setImportMessage(`🎉 ${countSuccess} matérias mais recentes adicionadas com sucesso à Fila! Intervalo de ${queueInterval} minutos entre cada uma. Nenhuma notícia repetida foi incluída.`);
+
+    const modeDescription =
+      queueScheduleMode === "1_per_category"
+        ? "🌟 1 matéria por Aba/Editoria a cada 10 min"
+        : queueScheduleMode === "2_per_10m"
+        ? "2 matérias a cada 10 min"
+        : queueScheduleMode === "3_per_10m"
+        ? "3 matérias a cada 10 min"
+        : "1 matéria a cada 10 min";
+
+    setImportMessage(`🎉 ${countSuccess} matérias mais recentes adicionadas à Fila com sucesso! Ritmo: ${modeDescription}. Nenhuma notícia repetida foi incluída.`);
   }
 
   // 1. Enviar notícias marcadas manualmente pelo usuário
@@ -1195,6 +1353,47 @@ export default function AdminApp() {
                   </div>
                 </div>
 
+                {/* Barra do Piloto Automático */}
+                <div className="radarAutoPilotBar">
+                  <div className="radarAutoPilotInfo">
+                    {autoPilot ? (
+                      <span className="radarAutoPilotBadgeActive">
+                        🟢 PILOTO AUTOMÁTICO ATIVO
+                      </span>
+                    ) : (
+                      <span style={{ fontSize: 13, opacity: 0.9 }}>
+                        🤖 Piloto Automático
+                      </span>
+                    )}
+                    <span>
+                      {autoPilot
+                        ? `Varrendo e adicionando notícias novas à fila a cada 10 min • Próximo envio em ${Math.floor(autoPilotCountdown / 60).toString().padStart(2, "0")}:${(autoPilotCountdown % 60).toString().padStart(2, "0")}`
+                        : "Posta as matérias não postadas automaticamente na fila a cada 10 minutos sem repetir."}
+                    </span>
+                  </div>
+                  <div style={{ display: "flex", gap: 8, alignItems: "center", flexWrap: "wrap" }}>
+                    {autoPilot && (
+                      <button
+                        type="button"
+                        className="btn secondary"
+                        style={{ padding: "6px 12px", fontSize: 11, fontWeight: 700 }}
+                        disabled={autoPilotRunning || batchQueueing}
+                        onClick={runAutoPilotCycle}
+                        title="Executa agora mesmo o ciclo de busca e agendamento sem esperar os 10 minutos"
+                      >
+                        {autoPilotRunning ? "⏳ Rodando..." : "⚡ Executar Agora"}
+                      </button>
+                    )}
+                    <button
+                      type="button"
+                      className={`btnAutoPilotToggle ${!autoPilot ? "btnAutoPilotOff" : ""}`}
+                      onClick={() => setAutoPilot((prev) => !prev)}
+                    >
+                      {autoPilot ? "⏸️ Pausar Piloto Automático" : "🚀 Ligar Piloto Automático (a cada 10m)"}
+                    </button>
+                  </div>
+                </div>
+
                 {/* Abas de Região: Goiânia/Goiás vs Brasil */}
                 <div className="radarRegionNav">
                   <button
@@ -1315,6 +1514,45 @@ export default function AdminApp() {
                       )}
                     </div>
 
+                    {/* Seletor de Ritmo de Postagem na Fila */}
+                    <div className="radarPaceGroup" title="Escolha quantas matérias liberar a cada 10 minutos na fila">
+                      <span style={{ fontSize: 11, fontWeight: 800, color: "#334155" }}>
+                        ⏱️ Ritmo da Fila:
+                      </span>
+                      <button
+                        type="button"
+                        className={`radarPaceBtn ${queueScheduleMode === "1_per_10m" ? "active" : ""}`}
+                        onClick={() => setQueueScheduleMode("1_per_10m")}
+                        title="Programa 1 matéria a cada 10 minutos (+10m, +20m, +30m...)"
+                      >
+                        1 a cada 10m
+                      </button>
+                      <button
+                        type="button"
+                        className={`radarPaceBtn ${queueScheduleMode === "2_per_10m" ? "active" : ""}`}
+                        onClick={() => setQueueScheduleMode("2_per_10m")}
+                        title="Programa 2 matérias juntas a cada 10 minutos"
+                      >
+                        2 a cada 10m
+                      </button>
+                      <button
+                        type="button"
+                        className={`radarPaceBtn ${queueScheduleMode === "3_per_10m" ? "active" : ""}`}
+                        onClick={() => setQueueScheduleMode("3_per_10m")}
+                        title="Programa 3 matérias juntas a cada 10 minutos"
+                      >
+                        3 a cada 10m
+                      </button>
+                      <button
+                        type="button"
+                        className={`radarPaceBtn special ${queueScheduleMode === "1_per_category" ? "active" : ""}`}
+                        onClick={() => setQueueScheduleMode("1_per_category")}
+                        title="🌟 1 matéria de cada aba do jornal a cada 10 minutos (Segurança, Goiânia, Trânsito, etc.)"
+                      >
+                        🌟 1 por Aba do Jornal
+                      </button>
+                    </div>
+
                     <div style={{ display: "flex", alignItems: "center", gap: 10, flexWrap: "wrap" }}>
                       {selectedUrls.length > 0 && (
                         <button
@@ -1323,7 +1561,7 @@ export default function AdminApp() {
                           style={{ padding: "8px 16px", fontSize: 13 }}
                           disabled={batchQueueing}
                           onClick={queueSelectedFromRadar}
-                          title="Envia as notícias selecionadas para a fila, agendadas pelas mais recentes a cada 10 min"
+                          title="Envia as notícias selecionadas para a fila, com o ritmo escolhido"
                         >
                           {batchQueueing
                             ? "⏳ Agendando na Fila..."
@@ -1335,7 +1573,7 @@ export default function AdminApp() {
                         className="btnQueueAll"
                         disabled={batchQueueing || unpostedItemsCount === 0}
                         onClick={queueAllUnpostedFromRadar}
-                        title="Posta todas as notícias não postadas na fila (+10m cada), ordenando da mais recente para a mais antiga e sem repetir nenhuma notícia"
+                        title="Posta todas as notícias não postadas na fila com o ritmo escolhido, ordenando da mais recente para a mais antiga e sem repetir nenhuma notícia"
                       >
                         {batchQueueing
                           ? "⏳ Agendando na Fila..."

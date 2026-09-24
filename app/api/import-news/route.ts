@@ -10,6 +10,9 @@ const MAX_HTML = 2_000_000;
 function decodeEntities(value: string) {
   const named: Record<string, string> = {
     amp: "&", lt: "<", gt: ">", quot: '"', apos: "'", nbsp: " ",
+    hellip: "…", mdash: "—", ndash: "–", bull: "•",
+    ldquo: "“", rdquo: "”", lsquo: "‘", rsquo: "’",
+    copy: "©", reg: "®", trade: "™", ordf: "ª", ordm: "º",
   };
   return value.replace(/&(#x?[0-9a-f]+|[a-z]+);/gi, (_, code: string) => {
     if (code[0] === "#") {
@@ -22,9 +25,15 @@ function decodeEntities(value: string) {
 }
 
 function cleanText(value = "") {
-  return decodeEntities(value.replace(/<!\[CDATA\[([\s\S]*?)\]\]>/g, "$1").replace(/<[^>]*>/g, " "))
+  let cleaned = decodeEntities(value.replace(/<!\[CDATA\[([\s\S]*?)\]\]>/g, "$1").replace(/<[^>]*>/g, " "));
+  cleaned = cleaned
+    .replace(/\[\s*(&hellip;|&#8230;|…|\.{3})\s*\]/gi, "")
+    .replace(/(&hellip;|&#8230;)/gi, "")
+    .replace(/\[\s*\.\.\.\s*\]/g, "")
+    .replace(/\[\s*…\s*\]/g, "")
     .replace(/\s+/g, " ")
     .trim();
+  return cleaned;
 }
 
 function attrMap(tag: string) {
