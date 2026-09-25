@@ -89,18 +89,25 @@ async function writeLocal(posts: Post[]) {
   } catch {}
 }
 
-export async function publishDuePosts() {
+export async function publishDuePosts(): Promise<Post[]> {
   const now = new Date().toISOString();
+  let updatedPosts: Post[] = [];
+
   if (hasSupabaseConfig()) {
     try {
-      await sb(`posts?status=eq.scheduled&published_at=lte.${encodeURIComponent(now)}`, {
+      const res = await sb(`posts?status=eq.scheduled&published_at=lte.${encodeURIComponent(now)}`, {
         method: "PATCH",
+        headers: { Prefer: "return=representation" },
         body: JSON.stringify({ status: "published", updated_at: now }),
       });
+      if (Array.isArray(res)) {
+        updatedPosts = res;
+      }
     } catch (err: any) {
       console.warn("Erro ao liberar agendamentos no Supabase:", err.message);
     }
   }
+
   try {
     const posts = await readLocal();
     let changed = false;
@@ -109,6 +116,9 @@ export async function publishDuePosts() {
         post.status = "published";
         post.updated_at = now;
         changed = true;
+        if (!updatedPosts.some((p) => p.id === post.id)) {
+          updatedPosts.push(post);
+        }
       }
     }
     if (changed) {
@@ -117,6 +127,8 @@ export async function publishDuePosts() {
       } catch {}
     }
   } catch {}
+
+  return updatedPosts;
 }
 
 export async function getPosts(opts: { includeDrafts?: boolean; category?: string; limit?: number } = {}) {
@@ -208,8 +220,29 @@ export async function createPost(input: PostInput) {
           body: JSON.stringify(post),
         });
       } catch (err: any) {
-        // Se a coluna video_url ainda não foi adicionada no Supabase pelo schema.sql, tenta sem ela
-        if (err.message && err.message.includes("video_url")) {
+        // Se houver conflito de slug único no Supabase, adiciona sufixo único e tenta novamente
+        if (err.message && err.message.includes("posts_slug_key")) {
+          post.slug = `${post.slug}-${Math.random().toString(36).slice(2, 6)}`;
+          try {
+            rows = await sb("posts", {
+              method: "POST",
+              headers: { Prefer: "return=representation" },
+              body: JSON.stringify(post),
+            });
+          } catch (retryErr: any) {
+            if (retryErr.message && retryErr.message.includes("video_url")) {
+              const { video_url: _, ...withoutVideo } = post;
+              rows = await sb("posts", {
+                method: "POST",
+                headers: { Prefer: "return=representation" },
+                body: JSON.stringify(withoutVideo),
+              });
+            } else {
+              throw retryErr;
+            }
+          }
+        } else if (err.message && err.message.includes("video_url")) {
+          // Se a coluna video_url ainda não foi adicionada no Supabase pelo schema.sql, tenta sem ela
           const { video_url: _, ...withoutVideo } = post;
           rows = await sb("posts", {
             method: "POST",

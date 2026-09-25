@@ -228,15 +228,51 @@ export default function AdminApp() {
     return next.toISOString();
   }
 
-  // Verifica periodicamente a cada 10 minutos se chegou a hora de liberar matérias da fila (economiza recursos)
+  // Verifica periodicamente (a cada 20s) e ao focar a aba se chegou a hora de liberar matérias da fila
   useEffect(() => {
-    const intervalTimer = setInterval(() => {
-      fetch("/api/posts/publish-due")
-        .then(() => load())
-        .catch(() => {});
-    }, 10 * 60 * 1000);
-    return () => clearInterval(intervalTimer);
+    async function checkPublishDue() {
+      try {
+        const res = await fetch("/api/posts/publish-due");
+        if (res.ok) {
+          const data = await res.json();
+          if (data && data.publishedCount > 0) {
+            setMessage(`🚀 ${data.publishedCount} matéria(s) agendada(s) acabaram de ser publicadas no portal com sucesso!`);
+            load();
+          }
+        }
+      } catch {}
+    }
+
+    // Checa a cada 20 segundos
+    const intervalTimer = setInterval(checkPublishDue, 20 * 1000);
+
+    // Checa imediatamente ao focar a aba do navegador
+    function handleVisibility() {
+      if (document.visibilityState === "visible") {
+        checkPublishDue();
+      }
+    }
+    document.addEventListener("visibilitychange", handleVisibility);
+
+    return () => {
+      clearInterval(intervalTimer);
+      document.removeEventListener("visibilitychange", handleVisibility);
+    };
   }, []);
+
+  useEffect(() => {
+    if (view === "queue" || view === "list") {
+      fetch("/api/posts/publish-due")
+        .then((r) => r.json())
+        .then((data) => {
+          if (data && data.publishedCount > 0) {
+            setMessage(`🚀 ${data.publishedCount} matéria(s) agendada(s) acabaram de ser publicadas no portal com sucesso!`);
+            load();
+          }
+        })
+        .catch(() => {});
+    }
+  }, [view]);
 
   function syncCategoryDrafts(nextCategories: Category[]) {
     setCategoryDrafts(Object.fromEntries(nextCategories.map((c) => [c.id, { name: c.name, slug: c.slug }])));
@@ -663,10 +699,16 @@ export default function AdminApp() {
     setAutoPilotRunning(true);
     const siteCount = RADAR_SOURCES.filter((s) => s.region === radarRegion).length;
     const regionLabel = radarRegion === "goias" ? `todos os ${siteCount} sites de Goiás` : `todos os jornais do Brasil`;
-    setImportMessage(`🤖 Piloto Automático: Varrendo simultaneamente ${regionLabel} em tempo real...`);
+    setImportMessage(`🤖 Piloto Automático: Checando publicações vencidas e varrendo ${regionLabel}...`);
     try {
       // 1. Libera publicações cujo horário já venceu
-      await fetch("/api/posts/publish-due").catch(() => {});
+      const pubRes = await fetch("/api/posts/publish-due").catch(() => null);
+      if (pubRes && pubRes.ok) {
+        const pubData = await pubRes.json().catch(() => null);
+        if (pubData && pubData.publishedCount > 0) {
+          setMessage(`🚀 ${pubData.publishedCount} matéria(s) agendada(s) acabaram de ser publicadas no portal com sucesso!`);
+        }
+      }
 
       // 2. Atualiza lista de posts mais recentes do banco para evitar duplicatas com 100% de precisão
       const postsRes = await fetch("/api/posts", { cache: "no-store" }).catch(() => null);
@@ -687,7 +729,7 @@ export default function AdminApp() {
       const unposted = allNews.filter((it) => !isItemAlreadyPosted(it, freshPosts));
       if (unposted.length > 0) {
         setImportMessage(`🤖 Piloto Automático: Encontradas ${unposted.length} notícias inéditas em todos os ${siteCount} sites! Agendando na fila...`);
-        await queueItemsInBatch(unposted, "Piloto Automático (Todos os Sites)");
+        await queueItemsInBatch(unposted, "Piloto Automático (Todos os Sites)", freshPosts);
       } else {
         setImportMessage(`🤖 Piloto Automático: Verificou ${allNews.length} notícias de todos os ${siteCount} sites. Nenhuma notícia nova pendente. Próxima checagem em 10 minutos.`);
       }
@@ -717,11 +759,13 @@ export default function AdminApp() {
   }, [autoPilot, autoPilotRunning, batchQueueing, radarRegion, queueScheduleMode]);
 
   // Enfileiramento em lote com garantia de ordenação pelas mais recentes, sem repetição e com ritmo configurável
-  async function queueItemsInBatch(rawItems: ImportedNews[], batchTypeLabel: string) {
+  async function queueItemsInBatch(rawItems: ImportedNews[], batchTypeLabel: string, currentPostsList?: Post[]) {
     if (rawItems.length === 0) return;
 
+    const referencePosts = currentPostsList && currentPostsList.length > 0 ? currentPostsList : posts;
+
     // 1. Filtrar matérias que já existem no banco (publicadas, rascunhos ou agendadas)
-    const notInDb = rawItems.filter((item) => !isItemAlreadyPosted(item));
+    const notInDb = rawItems.filter((item) => !isItemAlreadyPosted(item, referencePosts));
 
     // 2. Não pode repetir notícia no mesmo lote (deduplicação estrita por slug, URL base, imagem e similaridade temática)
     const uniqueItems = deduplicateImportedItems(notInDb);
@@ -776,7 +820,10 @@ export default function AdminApp() {
 
     let countSuccess = 0;
     let baseTime = Date.now();
-    const future = queuedPosts.filter((p) => p.published_at && new Date(p.published_at).getTime() > Date.now());
+    const refQueued = referencePosts
+      .filter((p) => p.status === "scheduled")
+      .sort((a, b) => +new Date(a.published_at || 0) - +new Date(b.published_at || 0));
+    const future = refQueued.filter((p) => p.published_at && new Date(p.published_at).getTime() > Date.now());
     if (future.length > 0) {
       const last = future[future.length - 1];
       baseTime = Math.max(Date.now(), new Date(last.published_at!).getTime());
@@ -801,7 +848,7 @@ export default function AdminApp() {
       if (item.source_url && (!item.image_url || !item.video_url || rawSource.split("\n\n").length < 2 || rawSource.length < 320)) {
         try {
           const controller = new AbortController();
-          const timeoutId = setTimeout(() => controller.abort(), 6000);
+          const timeoutId = setTimeout(() => controller.abort(), 3500);
           const fetchRes = await fetch("/api/import-news", {
             method: "POST",
             headers: { "Content-Type": "application/json" },
@@ -966,6 +1013,58 @@ export default function AdminApp() {
       setMessage(`Erro: ${e.message}`);
     }
     await load();
+  }
+
+  async function triggerPublishDue() {
+    setLoading(true);
+    try {
+      const res = await fetch("/api/posts/publish-due");
+      if (res.ok) {
+        const data = await res.json();
+        if (data.publishedCount > 0) {
+          setMessage(`🚀 ${data.publishedCount} matéria(s) agendada(s) foram publicadas no portal agora!`);
+        } else {
+          setMessage("Nenhuma matéria agendada com horário vencido no momento.");
+        }
+      }
+      await load();
+    } catch (err: any) {
+      setMessage(`Erro: ${err.message}`);
+    } finally {
+      setLoading(false);
+    }
+  }
+
+  async function publishNextQueueSlotNow() {
+    if (queuedPosts.length === 0) return;
+    setLoading(true);
+    try {
+      const firstTime = queuedPosts[0]?.published_at;
+      const slotPosts = queuedPosts.filter(
+        (p) =>
+          p.published_at === firstTime ||
+          (p.published_at && firstTime && Math.abs(new Date(p.published_at).getTime() - new Date(firstTime).getTime()) < 60000)
+      );
+      const targets = slotPosts.length > 0 ? slotPosts : [queuedPosts[0]];
+      const now = new Date().toISOString();
+
+      let successCount = 0;
+      for (const p of targets) {
+        const res = await fetch(`/api/posts/${p.id}`, {
+          method: "PATCH",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ status: "published", published_at: now }),
+        });
+        if (res.ok) successCount++;
+      }
+
+      setMessage(`🎉 ${successCount} matéria(s) da fila acabaram de ser publicadas agora mesmo no portal!`);
+      await load();
+    } catch (err: any) {
+      setMessage(`Erro ao publicar lote da fila: ${err.message}`);
+    } finally {
+      setLoading(false);
+    }
   }
 
   async function adjustQueueTime(p: Post, minutesOffset: number) {
@@ -1579,7 +1678,16 @@ export default function AdminApp() {
                     <button
                       type="button"
                       className={`btnAutoPilotToggle ${!autoPilot ? "btnAutoPilotOff" : ""}`}
-                      onClick={() => setAutoPilot((prev) => !prev)}
+                      onClick={() => {
+                        if (!autoPilot) {
+                          setAutoPilot(true);
+                          setTimeout(() => {
+                            runAutoPilotCycle();
+                          }, 100);
+                        } else {
+                          setAutoPilot(false);
+                        }
+                      }}
                     >
                       {autoPilot ? "⏸️ Pausar Piloto Automático" : "🚀 Ligar Piloto Automático (Todos os Sites)"}
                     </button>
@@ -2069,6 +2177,28 @@ export default function AdminApp() {
                         </span>
                       )}
                     </div>
+                    {queuedPosts.length > 0 && (
+                      <button
+                        type="button"
+                        className="btn secondary"
+                        style={{ padding: "5px 12px", fontSize: 11, background: "#ecfdf5", borderColor: "#a7f3d0", color: "#065f46", borderRadius: 6, fontWeight: 700 }}
+                        onClick={triggerPublishDue}
+                        title="Verifica agora se há matérias no horário de publicação e publica imediatamente"
+                      >
+                        ⚡ Liberar Prontas Agora
+                      </button>
+                    )}
+                    {queuedPosts.length > 0 && (
+                      <button
+                        type="button"
+                        className="btn"
+                        style={{ padding: "5px 12px", fontSize: 11, borderRadius: 6, fontWeight: 700 }}
+                        onClick={publishNextQueueSlotNow}
+                        title="Publica imediatamente o próximo lote de matérias agendadas sem esperar os 10 minutos"
+                      >
+                        🚀 Publicar Próximas da Fila Agora
+                      </button>
+                    )}
                     {queuedPosts.length > 1 && (
                       <button
                         type="button"

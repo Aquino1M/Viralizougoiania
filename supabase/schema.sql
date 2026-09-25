@@ -228,7 +228,7 @@ on conflict (slug) do nothing;
 -- 1. Ativa a extensão pg_cron nativa do Supabase
 create extension if not exists pg_cron;
 
--- 2. Agenda a liberação automática a cada 10 minutos (economiza recursos)
+-- 2. Agenda a liberação automática a cada 1 minuto (precisão máxima 24h por dia)
 do $$
 begin
   if exists (select 1 from cron.job where jobname = 'publicar-fila-viralizougoiania') then
@@ -238,7 +238,7 @@ end $$;
 
 select cron.schedule(
   'publicar-fila-viralizougoiania',
-  '*/10 * * * *',
+  '* * * * *',
   $cron$
     update public.posts
     set status = 'published', updated_at = now()
