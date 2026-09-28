@@ -8,6 +8,7 @@ type RadarSource = {
   name: string;
   feedUrl: string;
   hosts: string[];
+  category?: string;
 };
 
 const SOURCES: RadarSource[] = [
@@ -17,7 +18,10 @@ const SOURCES: RadarSource[] = [
   { name: "Curta Mais", feedUrl: "https://curtamais.com.br/goiania/feed/", hosts: ["curtamais.com.br", "www.curtamais.com.br"] },
   { name: "Dia Online", feedUrl: "https://diaonline.ig.com.br/feed/", hosts: ["diaonline.ig.com.br"] },
   { name: "Metrópoles Goiás", feedUrl: "https://www.metropoles.com/distrito-federal/entorno/feed", hosts: ["metropoles.com", "www.metropoles.com"] },
-  { name: "Goiás 24 Horas", feedUrl: "https://goias24horas.com.br/feed/", hosts: ["goias24horas.com.br", "www.goias24horas.com.br"] }
+  { name: "Goiás 24 Horas", feedUrl: "https://goias24horas.com.br/feed/", hosts: ["goias24horas.com.br", "www.goias24horas.com.br"] },
+  { name: "Portal LeoDias", feedUrl: "https://portalleodias.com/famosos/feed/", hosts: ["portalleodias.com", "www.portalleodias.com"], category: "Fofoca" },
+  { name: "OFuxico • A Fazenda", feedUrl: "https://ofuxico.com.br/reality-show/a-fazenda/feed/", hosts: ["ofuxico.com.br", "www.ofuxico.com.br"], category: "Fofoca" },
+  { name: "UOL Futebol", feedUrl: "https://esporte.uol.com.br/futebol/ultimas/index.xml", hosts: ["uol.com.br", "www.uol.com.br", "esporte.uol.com.br"], category: "Futebol" }
 ];
 
 const STOP = new Set(["de","da","do","das","dos","a","o","as","os","e","em","no","na","nos","nas","um","uma","para","por","com","que","se","ao","aos","goias","goiás","goiania","goiânia"]);
@@ -177,7 +181,7 @@ async function fetchSource(source: RadarSource): Promise<ImportedNews[]> {
       excerpt: desc || sourceText.slice(0, 220) || title,
       content: "",
       source_content: sourceText,
-      category: classifyCategory(title, sourceText),
+      category: source.category || classifyCategory(title, sourceText),
       image_url: feedImage(block, source.feedUrl),
       image_credit: "Foto: Reprodução / " + source.name,
       video_url: "",
@@ -333,8 +337,10 @@ export async function runServerRadarAutomation(options: { force?: boolean } = {}
     found = all.length;
 
     const categoryNames = new Set(categories.map(function(c) { return c.name.toLowerCase(); }));
+    const builtInVerticals = new Set(["fofoca","futebol"]);
     all.forEach(function(item) {
-      if (!item.category || !categoryNames.has(item.category.toLowerCase())) item.category = "Goiânia";
+      const category=(item.category||"").toLowerCase();
+      if (!category || (!categoryNames.has(category) && !builtInVerticals.has(category))) item.category = "Goiânia";
     });
 
     const unseen = dedupeIncoming(all, posts);

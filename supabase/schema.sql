@@ -129,8 +129,10 @@ insert into public.categories (name, slug, active, sort_order) values
   ('Esportes', 'esportes', true, 7),
   ('Eventos', 'eventos', true, 8),
   ('Economia', 'economia', true, 9),
-  ('Serviços', 'servicos', true, 10)
-on conflict (slug) do nothing;
+  ('Serviços', 'servicos', true, 10),
+  ('Futebol', 'futebol', true, 11),
+  ('Fofoca', 'fofoca', true, 12)
+on conflict (slug) do update set name = excluded.name, active = true, sort_order = excluded.sort_order;
 
 -- 6. Inserção das Configurações de Redes Sociais
 insert into public.settings (id, data, updated_at) values (

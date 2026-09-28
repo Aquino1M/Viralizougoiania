@@ -1,15 +1,8 @@
 import Link from "next/link";
 import BrandLogo from "@/components/BrandLogo";
 import NavBar from "@/components/NavBar";
+import HeaderSearch from "@/components/HeaderSearch";
 import { getCategories } from "@/lib/storage";
-
-function SearchIcon() {
-  return (
-    <svg viewBox="0 0 24 24" width="17" height="17" aria-hidden="true">
-      <path d="m21 21-4.35-4.35m2.35-5.65a8 8 0 1 1-16 0 8 8 0 0 1 16 0Z" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" />
-    </svg>
-  );
-}
 
 export default async function Header({ breakingTitle }: { breakingTitle?: string }) {
   const categories = await getCategories();
@@ -44,18 +37,7 @@ export default async function Header({ breakingTitle }: { breakingTitle?: string
           <BrandLogo />
 
           <div className="headerActions">
-            <form action="/busca" method="GET" className="headerSearchForm" role="search">
-              <input
-                type="search"
-                name="q"
-                placeholder="Buscar notícias em Goiânia..."
-                aria-label="Buscar notícias"
-                required
-              />
-              <button type="submit" className="searchSubmitBtn" aria-label="Pesquisar">
-                <SearchIcon />
-              </button>
-            </form>
+            <HeaderSearch />
           </div>
         </div>
       </header>
