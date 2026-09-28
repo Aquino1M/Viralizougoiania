@@ -23,6 +23,9 @@ export async function POST(req: Request) {
   try {
     const b = await req.json();
     const publishing = normalizePublishing(b.status, b.published_at);
+    if (!b.image_url || typeof b.image_url !== "string" || b.image_url.trim().length < 10) {
+      return NextResponse.json({ error: "É obrigatório que toda matéria tenha uma imagem válida para ser postada ou agendada na fila." }, { status: 400 });
+    }
     if (b.status === "scheduled" && !b.published_at) {
       return NextResponse.json({ error: "Escolha a data e a hora do agendamento." }, { status: 400 });
     }

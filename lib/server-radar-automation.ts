@@ -19,8 +19,10 @@ const SOURCES: RadarSource[] = [
   { name: "Dia Online", feedUrl: "https://diaonline.ig.com.br/feed/", hosts: ["diaonline.ig.com.br"] },
   { name: "Metrópoles Goiás", feedUrl: "https://www.metropoles.com/distrito-federal/entorno/feed", hosts: ["metropoles.com", "www.metropoles.com"] },
   { name: "Goiás 24 Horas", feedUrl: "https://goias24horas.com.br/feed/", hosts: ["goias24horas.com.br", "www.goias24horas.com.br"] },
-  { name: "Portal LeoDias", feedUrl: "https://portalleodias.com/famosos/feed/", hosts: ["portalleodias.com", "www.portalleodias.com"], category: "Fofoca" },
-  { name: "OFuxico • A Fazenda", feedUrl: "https://ofuxico.com.br/reality-show/a-fazenda/feed/", hosts: ["ofuxico.com.br", "www.ofuxico.com.br"], category: "Fofoca" },
+  { name: "Portal LeoDias", feedUrl: "https://portalleodias.com/famosos/feed/", hosts: ["portalleodias.com", "www.portalleodias.com"], category: "Fofocas" },
+  { name: "Metrópoles Celebridades", feedUrl: "https://www.metropoles.com/celebridades/feed", hosts: ["metropoles.com", "www.metropoles.com"], category: "Fofocas" },
+  { name: "OFuxico • A Fazenda", feedUrl: "https://ofuxico.com.br/reality-show/a-fazenda/feed/", hosts: ["ofuxico.com.br", "www.ofuxico.com.br"], category: "Fofocas" },
+  { name: "GE Brasileirão", feedUrl: "https://ge.globo.com/rss/ge/futebol/brasileirao-serie-a/", hosts: ["ge.globo.com"], category: "Futebol" },
   { name: "UOL Futebol", feedUrl: "https://esporte.uol.com.br/futebol/ultimas/index.xml", hosts: ["uol.com.br", "www.uol.com.br", "esporte.uol.com.br"], category: "Futebol" }
 ];
 
@@ -208,6 +210,7 @@ function dedupeIncoming(items: ImportedNews[], posts: Post[]) {
   });
 
   for (const item of sorted) {
+    if (!item.image_url || item.image_url.trim().length < 10) continue;
     const url = canonicalUrl(item.source_url);
     const slug = slugify(item.title);
     if (!url || postUrls.has(url) || urls.has(url) || postSlugs.has(slug) || slugs.has(slug)) continue;
@@ -354,7 +357,8 @@ export async function runServerRadarAutomation(options: { force?: boolean } = {}
         title: item.title,
         excerpt: item.excerpt,
         sourceText: sourceText,
-        sourceName: item.source_name
+        sourceName: item.source_name,
+        category: item.category,
       });
 
       try {

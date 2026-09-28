@@ -30,12 +30,34 @@ main{min-height:65vh}.heroSection{padding:30px 0 25px}.cityEyebrow{font-size:12p
 @media(max-width:620px){.categoryAdminRow{grid-template-columns:1fr}.categoryOrder{justify-content:start}.categoryEditFields{grid-template-columns:1fr}.categoryActions .btn{flex:1}.categoryCreate .btn{width:100%}}
 
 /* Header Search Form */
-.headerSearchForm{display:flex;align-items:center;background:rgba(255,255,255,.09);border:1px solid rgba(255,255,255,.16);border-radius:999px;padding:3px 6px 3px 14px;transition:.2s ease;min-width:240px}
-.headerSearchForm:focus-within{background:rgba(255,255,255,.15);border-color:var(--brand);box-shadow:0 0 0 3px rgba(255,106,19,.25)}
-.headerSearchForm input{background:transparent;border:0;color:#fff;font-size:12px;outline:none;width:100%}
-.headerSearchForm input::placeholder{color:#94a3b8}
+.headerSearchComponent{position:relative}
+.headerSearchDesktop{display:flex;align-items:center;background:rgba(255,255,255,.09);border:1px solid rgba(255,255,255,.16);border-radius:999px;padding:3px 6px 3px 14px;transition:.2s ease;min-width:240px}
+.headerSearchDesktop:focus-within{background:rgba(255,255,255,.15);border-color:var(--brand);box-shadow:0 0 0 3px rgba(255,106,19,.25)}
+.headerSearchDesktop input{background:transparent;border:0;color:#fff;font-size:12px;outline:none;width:100%}
+.headerSearchDesktop input::placeholder{color:#94a3b8}
 .searchSubmitBtn{background:var(--brand);color:#fff;border:0;border-radius:50%;width:32px;height:32px;display:grid;place-items:center;cursor:pointer;flex-shrink:0;transition:transform .15s ease}
 .searchSubmitBtn:hover{background:var(--brand-dark);transform:scale(1.05)}
+
+/* Mobile Search Button & Active Bar */
+.headerSearchMobile{display:none}
+.mobileSearchTrigger{width:40px;height:40px;border-radius:50%;border:1px solid rgba(255,255,255,.2);background:rgba(255,255,255,.08);color:#fff;display:grid;place-items:center;cursor:pointer;transition:all .2s ease}
+.mobileSearchTrigger:hover,.mobileSearchTrigger:active{background:var(--brand);border-color:var(--brand);transform:scale(1.05)}
+.mobileSearchExpandedOverlay{position:absolute;top:0;left:0;right:0;bottom:0;background:var(--navy);z-index:90;display:flex;align-items:center;padding:0 12px;animation:mobileSearchFadeIn .2s cubic-bezier(.16,1,.3,1)}
+@keyframes mobileSearchFadeIn{from{opacity:0;transform:translateY(-8px)}to{opacity:1;transform:translateY(0)}}
+.mobileSearchFormActive{width:100%;display:flex;align-items:center;background:rgba(255,255,255,.14);border:1.5px solid var(--brand);border-radius:999px;padding:5px 8px 5px 14px;gap:8px;box-shadow:0 6px 24px rgba(0,0,0,.4)}
+.mobileSearchIconInside{color:#ff8533;display:grid;place-items:center}
+.mobileSearchInput{flex:1;background:transparent;border:0;color:#fff;font-size:14px;outline:none;min-width:0}
+.mobileSearchInput::placeholder{color:#94a3b8}
+.mobileSearchGoBtn{background:var(--brand);color:#fff;border:0;border-radius:999px;padding:6px 13px;font-size:12px;font-weight:850;cursor:pointer;white-space:nowrap;transition:background .15s ease}
+.mobileSearchGoBtn:hover{background:var(--brand-dark)}
+.mobileSearchCloseBtn{background:rgba(255,255,255,.1);color:#e2e8f0;border:0;border-radius:50%;width:32px;height:32px;display:grid;place-items:center;cursor:pointer;flex-shrink:0;transition:background .15s ease}
+.mobileSearchCloseBtn:hover{background:rgba(255,255,255,.25);color:#fff}
+
+@media(max-width:768px){
+  .headerSearchDesktop{display:none}
+  .headerSearchMobile{display:flex;align-items:center}
+  .siteHeader{position:relative}
+}
 
 /* Footer Social & Staff Link */
 .footerSocialWrap{margin-top:20px}
@@ -191,8 +213,6 @@ main{min-height:65vh}.heroSection{padding:30px 0 25px}.cityEyebrow{font-size:12p
 .radarPaceBtn.active{background:#0284c7;color:#ffffff;font-weight:850;box-shadow:0 2px 6px rgba(2,132,199,.25)}
 .radarPaceBtn.special.active{background:linear-gradient(135deg,#10b981 0%,#059669 100%);box-shadow:0 2px 6px rgba(16,185,129,.3)}
 
-
-
 /* ===== Busca mobile: abre somente ao tocar na lupa ===== */
 .headerRow{position:relative}
 .searchCloseBtn{display:none;background:transparent;border:0;color:#cbd5e1;font-size:22px;line-height:1;cursor:pointer;width:28px;height:28px;place-items:center}
@@ -214,62 +234,136 @@ main{min-height:65vh}.heroSection{padding:30px 0 25px}.cityEyebrow{font-size:12p
   .headerSearchForm.mobileSearchOpen .searchCloseBtn{display:grid;flex:none}
 }
 
-/* ===== Editoria Futebol ===== */
-.footballPage{background:#f6f8f7}
-.footballHero{background:linear-gradient(120deg,#071d18 0%,#0a4635 58%,#0e694c 100%);color:#fff;position:relative;overflow:hidden}
-.footballHero:after{content:"";position:absolute;width:420px;height:420px;border:75px solid rgba(255,255,255,.045);border-radius:50%;right:-100px;top:-180px}
-.footballHeroInner{min-height:235px;display:flex;justify-content:space-between;align-items:center;gap:30px;position:relative;z-index:1}
-.footballEyebrow{font-size:10px;font-weight:950;letter-spacing:.12em;color:#9ee9c8}
-.footballHero h1{font-size:58px;line-height:.95;letter-spacing:-2.5px;margin:9px 0 12px}
-.footballHero p{max-width:650px;color:#c9e1d7;line-height:1.55;margin:0;font-size:14px}
-.footballHeroBadge{width:138px;height:138px;border-radius:50%;border:1px solid rgba(255,255,255,.18);background:rgba(255,255,255,.07);display:grid;place-content:center;text-align:center;backdrop-filter:blur(6px);flex:none}
-.footballHeroBadge b{font-size:24px}.footballHeroBadge span{font-size:9px;color:#b6d3c8;text-transform:uppercase;letter-spacing:.09em;margin-top:4px}
-.teamStripWrap{background:#fff;border-bottom:1px solid #e4e9e6;position:sticky;top:51px;z-index:40}
-.teamStrip{display:flex;gap:8px;overflow:auto;padding:10px 0;scrollbar-width:none}.teamStrip::-webkit-scrollbar{display:none}
-.teamChip{display:flex;align-items:center;gap:7px;flex:none;border:1px solid #dce4df;background:#fff;border-radius:999px;padding:6px 10px 6px 6px;font-size:10px;font-weight:850;transition:.15s ease}
-.teamChip b{width:28px;height:28px;border-radius:50%;background:#edf4f0;display:grid;place-items:center;font-size:8px;letter-spacing:-.02em}
-.teamChip:hover{border-color:#0e694c;color:#0e694c}.teamChip.active{background:#0b3c2f;color:#fff;border-color:#0b3c2f}.teamChip.active b{background:#22a06b;color:#fff}
-.footballMainSection{padding-top:31px}.footballMainGrid{display:grid;grid-template-columns:minmax(0,1fr) 410px;gap:28px;align-items:start}
-.footballSectionHead h2{font-size:31px}.footballInternalGrid{display:grid;grid-template-columns:repeat(3,1fr);gap:14px;margin-bottom:24px}
-.footballInternalGrid .cardImage{height:155px}.footballInternalGrid .newsCard h3{font-size:17px}
-.liveFootballList{display:grid;gap:10px}
-.liveFootballCard{display:grid;grid-template-columns:145px minmax(0,1fr);gap:14px;background:#fff;border:1px solid #e2e7e4;border-radius:13px;padding:10px;transition:.16s ease}
-.liveFootballCard:hover{transform:translateY(-1px);border-color:#a9c4b8;box-shadow:0 8px 22px rgba(9,48,35,.07)}
-.liveFootballThumb{height:96px;background:linear-gradient(135deg,#0c3026,#176749);border-radius:9px;overflow:hidden;display:grid;place-items:center;color:#fff;font-size:27px;font-weight:950}
-.liveFootballThumb img{width:100%;height:100%;object-fit:cover}
-.liveFootballBody{min-width:0;padding:2px 4px 1px 0}.liveSourceRow{display:flex;justify-content:space-between;gap:8px;align-items:center}.liveSourceRow span{font-size:9px;font-weight:950;text-transform:uppercase;color:#0a7954}.liveSourceRow time{font-size:9px;color:#8a9590}
-.liveFootballBody h3{font-size:17px;line-height:1.23;margin:5px 0 8px;letter-spacing:-.25px}.liveFootballBody small{font-size:9px;color:#7c8a84;font-weight:800}
-.brasileiraoPanel{background:#fff;border:1px solid #dce4df;border-radius:16px;overflow:hidden;position:sticky;top:119px;box-shadow:0 10px 30px rgba(9,42,31,.055)}
-.brasileiraoHead{background:#0a2d23;color:#fff;padding:17px 18px;display:flex;align-items:center;justify-content:space-between;gap:15px}
-.brasileiraoHead span{font-size:8px;color:#8ecab2;font-weight:900;letter-spacing:.08em}.brasileiraoHead h2{font-size:23px;margin:2px 0 0}.brasileiraoHead>b{font-size:8px;background:#159466;padding:6px 8px;border-radius:999px;letter-spacing:.07em}
-.standingsScroll{overflow:auto}.standingsTable{width:100%;border-collapse:collapse;font-size:10px;white-space:nowrap}.standingsTable th{background:#f1f5f3;color:#78857f;font-size:8px;text-transform:uppercase;padding:9px 7px;text-align:center}.standingsTable th:nth-child(2){text-align:left}
-.standingsTable td{border-bottom:1px solid #edf0ee;padding:8px 7px;text-align:center}.standingsTable tbody tr:hover{background:#f6faf8}.standingsTable tbody tr:nth-child(-n+4) td:first-child{border-left:3px solid #159466}.standingsTable tbody tr:nth-last-child(-n+4) td:first-child{border-left:3px solid #d44d55}
-.standTeam{text-align:left!important;display:flex;align-items:center;gap:6px}.standTeam span{width:28px;font-size:8px;font-weight:950;color:#0e694c}.standTeam strong{font-size:10px}
-.selectedTeamRow{background:#edf9f4!important}.selectedTeamRow td{font-weight:850}
-.tableSourceLink{display:block;padding:11px 14px;font-size:9px;color:#68766f;background:#fafcfb;border-top:1px solid #e8ecea;text-align:right}.tableSourceLink:hover{color:#0e694c}
-.standingsUnavailable{padding:30px;text-align:center;color:#87918c;font-size:11px}.footballOwnNews{background:#fff}
+/* ==========================================================================
+   FUTEBOL HUB & SELEÇÃO DE CLUBES (POPULARES NA FRENTE)
+   ========================================================================== */
+.footballHub{background:#f8fafc;padding-bottom:48px}
+.footballTeamSelectorSection{background:#ffffff;border-bottom:1px solid #e2e8f0;padding:24px 0 16px;box-shadow:0 2px 8px rgba(0,0,0,.03)}
+.footballSectionHeader{display:flex;justify-content:space-between;align-items:flex-end;margin-bottom:16px;gap:12px;flex-wrap:wrap}
+.footballEyebrow{font-size:11px;font-weight:800;letter-spacing:1px;color:#047857;text-transform:uppercase;display:block;margin-bottom:4px}
+.footballSectionTitle{font-size:22px;font-weight:900;color:#0f172a;margin:0;letter-spacing:-.5px;text-transform:uppercase}
+.footballResetFilterBtn{background:#f1f5f9;border:1px solid #cbd5e1;color:#334155;font-weight:750;font-size:12px;padding:6px 12px;border-radius:20px;cursor:pointer;transition:all .15s ease}
+.footballResetFilterBtn:hover{background:#fee2e2;border-color:#f87171;color:#dc2626}
 
-/* ===== Editoria Fofoca ===== */
-.gossipPage{background:#fff9fc}
-.gossipHero{background:linear-gradient(120deg,#2b1027 0%,#7e194f 55%,#c73572 100%);color:#fff;overflow:hidden;position:relative}
-.gossipHero:after{content:"";position:absolute;right:-60px;bottom:-130px;width:360px;height:360px;border-radius:50%;background:rgba(255,255,255,.06)}
-.gossipHeroInner{min-height:225px;display:flex;justify-content:space-between;align-items:center;gap:30px;position:relative;z-index:1}.gossipHeroInner>div:first-child>span{font-size:10px;font-weight:950;color:#ffb7d6;letter-spacing:.11em}.gossipHero h1{font-size:58px;letter-spacing:-2.4px;margin:7px 0 10px}.gossipHero p{font-size:14px;color:#f1d7e4;margin:0;max-width:620px}
-.gossipBubble{width:150px;height:150px;border-radius:32px;background:rgba(255,255,255,.1);border:1px solid rgba(255,255,255,.16);display:grid;place-content:center;text-align:center;font-size:34px;transform:rotate(4deg);flex:none}.gossipBubble b{font-size:10px;max-width:100px;margin-top:5px;line-height:1.2}
-.gossipFilters{border-bottom:1px solid #f0dce6;background:#fff;position:sticky;top:51px;z-index:40}.gossipFilters .container{display:flex;gap:8px;overflow:auto;padding:10px 0;scrollbar-width:none}.gossipFilters .container::-webkit-scrollbar{display:none}.gossipFilter{flex:none;border:1px solid #efd8e4;border-radius:999px;padding:8px 13px;font-size:10px;font-weight:900;color:#6f3b56;background:#fff}.gossipFilter.active{background:#a51f5f;color:#fff;border-color:#a51f5f}
-.gossipOwnSection{background:#fff}.gossipLiveSection{padding-top:28px}.gossipLiveGrid{display:grid;grid-template-columns:repeat(3,1fr);gap:18px}.gossipLiveCard{background:#fff;border:1px solid #efdee7;border-radius:15px;overflow:hidden;transition:.17s ease}.gossipLiveCard:hover{transform:translateY(-2px);box-shadow:0 12px 30px rgba(111,25,72,.09)}
-.gossipLiveImage{height:180px;background:linear-gradient(135deg,#5c1740,#c73572);position:relative;display:grid;place-items:center;font-size:34px;color:#fff}.gossipLiveImage img{width:100%;height:100%;object-fit:cover}.gossipLiveImage>b{position:absolute;left:10px;bottom:10px;background:rgba(35,12,29,.85);color:#fff;border-radius:6px;padding:5px 7px;font-size:8px;text-transform:uppercase;letter-spacing:.05em}
-.gossipLiveBody{padding:13px}.gossipLiveBody time{font-size:9px;color:#a16c88}.gossipLiveBody h3{font-size:18px;line-height:1.2;letter-spacing:-.3px;margin:5px 0 9px}.gossipLiveBody small{font-size:9px;color:#9a6c83;font-weight:850}
-.gossipLiveLead{grid-column:span 2;display:grid;grid-template-columns:1.15fr 1fr}.gossipLiveLead .gossipLiveImage{height:100%;min-height:300px}.gossipLiveLead .gossipLiveBody{display:flex;flex-direction:column;justify-content:center;padding:28px}.gossipLiveLead .gossipLiveBody h3{font-size:29px}
+.footballTeamsScroller{overflow-x:auto;padding-bottom:10px;scrollbar-width:thin;scrollbar-color:#cbd5e1 transparent}
+.footballTeamsScroller::-webkit-scrollbar{height:6px}
+.footballTeamsScroller::-webkit-scrollbar-thumb{background:#cbd5e1;border-radius:10px}
+.footballTeamsList{display:flex;gap:14px;align-items:flex-start;min-width:max-content;padding:4px 2px}
+.footballTeamItem{background:none;border:none;display:flex;flex-direction:column;align-items:center;gap:6px;cursor:pointer;padding:6px 8px;border-radius:12px;transition:all .2s ease;outline:none}
+.footballTeamItem:hover .footballTeamShieldBox{transform:scale(1.12);filter:drop-shadow(0 4px 8px rgba(0,0,0,.15))}
+.footballTeamItem.active{background:#ecfdf5;border-radius:12px}
+.footballTeamItem.active .footballTeamShieldBox{transform:scale(1.15);filter:drop-shadow(0 4px 10px rgba(4,120,87,.35))}
+.footballTeamItem.active .footballTeamCode{color:#047857;font-weight:900}
+.footballTeamShieldBox{transition:transform .2s ease,filter .2s ease}
+.footballTeamCode{font-size:11px;font-weight:800;color:#475569;letter-spacing:-.2px}
 
-@media(max-width:1000px){
-  .footballMainGrid{grid-template-columns:1fr}.brasileiraoPanel{position:static}.footballInternalGrid{grid-template-columns:repeat(2,1fr)}
-  .gossipLiveGrid{grid-template-columns:repeat(2,1fr)}
+/* ==========================================================================
+   MINI TABELA BRASILEIRÃO (ATÉ O 10º COM SCROLL NATIVO LEVE) & RODADA
+   ========================================================================== */
+.footballStandingsSection{padding:32px 0}
+.footballStandingsGrid{display:grid;grid-template-columns:1.55fr 1fr;gap:24px;align-items:start}
+
+.footballStandingsCard, .footballFixturesCard{background:#ffffff;border:1px solid #e2e8f0;border-radius:16px;box-shadow:0 4px 16px rgba(0,0,0,.04);overflow:hidden}
+.footballCardHeader{padding:18px 20px;border-bottom:1px solid #f1f5f9;background:#ffffff}
+.footballCardIcon{font-size:22px;background:#f0fdf4;padding:8px;border-radius:10px}
+.footballCardTitle{font-size:17px;font-weight:850;color:#0f172a;margin:0 0 2px;letter-spacing:-.3px}
+.footballCardSubtitle{font-size:12px;color:#64748b;margin:0}
+
+/* Tabela com scroll suave sem travar - Altura para 10 posições visíveis */
+.footballTableWrapper{max-height:445px;overflow-y:auto;overflow-x:auto;scrollbar-width:thin;scrollbar-color:#94a3b8 #f1f5f9}
+.footballTableWrapper::-webkit-scrollbar{width:6px;height:6px}
+.footballTableWrapper::-webkit-scrollbar-track{background:#f1f5f9}
+.footballTableWrapper::-webkit-scrollbar-thumb{background:#94a3b8;border-radius:6px}
+
+.footballTable{width:100%;border-collapse:collapse;font-size:13px;text-align:left}
+.footballTable thead{position:sticky;top:0;z-index:10;background:#f8fafc;box-shadow:0 1px 3px rgba(0,0,0,.05)}
+.footballTable th{padding:10px 8px;font-size:11px;font-weight:800;color:#475569;text-transform:uppercase;letter-spacing:.3px;border-bottom:1px solid #e2e8f0}
+.footballTable td{padding:9px 8px;border-bottom:1px solid #f1f5f9;vertical-align:middle;transition:background .12s ease}
+.footballTable tbody tr:hover td{background:#f8fafc}
+.footballTable tbody tr.rowSelected td{background:#f0fdf4;font-weight:700}
+
+.thPos{width:42px;text-align:center}
+.tdPos{text-align:center;font-weight:800;position:relative}
+.posIndicator{position:absolute;left:0;top:4px;bottom:4px;width:4px;border-radius:0 3px 3px 0}
+.zoneLibertadores .posIndicator{background:#10b981}
+.zonePreLibertadores .posIndicator{background:#0284c7}
+.zoneSulAmericana .posIndicator{background:#f97316}
+.zoneRebaixamento .posIndicator{background:#ef4444}
+
+.posNumber{font-size:12px;color:#334155}
+.thTeam{min-width:140px}
+.teamInfoCell{display:flex;align-items:center;gap:8px}
+.teamNameShort{font-weight:850;font-size:12px;color:#0f172a}
+.teamNameFull{font-size:13px;color:#334155;font-weight:600}
+@media(max-width:960px){.teamNameFull{display:none}}
+
+.thNum{text-align:center;width:32px}
+.tdNum{text-align:center;font-size:12px;color:#334155}
+.tdPoints{font-size:14px;color:#0f172a;font-weight:800}
+.tdPercentage{font-weight:700;color:#475569}
+
+.thRecent{text-align:center;width:80px}
+.tdRecent{text-align:center}
+.recentDots{display:inline-flex;gap:3px;align-items:center}
+.recentDot{width:7px;height:7px;border-radius:50%}
+.dotWin{background:#10b981}
+.dotDraw{background:#94a3b8}
+.dotLoss{background:#ef4444}
+
+.footballTableLegend{display:flex;flex-wrap:wrap;gap:12px;padding:12px 18px;background:#f8fafc;border-top:1px solid #e2e8f0;font-size:11px;font-weight:700;color:#475569}
+.legendItem{display:flex;align-items:center;gap:6px}
+.legendDot{width:8px;height:8px;border-radius:2px}
+.dotLibertadores{background:#10b981}
+.dotPreLibertadores{background:#0284c7}
+.dotSulAmericana{background:#f97316}
+.dotRebaixamento{background:#ef4444}
+
+/* Painel de Rodada */
+.footballFixturesHeader{display:flex;justify-content:space-between;align-items:center;padding:14px 18px;background:linear-gradient(135deg,#064e3b 0%,#047857 100%);color:#ffffff}
+.roundNavBtn{background:rgba(255,255,255,.2);border:none;color:#ffffff;font-size:18px;width:32px;height:32px;border-radius:50%;display:flex;align-items:center;justify-content:center;cursor:pointer;transition:background .15s ease}
+.roundNavBtn:hover{background:rgba(255,255,255,.35)}
+.roundTitle{text-align:center;display:flex;flex-direction:column}
+.roundTitle b{font-size:15px;letter-spacing:-.2px}
+.roundTitle span{font-size:11px;opacity:.85}
+
+.footballFixturesList{max-height:445px;overflow-y:auto;scrollbar-width:thin;scrollbar-color:#cbd5e1 #f8fafc}
+.footballFixturesList::-webkit-scrollbar{width:5px}
+.footballFixturesList::-webkit-scrollbar-thumb{background:#cbd5e1;border-radius:6px}
+
+.fixtureMatchCard{padding:12px 16px;border-bottom:1px solid #f1f5f9;transition:background .12s ease}
+.fixtureMatchCard:hover{background:#f8fafc}
+.fixtureMeta{display:flex;justify-content:space-between;font-size:11px;color:#64748b;margin-bottom:8px;font-weight:600}
+.fixtureStadium{white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:140px}
+
+.fixtureScoreRow{display:flex;align-items:center;justify-content:space-between;gap:8px}
+.fixtureTeam{display:flex;align-items:center;gap:8px;width:38%}
+.homeTeam{justify-content:flex-end;text-align:right}
+.awayTeam{justify-content:flex-start;text-align:left}
+.fixtureTeamCode{font-weight:850;font-size:13px;color:#0f172a}
+.fixtureScoreBox{display:flex;align-items:center;gap:6px;background:#f1f5f9;padding:4px 12px;border-radius:8px;font-weight:900;font-size:15px;color:#0f172a;min-width:64px;justify-content:center}
+.fixtureX{color:#94a3b8;font-size:11px;font-weight:600}
+
+/* Notícias de Futebol */
+.footballNewsSection{padding:24px 0 40px}
+.footballNewsHeader{display:flex;justify-content:space-between;align-items:flex-end;margin-bottom:20px;border-bottom:2px solid #047857;padding-bottom:12px}
+.footballPostCount{font-size:12px;font-weight:800;color:#047857;background:#ecfdf5;padding:4px 10px;border-radius:20px}
+
+/* ==========================================================================
+   HUB DE FOFOCAS & FAMOSOS
+   ========================================================================== */
+.gossipHub{background:#faf5ff;padding-bottom:48px}
+.gossipHero{background:linear-gradient(135deg,#7e22ce 0%,#a855f7 50%,#ec4899 100%);color:#ffffff;padding:40px 0 32px;box-shadow:0 4px 20px rgba(126,34,206,.2)}
+.gossipBadge{background:rgba(255,255,255,.2);backdrop-filter:blur(4px);padding:4px 12px;border-radius:20px;font-size:11px;font-weight:900;letter-spacing:1px;display:inline-block;margin-bottom:12px;border:1px solid rgba(255,255,255,.3)}
+.gossipHero h1{font-size:36px;font-weight:900;margin:0 0 10px;letter-spacing:-.8px}
+.gossipHero p{font-size:15px;opacity:.92;max-width:680px;line-height:1.5;margin:0 0 16px}
+.gossipStats{background:#ffffff;color:#7e22ce;font-weight:850;font-size:12px;padding:6px 14px;border-radius:20px;display:inline-flex;align-items:center;gap:6px;box-shadow:0 2px 8px rgba(0,0,0,.1)}
+
+@media(max-width:960px){
+  .footballStandingsGrid{grid-template-columns:1fr;gap:20px}
+  .footballTableWrapper{max-height:420px}
+  .footballFixturesList{max-height:360px}
 }
-@media(max-width:620px){
-  .footballHeroInner,.gossipHeroInner{min-height:175px}.footballHero h1,.gossipHero h1{font-size:42px}.footballHero p,.gossipHero p{font-size:12px}
-  .footballHeroBadge,.gossipBubble{display:none}.teamStripWrap,.gossipFilters{top:46px}
-  .footballInternalGrid{grid-template-columns:1fr}.footballInternalGrid .cardImage{height:210px}
-  .liveFootballCard{grid-template-columns:105px 1fr;padding:8px;gap:10px}.liveFootballThumb{height:82px}.liveFootballBody h3{font-size:14px;margin-top:3px}.liveSourceRow{display:block}.liveSourceRow time{display:block;margin-top:2px}
-  .brasileiraoPanel{border-radius:12px}.standingsTable{min-width:540px}
-  .gossipLiveGrid{grid-template-columns:1fr}.gossipLiveLead{grid-column:auto;display:block}.gossipLiveLead .gossipLiveImage{min-height:0;height:210px}.gossipLiveLead .gossipLiveBody{padding:14px}.gossipLiveLead .gossipLiveBody h3{font-size:20px}.gossipLiveImage{height:205px}
-}
+
+.liveAutoSyncBadge{background:#ecfdf5;color:#047857;border:1px solid #a7f3d0;font-size:11px;font-weight:800;padding:4px 10px;border-radius:20px;display:inline-flex;align-items:center;gap:6px}
+.footballRefreshBtn{background:#f8fafc;border:1px solid #cbd5e1;color:#334155;font-size:11px;font-weight:750;padding:4px 10px;border-radius:8px;cursor:pointer;transition:all .15s ease}
+.footballRefreshBtn:hover{background:#f1f5f9;color:#0f172a;border-color:#94a3b8}

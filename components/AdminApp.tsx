@@ -58,12 +58,15 @@ const blank: FormState = {
   is_reviewed: true,
 };
 
-type RadarSource = {
+export type RadarRegion = "goias" | "brasil" | "futebol" | "fofocas" | "all";
+
+export type RadarSource = {
   name: string;
   url: string;
   label: string;
-  region: "goias" | "brasil";
+  region: RadarRegion;
   tag: string;
+  defaultCategory?: "Futebol" | "Fofocas";
 };
 
 const RADAR_SOURCES: RadarSource[] = [
@@ -85,6 +88,21 @@ const RADAR_SOURCES: RadarSource[] = [
   { name: "G1 Política", url: "https://g1.globo.com/rss/g1/politica/", label: "G1 Política", region: "brasil", tag: "Brasília" },
   { name: "G1 Economia", url: "https://g1.globo.com/rss/g1/economia/", label: "G1 Economia", region: "brasil", tag: "Mercado" },
   { name: "Agência Brasil", url: "https://agenciabrasil.ebc.com.br/rss/ultimasnoticias/feed.xml", label: "Agência Brasil", region: "brasil", tag: "Oficial" },
+
+  // FUTEBOL & BRASILEIRÃO
+  { name: "GE Brasileirão", url: "https://ge.globo.com/rss/ge/futebol/brasileirao-serie-a/", label: "GE Brasileirão A", region: "futebol", tag: "Tabela & Jogos", defaultCategory: "Futebol" },
+  { name: "GE Futebol", url: "https://ge.globo.com/rss/ge/futebol/", label: "GE Futebol Geral", region: "futebol", tag: "Nacional", defaultCategory: "Futebol" },
+  { name: "GE Goiás & Clubes", url: "https://ge.globo.com/rss/ge/go/", label: "GE Clubes Goianos", region: "futebol", tag: "Goiás & Vila", defaultCategory: "Futebol" },
+  { name: "Metrópoles Futebol", url: "https://www.metropoles.com/esportes/futebol/feed", label: "Metrópoles Futebol", region: "futebol", tag: "Futebol BR", defaultCategory: "Futebol" },
+  { name: "Gazeta Esportiva", url: "https://www.gazetaesportiva.com/feed/", label: "Gazeta Esportiva", region: "futebol", tag: "Paulistão & BR", defaultCategory: "Futebol" },
+  { name: "UOL Esporte", url: "https://rss.uol.com.br/feed/esporte.xml", label: "UOL Esporte", region: "futebol", tag: "Esportes & BR", defaultCategory: "Futebol" },
+
+  // FOFOCAS & FAMOSOS
+  { name: "Leo Dias", url: "https://portalleodias.com/feed", label: "Portal Leo Dias", region: "fofocas", tag: "Exclusivas & Babados", defaultCategory: "Fofocas" },
+  { name: "Quem Acontece", url: "https://revistaquem.globo.com/rss/quem/", label: "Revista Quem (Globo)", region: "fofocas", tag: "Celebridades", defaultCategory: "Fofocas" },
+  { name: "Metrópoles Celebridades", url: "https://www.metropoles.com/celebridades/feed", label: "Metrópoles Celebridades", region: "fofocas", tag: "Fofocas & Reality", defaultCategory: "Fofocas" },
+  { name: "Hugo Gloss", url: "https://hugogloss.uol.com.br/feed/", label: "Hugo Gloss", region: "fofocas", tag: "Pop & Famosos", defaultCategory: "Fofocas" },
+  { name: "UOL Famosos", url: "https://rss.uol.com.br/feed/entretenimento.xml", label: "UOL Famosos & TV", region: "fofocas", tag: "Bastidores", defaultCategory: "Fofocas" },
 ];
 
 function formatRadarDate(dateStr?: string | null): string {
@@ -150,12 +168,13 @@ export default function AdminApp() {
   const [importing, setImporting] = useState(false);
   const [importItems, setImportItems] = useState<ImportedNews[]>([]);
   const [importMessage, setImportMessage] = useState("");
-  const [radarRegion, setRadarRegion] = useState<"goias" | "brasil">("goias");
+  const [radarRegion, setRadarRegion] = useState<RadarRegion>("goias");
   const [activeSourceUrl, setActiveSourceUrl] = useState<string>("ALL");
   const [queueInterval, setQueueInterval] = useState<number>(10);
   const [selectedUrls, setSelectedUrls] = useState<string[]>([]);
   const [batchQueueing, setBatchQueueing] = useState(false);
   const [batchProgress, setBatchProgress] = useState("");
+  const [syncingFootball, setSyncingFootball] = useState(false);
 
   // Ritmo de postagem na fila (1 por slot, 2 por slot, 3 por slot, ou 1 por Aba/Editoria)
   type QueueScheduleMode = "1_per_10m" | "2_per_10m" | "3_per_10m" | "1_per_category";
@@ -371,6 +390,7 @@ export default function AdminApp() {
       excerpt: form.excerpt,
       sourceText: raw,
       sourceName: form.source_name,
+      category: form.category,
     });
     setForm((curr) => ({ ...curr, content: formatted }));
     setMessage("Matéria reescrita e formatada com sucesso no padrão do portal!");
@@ -398,6 +418,13 @@ export default function AdminApp() {
         } catch {}
       }
 
+      // Regra obrigatória: Matéria precisa de imagem para ir para a fila ou ser postada
+      if (!activeItem.image_url || activeItem.image_url.trim().length < 10) {
+        setImportMessage("⚠️ Esta notícia não possui imagem na fonte original. Regra do portal: se não tiver foto, não posta!");
+        setImporting(false);
+        return;
+      }
+
       let targetCategory = "Goiânia";
       if (activeItem.category) {
         const match = categories.find((c) => c.name.toLowerCase() === activeItem.category!.toLowerCase());
@@ -412,6 +439,7 @@ export default function AdminApp() {
         excerpt: activeItem.excerpt,
         sourceText: rawSource,
         sourceName: activeItem.source_name,
+        category: targetCategory,
       });
 
       const nextSlot = getNextQueueTime();
@@ -577,7 +605,7 @@ export default function AdminApp() {
   }
 
   // Busca e agrega notícias de TODOS os jornais da região selecionada simultaneamente em paralelo
-  async function fetchRadarFeeds(region: "goias" | "brasil" | "all" = radarRegion): Promise<ImportedNews[]> {
+  async function fetchRadarFeeds(region: RadarRegion | "all" = radarRegion): Promise<ImportedNews[]> {
     const targetSources = region === "all"
       ? RADAR_SOURCES
       : RADAR_SOURCES.filter((s) => s.region === region);
@@ -587,7 +615,11 @@ export default function AdminApp() {
         const res = await fetch("/api/import-news", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ url: src.url, mode: "feed" }),
+          body: JSON.stringify({
+            url: src.url,
+            mode: "feed",
+            defaultCategory: src.defaultCategory,
+          }),
         });
         if (!res.ok) return [];
         const data = await res.json();
@@ -595,6 +627,7 @@ export default function AdminApp() {
         return items.map((it) => ({
           ...it,
           source_name: it.source_name || src.name,
+          category: it.category || src.defaultCategory || "Goiânia",
         }));
       } catch (err) {
         console.warn(`Aviso ao carregar feed ${src.name}:`, err);
@@ -614,7 +647,7 @@ export default function AdminApp() {
   }
 
   // Carrega na tela do Radar as notícias de TODOS os jornais da região selecionada
-  async function importAllFeeds(region: "goias" | "brasil" = radarRegion) {
+  async function importAllFeeds(region: RadarRegion = radarRegion) {
     setImporting(true);
     setImportMessage("");
     setImportItems([]);
@@ -624,13 +657,39 @@ export default function AdminApp() {
       setImportItems(items);
       autoHealMissingImages(items);
       const siteCount = RADAR_SOURCES.filter((s) => s.region === region).length;
+      const label =
+        region === "goias"
+          ? "Goiás"
+          : region === "brasil"
+          ? "Grandes Jornais do Brasil"
+          : region === "futebol"
+          ? "Futebol & Brasileirão"
+          : "Fofocas & Famosos";
       setImportMessage(
-        `📡 Radar: ${items.length} notícias recolhidas simultaneamente de todos os ${siteCount} sites de ${region === "goias" ? "Goiás" : "Brasil"}! Ordenadas das mais recentes.`
+        `📡 Radar: ${items.length} notícias recolhidas simultaneamente de todos os ${siteCount} sites de ${label}! Ordenadas das mais recentes.`
       );
     } catch (err: any) {
       setImportMessage(`Erro ao buscar notícias de todos os sites: ${err.message}`);
     } finally {
       setImporting(false);
+    }
+  }
+
+  async function handleSyncFootballAdmin() {
+    setSyncingFootball(true);
+    setImportMessage("⚽ Sincronizando tabela e jogos ao vivo com a fonte oficial...");
+    try {
+      const res = await fetch("/api/football/sync?force=true");
+      const data = await res.json();
+      if (res.ok) {
+        setImportMessage(`🏆 Sucesso: Tabela e jogos da ${data.current_round}ª rodada do Brasileirão atualizados com sucesso da fonte oficial!`);
+      } else {
+        setImportMessage(`Erro ao sincronizar futebol: ${data.error}`);
+      }
+    } catch (err: any) {
+      setImportMessage(`Erro ao sincronizar futebol: ${err.message}`);
+    } finally {
+      setSyncingFootball(false);
     }
   }
 
@@ -705,34 +764,68 @@ export default function AdminApp() {
     return () => clearInterval(statusTimer);
   }, []);
 
-  // Execução manual usa exatamente o MESMO ciclo que roda 24/7 no servidor.
+  // Rotina de execução do ciclo do Piloto Automático (Varre TODOS os canais, incluindo Futebol e Fofocas)
   async function runAutoPilotCycle() {
     if (autoPilotRunning || batchQueueing) return;
     setAutoPilotRunning(true);
-    setImportMessage("🤖 Servidor Vercel: varrendo os 7 sites de Goiás, removendo repetidas e abastecendo a fila...");
+    setImportMessage("🤖 Piloto Automático: Checando publicações vencidas e varrendo todos os canais (Goiás, Brasil, Futebol e Fofocas)...");
     try {
       const res = await fetch("/api/automation/radar-cycle?force=1", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
       });
       const data = await res.json().catch(() => ({}));
-      if (!res.ok) throw new Error(data.error || "Falha ao executar o ciclo no servidor.");
-
-      if (data.skipped) {
-        setImportMessage("🤖 Piloto: ciclo ignorado porque outro ciclo já está em execução.");
+      if (res.ok) {
+        if (data.skipped) {
+          setImportMessage("🤖 Piloto: ciclo ignorado porque outro ciclo já está em execução.");
+        } else {
+          setImportMessage(
+            "🤖 Piloto 24/7: " +
+            Number(data.found || 0) + " notícias encontradas • " +
+            Number(data.newItems || 0) + " inéditas • " +
+            Number(data.added || 0) + " adicionadas à fila • " +
+            Number(data.published || 0) + " liberadas."
+          );
+        }
       } else {
-        setImportMessage(
-          "🤖 Piloto 24/7: " +
-          Number(data.found || 0) + " notícias encontradas • " +
-          Number(data.newItems || 0) + " inéditas • " +
-          Number(data.added || 0) + " adicionadas à fila • " +
-          Number(data.published || 0) + " liberadas."
-        );
+        // Fallback: varredura direta via cliente
+        const pubRes = await fetch("/api/posts/publish-due").catch(() => null);
+        if (pubRes && pubRes.ok) {
+          const pubData = await pubRes.json().catch(() => null);
+          if (pubData && pubData.publishedCount > 0) {
+            setMessage(`🚀 ${pubData.publishedCount} matéria(s) agendada(s) acabaram de ser publicadas no portal com sucesso!`);
+          }
+        }
+
+        const postsRes = await fetch("/api/posts", { cache: "no-store" }).catch(() => null);
+        let freshPosts = posts;
+        if (postsRes && postsRes.ok) {
+          const pData = await postsRes.json();
+          if (Array.isArray(pData.posts)) {
+            freshPosts = pData.posts;
+            setPosts(freshPosts);
+          }
+        }
+
+        const allNews = await fetchRadarFeeds("all");
+        setImportItems(allNews);
+
+        const unpostedWithImage = allNews.filter((it) => {
+          if (isItemAlreadyPosted(it, freshPosts)) return false;
+          return Boolean(it.image_url && it.image_url.trim().length > 10);
+        });
+
+        if (unpostedWithImage.length > 0) {
+          setImportMessage(`🤖 Piloto Automático: Encontradas ${unpostedWithImage.length} notícias inéditas com foto em todos os canais! Agendando na fila...`);
+          await queueItemsInBatch(unpostedWithImage, "Piloto Automático (Todos os Sites)", freshPosts);
+        } else {
+          setImportMessage(`🤖 Piloto Automático: Verificou notícias de todos os portais. Nenhuma matéria pendente com foto. Próxima checagem em 10 minutos.`);
+        }
       }
       await load();
       await refreshAutomationStatus();
     } catch (err: any) {
-      setImportMessage("Erro no Piloto 24/7: " + err.message);
+      setImportMessage("Erro no Piloto: " + err.message);
     } finally {
       setAutoPilotRunning(false);
     }
@@ -878,11 +971,17 @@ export default function AdminApp() {
         } catch {}
       }
 
+      // Regra obrigatória: se não tiver foto, NÃO POSTA nem agenda!
+      if (!item.image_url || item.image_url.trim().length < 10) {
+        continue;
+      }
+
       const formatted = formatViralizouArticle({
         title: item.title,
         excerpt: item.excerpt,
         sourceText: rawSource,
         sourceName: item.source_name,
+        category: targetCategory,
       });
 
       const computedAuthor = item.source_author
@@ -1146,6 +1245,7 @@ export default function AdminApp() {
       excerpt: activeItem.excerpt,
       sourceText: rawSource,
       sourceName: activeItem.source_name,
+      category: targetCategory,
     });
 
     const importedAuthor = activeItem.source_author
@@ -1175,12 +1275,20 @@ export default function AdminApp() {
       is_reviewed: true,
     });
     setView("form");
-    setMessage(`Matéria completa pronta no tema "${targetCategory}"! Pronta para postar.`);
+    if (!activeItem.image_url || activeItem.image_url.trim().length < 10) {
+      setMessage(`⚠️ Atenção: Esta matéria não possui foto na fonte original. Regra do portal: adicione uma imagem antes de publicar.`);
+    } else {
+      setMessage(`Matéria completa pronta no tema "${targetCategory}"! Pronta para postar.`);
+    }
   }
 
 
   async function submit(e: FormEvent) {
     e.preventDefault();
+    if (!form.image_url || form.image_url.trim().length < 10) {
+      setMessage("⚠️ Regra obrigatória do portal: Toda matéria precisa ter uma imagem para ser postada ou agendada. Insira uma foto.");
+      return;
+    }
     setSaving(true);
     setMessage("");
     const payload = {
@@ -1242,10 +1350,19 @@ export default function AdminApp() {
     setImportMessage("");
     setImportItems([]);
     setSelectedUrls([]);
+    const foundSource = RADAR_SOURCES.find((s) => s.url === targetUrl);
+    const defaultCat =
+      foundSource?.defaultCategory ||
+      (radarRegion === "futebol" ? "Futebol" : radarRegion === "fofocas" ? "Fofocas" : undefined);
+
     const r = await fetch("/api/import-news", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ url: targetUrl, mode: importMode }),
+      body: JSON.stringify({
+        url: targetUrl,
+        mode: importMode,
+        defaultCategory: defaultCat,
+      }),
     });
     const d = await r.json();
     setImporting(false);
@@ -1253,12 +1370,16 @@ export default function AdminApp() {
       setImportMessage(d.error || "Não foi possível importar.");
       return;
     }
-    const items = (d.items || []) as ImportedNews[];
+    const incomingItems = (d.items || []) as ImportedNews[];
+    const items = incomingItems.map((it) => ({
+      ...it,
+      category: it.category || defaultCat || "Goiânia",
+    }));
     setImportItems(items);
     autoHealMissingImages(items);
     setImportMessage(
       importMode === "feed"
-        ? `📡 Radar Goiás: ${items.length} notícias encontradas e categorizadas.`
+        ? `📡 Radar: ${items.length} notícias recolhidas de ${foundSource?.label || "fonte selecionada"}.`
         : "Matéria completa importada com sucesso!",
     );
     if (importMode === "article" && items[0]) useImported(items[0]);
@@ -1697,7 +1818,7 @@ export default function AdminApp() {
                   </div>
                 </div>
 
-                {/* Abas de Região: Goiânia/Goiás vs Brasil */}
+                {/* Abas de Canais do Radar: Goiás, Brasil, Futebol, Fofocas */}
                 <div className="radarRegionNav">
                   <button
                     type="button"
@@ -1715,7 +1836,7 @@ export default function AdminApp() {
                       }
                     }}
                   >
-                    📍 Notícias de Goiânia & Goiás
+                    📍 Goiânia & Goiás
                   </button>
                   <button
                     type="button"
@@ -1733,9 +1854,104 @@ export default function AdminApp() {
                       }
                     }}
                   >
-                    🇧🇷 Grandes Jornais do Brasil
+                    🇧🇷 Grandes Jornais
+                  </button>
+                  <button
+                    type="button"
+                    className={`radarRegionBtn ${radarRegion === "futebol" ? "active" : ""}`}
+                    onClick={() => {
+                      setRadarRegion("futebol");
+                      if (activeSourceUrl === "ALL") {
+                        importAllFeeds("futebol");
+                      } else {
+                        const first = RADAR_SOURCES.find((s) => s.region === "futebol");
+                        if (first && activeSourceUrl !== first.url) {
+                          setActiveSourceUrl(first.url);
+                          importNews("feed", first.url);
+                        }
+                      }
+                    }}
+                  >
+                    ⚽ Futebol & Brasileirão
+                  </button>
+                  <button
+                    type="button"
+                    className={`radarRegionBtn ${radarRegion === "fofocas" ? "active" : ""}`}
+                    onClick={() => {
+                      setRadarRegion("fofocas");
+                      if (activeSourceUrl === "ALL") {
+                        importAllFeeds("fofocas");
+                      } else {
+                        const first = RADAR_SOURCES.find((s) => s.region === "fofocas");
+                        if (first && activeSourceUrl !== first.url) {
+                          setActiveSourceUrl(first.url);
+                          importNews("feed", first.url);
+                        }
+                      }
+                    }}
+                  >
+                    ✨ Fofocas & Famosos
+                  </button>
+                  <button
+                    type="button"
+                    className={`radarRegionBtn ${radarRegion === "all" ? "active" : ""}`}
+                    onClick={() => {
+                      setRadarRegion("all");
+                      setActiveSourceUrl("ALL");
+                      importAllFeeds("all");
+                    }}
+                  >
+                    🌐 Todos os Canais (Goiás + Nacional + Futebol + Fofocas)
                   </button>
                 </div>
+
+                {/* Banner de Sincronização da Tabela e Rodadas quando estiver na aba Futebol */}
+                {radarRegion === "futebol" && (
+                  <div
+                    style={{
+                      background: "linear-gradient(135deg, #f0fdf4 0%, #ecfdf5 100%)",
+                      border: "1.5px solid #a7f3d0",
+                      borderRadius: 12,
+                      padding: "12px 16px",
+                      marginBottom: 16,
+                      display: "flex",
+                      justifyContent: "space-between",
+                      alignItems: "center",
+                      flexWrap: "wrap",
+                      gap: 12,
+                      boxShadow: "0 2px 10px rgba(16, 185, 129, 0.08)",
+                    }}
+                  >
+                    <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+                      <span style={{ fontSize: 22, background: "#dcfce7", padding: "6px", borderRadius: 8 }}>🏆</span>
+                      <div>
+                        <b style={{ color: "#065f46", fontSize: 13, display: "block" }}>
+                          Tabela & Rodada do Brasileirão (Atualização Automática Ativa)
+                        </b>
+                        <span style={{ color: "#047857", fontSize: 11 }}>
+                          Cron ativo na Vercel/Supabase. Os jogos e posições são atualizados ao final de cada partida.
+                        </span>
+                      </div>
+                    </div>
+                    <button
+                      type="button"
+                      className="btn"
+                      style={{
+                        background: "#047857",
+                        color: "#fff",
+                        fontSize: 12,
+                        fontWeight: 800,
+                        padding: "8px 16px",
+                        borderRadius: 8,
+                        boxShadow: "0 2px 6px rgba(4, 120, 87, 0.3)",
+                      }}
+                      disabled={syncingFootball}
+                      onClick={handleSyncFootballAdmin}
+                    >
+                      {syncingFootball ? "⏳ Sincronizando..." : "🔄 Atualizar Tabela e Jogos Agora"}
+                    </button>
+                  </div>
+                )}
 
                 {/* Botões de Fontes de Notícias */}
                 <div style={{ display: "flex", gap: 8, flexWrap: "wrap", marginBottom: 16 }}>
@@ -1765,11 +1981,28 @@ export default function AdminApp() {
                       importAllFeeds(radarRegion);
                     }}
                   >
-                    ⚡ <b>Todos os {radarRegion === "goias" ? "7 Sites de Goiás" : "Jornais"}</b>
+                    ⚡ <b>
+                      Todos os{" "}
+                      {radarRegion === "all"
+                        ? RADAR_SOURCES.length
+                        : RADAR_SOURCES.filter((s) => s.region === radarRegion).length}{" "}
+                      {radarRegion === "goias"
+                        ? "Sites de Goiás"
+                        : radarRegion === "brasil"
+                        ? "Grandes Jornais"
+                        : radarRegion === "futebol"
+                        ? "Portais de Futebol"
+                        : radarRegion === "fofocas"
+                        ? "Sites de Fofocas"
+                        : "Sites (Goiás, Brasil, Futebol, Fofocas)"}
+                    </b>
                     <span style={{ opacity: 0.85, fontSize: 10 }}>(Simultâneo)</span>
                   </button>
 
-                  {RADAR_SOURCES.filter((s) => s.region === radarRegion).map((src) => {
+                  {(radarRegion === "all"
+                    ? RADAR_SOURCES
+                    : RADAR_SOURCES.filter((s) => s.region === radarRegion)
+                  ).map((src) => {
                     const isActive = activeSourceUrl === src.url;
                     return (
                       <button

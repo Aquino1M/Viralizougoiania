@@ -249,3 +249,20 @@ select cron.schedule(
       and published_at <= now();
   $cron$
 );
+
+-- =========================================================
+-- TABELA DE FUTEBOL & BRASILEIRÃO (Classificação e Rodadas Automáticas)
+-- =========================================================
+create table if not exists public.football_data (
+  id text primary key default 'brasileirao',
+  standings jsonb not null default '[]'::jsonb,
+  fixtures jsonb not null default '[]'::jsonb,
+  current_round integer not null default 1,
+  updated_at timestamptz not null default now()
+);
+
+alter table public.football_data enable row level security;
+drop policy if exists "Permitir leitura publica de futebol" on public.football_data;
+create policy "Permitir leitura publica de futebol" on public.football_data for select using (true);
+drop policy if exists "Permitir gravacao de futebol" on public.football_data;
+create policy "Permitir gravacao de futebol" on public.football_data for all using (true);

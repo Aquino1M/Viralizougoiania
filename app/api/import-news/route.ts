@@ -202,12 +202,37 @@ function classifyCategory(title: string, text = ""): string {
       ],
     },
     {
+      category: "Futebol",
+      terms: [
+        "futebol", "brasileirão", "brasileirao", "série a", "serie a", "série b", "serie b",
+        "copa do brasil", "libertadores", "sul-americana", "sulamericana",
+        "corinthians", "flamengo", "palmeiras", "são paulo", "santos", "vasco",
+        "grêmio", "gremio", "internacional", "cruzeiro", "atlético-mg", "atletico-mg",
+        "botafogo", "fluminense", "bahia", "fortaleza", "athletico-pr", "vitória", "vitoria",
+        "red bull bragantino", "bragantino", "juventude", "criciúma", "criciuma", "cuiabá", "cuiaba",
+        "goiás ec", "goias ec", "goiás e.c", "vila nova", "atlético goianiense", "atletico goianiense",
+        "atlético-go", "atletico-go", "serra dourada", "estádio antônio accioly", "estadio antônio accioly",
+        "escalação", "escalacao", "tabela do campeonato", "tabela do brasileirão", "artilheiro",
+        "goleador", "campeonato goiano", "campeonato paulista", "campeonato carioca"
+      ],
+    },
+    {
+      category: "Fofocas",
+      terms: [
+        "fofoca", "fofocas", "famosos", "celebridades", "affair", "namoro", "separação", "separacao",
+        "divórcio", "divorcio", "traição", "traicao", "flagrado", "flagrada", "flagra",
+        "influenciador", "influenciadora", "virgínia", "virginia fonseca", "zé felipe", "ze felipe",
+        "gusttavo lima", "anitta", "neymar", "luísa sonza", "luisa sonza", "deolane", "bastidores",
+        "portal leo dias", "leo dias", "quem", "hugo gloss", "reality", "bbb", "a fazenda", "ex-marido",
+        "ex-namorada", "ex-mulher", "polêmica", "polemica", "redes sociais dos famosos"
+      ],
+    },
+    {
       category: "Esportes",
       terms: [
-        "goiás ec", "goias ec", "goiás e.c", "vila nova", "atlético goianiense", "atletico goianiense",
-        "atlético-go", "atletico-go", "serra dourada", "estádio antônio accioly", "estadio", "campeonato goiano",
-        "futebol", "brasileirão", "brasileirao", "série a", "série b", "dragão", "esmeraldino", "tigre",
-        "goleador", "copa do brasil"
+        "vôlei", "volei", "basquete", "fórmula 1", "formula 1", "f1", "tênis", "tenis",
+        "natação", "natacao", "atletismo", "olimpíadas", "olimpiadas", "mma", "ufc",
+        "boxe", "ginástica", "esporte amador", "maratona"
       ],
     },
     {
@@ -555,6 +580,7 @@ async function extractArticle(html: string, finalUrl: string): Promise<ImportedN
     excerpt,
     sourceText: fullText,
     sourceName,
+    category: autoCategory,
   });
 
   return {
@@ -627,7 +653,7 @@ function feedAuthor(item: string): string {
   return "";
 }
 
-async function parseFeed(xml: string, feedUrl: string): Promise<ImportedNews[]> {
+async function parseFeed(xml: string, feedUrl: string, defaultCategory?: string): Promise<ImportedNews[]> {
   const sourceName = cleanText(tag(xml, "title")) || new URL(feedUrl).hostname.replace(/^www\./, "");
   const items = xml.match(/<item\b[\s\S]*?<\/item>/gi) || xml.match(/<entry\b[\s\S]*?<\/entry>/gi) || [];
   const parsed = items.slice(0, 30).map((item) => {
@@ -637,7 +663,10 @@ async function parseFeed(xml: string, feedUrl: string): Promise<ImportedNews[]> 
     const rawContent = tag(item, "content:encoded") || tag(item, "content") || tag(item, "description");
     const cleanContent = cleanText(rawContent);
     const excerpt = cleanText(tag(item, "description") || tag(item, "summary") || cleanContent).slice(0, 500);
-    const category = classifyCategory(title, cleanContent || excerpt);
+    let category = classifyCategory(title, cleanContent || excerpt);
+    if (defaultCategory && (category === "Goiânia" || category === "Esportes" || !category)) {
+      category = defaultCategory;
+    }
     const author = feedAuthor(item);
     const video = feedVideo(item);
     const image = feedImage(item);
@@ -646,6 +675,7 @@ async function parseFeed(xml: string, feedUrl: string): Promise<ImportedNews[]> 
       excerpt,
       sourceText: cleanContent,
       sourceName,
+      category,
     });
 
     return {
@@ -752,7 +782,8 @@ export async function POST(req: Request) {
       feedText = feed.text;
       feedUrl = feed.url;
     }
-    const items = await parseFeed(feedText, feedUrl);
+    const defaultCategory = typeof body.defaultCategory === "string" ? body.defaultCategory : undefined;
+    const items = await parseFeed(feedText, feedUrl, defaultCategory);
     if (!items.length) return NextResponse.json({ error: "Não encontrei notícias nesse feed." }, { status: 400 });
     return NextResponse.json({ items, feed_url: feedUrl });
   } catch (e) {
