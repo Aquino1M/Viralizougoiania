@@ -9,6 +9,11 @@ export type AutomationState = {
   last_added: number;
   last_published: number;
   last_hydrated: number;
+  last_reclassified: number;
+  last_football_sync: string | null;
+  last_round: number;
+  last_fixtures: number;
+  last_source_counts: Record<string, number>;
   last_error: string;
   running_until: string | null;
   updated_at?: string | null;
@@ -25,6 +30,11 @@ const DEFAULT_STATE: AutomationState = {
   last_added: 0,
   last_published: 0,
   last_hydrated: 0,
+  last_reclassified: 0,
+  last_football_sync: null,
+  last_round: 0,
+  last_fixtures: 0,
+  last_source_counts: {},
   last_error: "",
   running_until: null,
 };

@@ -4,6 +4,7 @@ import { isIP } from "node:net";
 import { isAdmin } from "@/lib/session";
 import type { ImportedNews } from "@/lib/types";
 import { formatViralizouArticle } from "@/lib/rewrite";
+import { classifyEditorial } from "@/lib/category-classifier";
 
 const MAX_HTML = 2_000_000;
 
@@ -155,120 +156,8 @@ async function safeFetch(raw: string) {
   throw new Error("Muitos redirecionamentos.");
 }
 
-function classifyCategory(title: string, text = ""): string {
-  const combined = `${title} ${text}`.toLowerCase();
-
-  const rules: { category: string; terms: string[] }[] = [
-    {
-      category: "Segurança",
-      terms: [
-        "polícia", "policia", "preso", "presa", "apreendido", "apreensão", "tiro", "assalto", "roubo",
-        "delegado", "delegacia", "pmgo", "pm-go", "pm ", "crime", "homicídio", "homicidio", "assassin",
-        "tráfico", "trafico", "suspeito", "arma de fogo", "batalhão", "droga", "mandado", "golpe",
-        "estelionato", "prisão", "prisao", "morte violenta", "rotam", "choque"
-      ],
-    },
-    {
-      category: "Trânsito",
-      terms: [
-        "trânsito", "transito", "colisão", "colisao", "acidente", "batida", "marginal botafogo", "detran",
-        "congestionamento", "interdição", "interdicao", "desvio", "pista", "motorista", "capotamento",
-        "atropelamento", "avenida 85", "avenida t-63", "t-63", "t-9", "avenida anhanguera", "semáforo",
-        "semaforo", "br-153", "viaduto", "lentidão", "lentidao"
-      ],
-    },
-    {
-      category: "Empregos",
-      terms: [
-        "vaga", "vagas", "concurso", "concursos", "sine", "contratação", "contratacao", "processo seletivo",
-        "currículo", "curriculo", "estágio", "estagio", "trainee", "oportunidade de emprego", "carteira assinada",
-        "trabalhador", "salário", "salario", "inscrições abertas", "inscricoes abertas", "edital"
-      ],
-    },
-    {
-      category: "Eventos",
-      terms: [
-        "show", "shows", "festival", "pecuária", "pecuaria", "teatro", "cinema", "música", "musica",
-        "festa", "rodeio", "sertanejo", "pagode", "ingresso", "ingressos", "exposição", "exposicao",
-        "cultural", "gastronomia", "gastronômico", "balada", "programação do fim de semana"
-      ],
-    },
-    {
-      category: "Política",
-      terms: [
-        "prefeitura", "câmara", "camara", "prefeito", "governador", "deputado", "vereador", "eleição",
-        "eleicoes", "votos", "senado", "senador", "caiado", "ronaldo caiado", "rogério cruz", "rogerio cruz",
-        "câmara municipal", "tribunal de contas", "tce-go", "tcm-go", "partido", "plenário", "secretário"
-      ],
-    },
-    {
-      category: "Futebol",
-      terms: [
-        "futebol", "brasileirão", "brasileirao", "série a", "serie a", "série b", "serie b",
-        "copa do brasil", "libertadores", "sul-americana", "sulamericana",
-        "corinthians", "flamengo", "palmeiras", "são paulo", "santos", "vasco",
-        "grêmio", "gremio", "internacional", "cruzeiro", "atlético-mg", "atletico-mg",
-        "botafogo", "fluminense", "bahia", "fortaleza", "athletico-pr", "vitória", "vitoria",
-        "red bull bragantino", "bragantino", "juventude", "criciúma", "criciuma", "cuiabá", "cuiaba",
-        "goiás ec", "goias ec", "goiás e.c", "vila nova", "atlético goianiense", "atletico goianiense",
-        "atlético-go", "atletico-go", "serra dourada", "estádio antônio accioly", "estadio antônio accioly",
-        "escalação", "escalacao", "tabela do campeonato", "tabela do brasileirão", "artilheiro",
-        "goleador", "campeonato goiano", "campeonato paulista", "campeonato carioca"
-      ],
-    },
-    {
-      category: "Fofocas",
-      terms: [
-        "fofoca", "fofocas", "famosos", "celebridades", "affair", "namoro", "separação", "separacao",
-        "divórcio", "divorcio", "traição", "traicao", "flagrado", "flagrada", "flagra",
-        "influenciador", "influenciadora", "virgínia", "virginia fonseca", "zé felipe", "ze felipe",
-        "gusttavo lima", "anitta", "neymar", "luísa sonza", "luisa sonza", "deolane", "bastidores",
-        "portal leo dias", "leo dias", "quem", "hugo gloss", "reality", "bbb", "a fazenda", "ex-marido",
-        "ex-namorada", "ex-mulher", "polêmica", "polemica", "redes sociais dos famosos"
-      ],
-    },
-    {
-      category: "Esportes",
-      terms: [
-        "vôlei", "volei", "basquete", "fórmula 1", "formula 1", "f1", "tênis", "tenis",
-        "natação", "natacao", "atletismo", "olimpíadas", "olimpiadas", "mma", "ufc",
-        "boxe", "ginástica", "esporte amador", "maratona"
-      ],
-    },
-    {
-      category: "Economia",
-      terms: [
-        "inflação", "inflacao", "economia", "comércio", "comercio", "faturamento", "ipca", "mercado",
-        "empresas", "pib", "imposto", "impostos", "shopping", "varejo", "exportação", "safra", "agronegócio",
-        "agronegocio", "agropecuária", "cotação", "juros", "selic"
-      ],
-    },
-    {
-      category: "Serviços",
-      terms: [
-        "vacinação", "vacinacao", "saúde", "saude", "sus", "água", "agua", "saneago", "equatorial",
-        "cnh", "serviço", "servico", "ipva", "iptu", "coleta de lixo", "lixo", "posto de saúde", "upa",
-        "hospital", "agendamento", "poupatempo", "vapt vupt", "atendimento ao cidadão"
-      ],
-    },
-    {
-      category: "Bairros",
-      terms: [
-        "setor bueno", "setor marista", "campinas", "jardim goiás", "jardim goias", "setor oeste",
-        "setor sul", "setor universitário", "setor universitario", "setor pedro ludovico", "setor central",
-        "setor bela vista", "parque amazônia", "parque amazonia", "bairro", "bairros", "moradores",
-        "região noroeste", "região leste"
-      ],
-    },
-  ];
-
-  for (const rule of rules) {
-    if (rule.terms.some((term) => combined.includes(term))) {
-      return rule.category;
-    }
-  }
-
-  return "Goiânia";
+function classifyCategory(title: string, text = "", sourceName = "", sourceUrl = ""): string {
+  return classifyEditorial({ title, excerpt: text, source_name: sourceName, source_url: sourceUrl });
 }
 
 function extractFullContent(html: string): string {
@@ -574,7 +463,7 @@ async function extractArticle(html: string, finalUrl: string): Promise<ImportedN
   if (!title) throw new Error("Não consegui identificar o título dessa matéria.");
 
   const fullText = extractFullContent(html);
-  const autoCategory = classifyCategory(title, fullText || excerpt);
+  const autoCategory = classifyCategory(title, fullText || excerpt, sourceName, finalUrl);
   const formattedContent = formatViralizouArticle({
     title,
     excerpt,
@@ -663,10 +552,8 @@ async function parseFeed(xml: string, feedUrl: string, defaultCategory?: string)
     const rawContent = tag(item, "content:encoded") || tag(item, "content") || tag(item, "description");
     const cleanContent = cleanText(rawContent);
     const excerpt = cleanText(tag(item, "description") || tag(item, "summary") || cleanContent).slice(0, 500);
-    let category = classifyCategory(title, cleanContent || excerpt);
-    if (defaultCategory && (category === "Goiânia" || category === "Esportes" || !category)) {
-      category = defaultCategory;
-    }
+    let category = classifyCategory(title, cleanContent || excerpt, sourceName, link || feedUrl);
+    if (defaultCategory) category = defaultCategory;
     const author = feedAuthor(item);
     const video = feedVideo(item);
     const image = feedImage(item);

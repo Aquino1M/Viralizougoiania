@@ -16,15 +16,10 @@ interface FootballHubProps {
 
 export default function FootballHub({ posts, liveData }: FootballHubProps) {
   const [selectedTeamCode, setSelectedTeamCode] = useState<string | null>(null);
-  const [standings, setStandings] = useState<StandingRow[]>(
-    liveData?.standings && liveData.standings.length > 0 ? liveData.standings : BRASILEIRAO_STANDINGS
-  );
-  const [fixtures, setFixtures] = useState<MatchFixture[]>(
-    liveData?.fixtures && liveData.fixtures.length > 0 ? liveData.fixtures : ROUND_FIXTURES
-  );
+  const standings: StandingRow[] = liveData?.standings && liveData.standings.length > 0 ? liveData.standings : BRASILEIRAO_STANDINGS;
+  const fixtures: MatchFixture[] = liveData?.fixtures && liveData.fixtures.length > 0 ? liveData.fixtures : ROUND_FIXTURES;
   const [currentRound, setCurrentRound] = useState<number>(liveData?.currentRound || 26);
-  const [updatedAt, setUpdatedAt] = useState<string>(liveData?.updated_at || "");
-  const [refreshing, setRefreshing] = useState(false);
+  const updatedAt = liveData?.updated_at || "";
 
   // Ordenação com os mais populares na frente
   const sortedTeams = useMemo(() => {
@@ -50,29 +45,6 @@ export default function FootballHub({ posts, liveData }: FootballHubProps) {
   const fixturesForRound = useMemo(() => {
     return fixtures.filter((f) => f.round === currentRound);
   }, [fixtures, currentRound]);
-
-  async function handleRefreshLive() {
-    setRefreshing(true);
-    try {
-      const res = await fetch("/api/football/sync?force=true");
-      if (res.ok) {
-        const json = await res.json();
-        // Recarregar os dados mais recentes
-        const freshRes = await fetch("/api/football/sync");
-        if (freshRes.ok) {
-          const freshData = await freshRes.json();
-          if (freshData.updated_at) {
-            setUpdatedAt(freshData.updated_at);
-          }
-        }
-        window.location.reload();
-      }
-    } catch (e) {
-      console.warn("Erro ao atualizar tabela:", e);
-    } finally {
-      setRefreshing(false);
-    }
-  }
 
   return (
     <div className="footballHub">
@@ -142,19 +114,15 @@ export default function FootballHub({ posts, liveData }: FootballHubProps) {
                       </p>
                     </div>
                   </div>
-                  <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-                    <span className="liveAutoSyncBadge" title="Atualização automática a cada rodada e final de jogos">
-                      <span className="liveDot"></span> Atualização Automática
+                  <div style={{ display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap" }}>
+                    <span className="liveAutoSyncBadge" title="Tabela e jogos atualizados pelo mesmo Piloto 24/7 que atualiza o Radar e a fila">
+                      <span className="liveDot"></span> Servidor 24/7 • a cada 10 min
                     </span>
-                    <button
-                      type="button"
-                      className="footballRefreshBtn"
-                      onClick={handleRefreshLive}
-                      disabled={refreshing}
-                      title="Forçar checagem imediata de placares e tabela"
-                    >
-                      {refreshing ? "Atualizando..." : "🔄 Atualizar"}
-                    </button>
+                    {updatedAt && (
+                      <span style={{ fontSize: 10, color: "#64748b", fontWeight: 700 }}>
+                        Atualizado {new Date(updatedAt).toLocaleTimeString("pt-BR", { hour: "2-digit", minute: "2-digit" })}
+                      </span>
+                    )}
                   </div>
                 </div>
               </div>

@@ -237,261 +237,9 @@ export default function AdminApp() {
     return next.toISOString();
   }
 
-  // Verifica periodicamente (a cada 20s) e ao focar a aba se chegou a hora de liberar matérias da fila
-  useEffect(() => {
-    async function checkPublishDue() {
-      try {
-        const res = await fetch("/api/posts/publish-due");
-        if (res.ok) {
-          const data = await res.json();
-          if (data && data.publishedCount > 0) {
-            setMessage(`🚀 ${data.publishedCount} matéria(s) agendada(s) acabaram de ser publicadas no portal com sucesso!`);
-            load();
-          }
-        }
-      } catch {}
-    }
+  // A publicação automática agora é responsabilidade exclusiva do ciclo unificado do servidor.
+  // Não fazemos mais polling de 20s no navegador, reduzindo invocações na Vercel.
 
-    // Checa a cada 20 segundos
-    const intervalTimer = setInterval(checkPublishDue, 20 * 1000);
-
-    // Checa imediatamente ao focar a aba do navegador
-    function handleVisibility() {
-      if (document.visibilityState === "visible") {
-        checkPublishDue();
-      }
-    }
-    document.addEventListener("visibilitychange", handleVisibility);
-
-    return () => {
-      clearInterval(intervalTimer);
-      document.removeEventListener("visibilitychange", handleVisibility);
-    };
-  }, []);
-
-  useEffect(() => {
-    if (view === "queue" || view === "list") {
-      fetch("/api/posts/publish-due")
-        .then((r) => r.json())
-        .then((data) => {
-          if (data && data.publishedCount > 0) {
-            setMessage(`🚀 ${data.publishedCount} matéria(s) agendada(s) acabaram de ser publicadas no portal com sucesso!`);
-            load();
-          }
-        })
-        .catch(() => {});
-    }
-  }, [view]);
-
-  function syncCategoryDrafts(nextCategories: Category[]) {
-    setCategoryDrafts(Object.fromEntries(nextCategories.map((c) => [c.id, { name: c.name, slug: c.slug }])));
-  }
-
-  async function loadAdmins() {
-    try {
-      const res = await fetch("/api/admins", { cache: "no-store" });
-      if (res.ok) {
-        const data = await res.json();
-        setAdmins(data.admins || []);
-      }
-    } catch {
-      // ignore
-    }
-  }
-
-  async function load() {
-    setLoading(true);
-    const [postsResponse, categoriesResponse, settingsResponse, adminsResponse] = await Promise.all([
-      fetch("/api/posts", { cache: "no-store" }),
-      fetch("/api/categories", { cache: "no-store" }),
-      fetch("/api/settings", { cache: "no-store" }),
-      fetch("/api/admins", { cache: "no-store" }).catch(() => null),
-    ]);
-    if (postsResponse.status === 401 || categoriesResponse.status === 401) {
-      router.push("/admin/login");
-      return;
-    }
-    const [postsData, categoriesData, settingsData] = await Promise.all([
-      postsResponse.json(),
-      categoriesResponse.json(),
-      settingsResponse.ok ? settingsResponse.json() : { settings: {} },
-    ]);
-    if (adminsResponse && adminsResponse.ok) {
-      try {
-        const adminsData = await adminsResponse.json();
-        setAdmins(adminsData.admins || []);
-      } catch {}
-    }
-    setPosts(postsData.posts || []);
-    const nextCategories = (categoriesData.categories || []) as Category[];
-    setCategories(nextCategories);
-    syncCategoryDrafts(nextCategories);
-    if (settingsData.settings?.socials) {
-      setSocials(settingsData.settings.socials);
-    }
-    setMode(postsData.mode || categoriesData.mode || "");
-    setLoading(false);
-  }
-
-  useEffect(() => {
-    load();
-  }, []);
-
-  const filtered = useMemo(
-    () => posts.filter((p) => (p.title + p.category + p.city).toLowerCase().includes(search.toLowerCase())),
-    [posts, search],
-  );
-
-  const orderedCategories = useMemo(
-    () => [...categories].sort((a, b) => a.sort_order - b.sort_order || a.name.localeCompare(b.name)),
-    [categories],
-  );
-
-  function edit(p: Post) {
-    setForm({
-      id: p.id,
-      title: p.title,
-      slug: p.slug,
-      excerpt: p.excerpt,
-      content: p.content,
-      source_content: p.source_content || p.content,
-      category: p.category,
-      city: p.city,
-      author: p.author || "Aquino",
-      image_url: p.image_url,
-      image_credit: p.image_credit || "",
-      featured: p.featured,
-      status: p.status,
-      published_at: localDateTime(p.published_at),
-      source_name: p.source_name || "",
-      source_url: p.source_url || "",
-      source_author: p.source_author || "",
-      video_url: p.video_url || "",
-      seo_title: p.seo_title || p.title,
-      seo_description: p.seo_description || p.excerpt,
-      seo_keywords: p.seo_keywords || "",
-      is_reviewed: true,
-    });
-    setView("form");
-    setMessage("");
-  }
-
-  function create() {
-    const firstActive = orderedCategories.find((c) => c.active)?.name || "Goiânia";
-    setForm({ ...blank, category: firstActive });
-    setView("form");
-    setMessage("");
-  }
-
-  function reformatContent() {
-    const raw = form.source_content || form.content;
-    const formatted = formatViralizouArticle({
-      title: form.title,
-      excerpt: form.excerpt,
-      sourceText: raw,
-      sourceName: form.source_name,
-      category: form.category,
-    });
-    setForm((curr) => ({ ...curr, content: formatted }));
-    setMessage("Matéria reescrita e formatada com sucesso no padrão do portal!");
-  }
-
-  async function queueFromRadar(item: ImportedNews) {
-    setImporting(true);
-    setImportMessage(`Adicionando "${item.title.slice(0, 45)}..." à fila de postagem...`);
-    try {
-      let activeItem = item;
-      if (
-        item.source_url &&
-        (!item.image_url || !item.video_url || !item.source_content || item.source_content.split("\n\n").length < 2 || item.source_content.length < 300)
-      ) {
-        try {
-          const r = await fetch("/api/import-news", {
-            method: "POST",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({ url: item.source_url, mode: "article" }),
-          });
-          if (r.ok) {
-            const d = await r.json();
-            if (d.items?.[0]) activeItem = { ...item, ...d.items[0] };
-          }
-        } catch {}
-      }
-
-      // Regra obrigatória: Matéria precisa de imagem para ir para a fila ou ser postada
-      if (!activeItem.image_url || activeItem.image_url.trim().length < 10) {
-        setImportMessage("⚠️ Esta notícia não possui imagem na fonte original. Regra do portal: se não tiver foto, não posta!");
-        setImporting(false);
-        return;
-      }
-
-      let targetCategory = "Goiânia";
-      if (activeItem.category) {
-        const match = categories.find((c) => c.name.toLowerCase() === activeItem.category!.toLowerCase());
-        targetCategory = match ? match.name : activeItem.category;
-      } else {
-        targetCategory = orderedCategories.find((c) => c.active)?.name || "Goiânia";
-      }
-
-      const rawSource = activeItem.source_content || activeItem.content || activeItem.excerpt || activeItem.title;
-      const formatted = formatViralizouArticle({
-        title: activeItem.title,
-        excerpt: activeItem.excerpt,
-        sourceText: rawSource,
-        sourceName: activeItem.source_name,
-        category: targetCategory,
-      });
-
-      const nextSlot = getNextQueueTime();
-
-      const computedAuthor = activeItem.source_author
-        ? (activeItem.source_name ? `${activeItem.source_author} | ${activeItem.source_name}` : activeItem.source_author)
-        : (activeItem.source_name || "Redação");
-
-      const payload = {
-        title: activeItem.title,
-        slug: slugify(activeItem.title),
-        excerpt: activeItem.excerpt || activeItem.title,
-        content: formatted,
-        source_content: rawSource,
-        category: targetCategory,
-        city: "Goiânia",
-        author: computedAuthor,
-        image_url: activeItem.image_url || "",
-        image_credit: activeItem.image_credit || (activeItem.source_author ? `Reportagem: ${activeItem.source_author}${activeItem.source_name ? ` | ${activeItem.source_name}` : ""}` : `Foto: Reprodução / ${activeItem.source_name || "Divulgação"}`),
-        video_url: activeItem.video_url || "",
-        featured: false,
-        status: "scheduled" as PostStatus,
-        published_at: nextSlot,
-        source_name: activeItem.source_name,
-        source_url: activeItem.source_url,
-        source_author: activeItem.source_author || "",
-        seo_title: activeItem.title,
-        seo_description: activeItem.excerpt || activeItem.title,
-        seo_keywords: `Goiânia, ${targetCategory}`,
-      };
-
-      const res = await fetch("/api/posts", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(payload),
-      });
-
-      if (!res.ok) {
-        const err = await res.json();
-        throw new Error(err.error || "Erro ao agendar notícia na fila.");
-      }
-
-      await load();
-      const d = new Date(nextSlot);
-      const timeStr = d.toLocaleTimeString("pt-BR", { hour: "2-digit", minute: "2-digit" });
-      setImportMessage(`✅ Notícia agendada na Fila! Será liberada automaticamente às ${timeStr}.`);
-    } catch (err: any) {
-      setImportMessage(`Erro ao agendar na fila: ${err.message}`);
-    } finally {
-      setImporting(false);
-    }
-  }
 
   // Stop words para análise semântica de similaridade de matérias
   const STOP_WORDS_SET = new Set([
@@ -760,7 +508,7 @@ export default function AdminApp() {
 
   useEffect(() => {
     refreshAutomationStatus();
-    const statusTimer = setInterval(refreshAutomationStatus, 30000);
+    const statusTimer = setInterval(refreshAutomationStatus, 60000);
     return () => clearInterval(statusTimer);
   }, []);
 
@@ -768,7 +516,7 @@ export default function AdminApp() {
   async function runAutoPilotCycle() {
     if (autoPilotRunning || batchQueueing) return;
     setAutoPilotRunning(true);
-    setImportMessage("🤖 Piloto Automático: Checando publicações vencidas e varrendo todos os canais (Goiás, Brasil, Futebol e Fofocas)...");
+    setImportMessage("🤖 Ciclo Único 24/7: Radar + fila + publicações + tabela + jogos em uma única execução do servidor...");
     try {
       const res = await fetch("/api/automation/radar-cycle?force=1", {
         method: "POST",
@@ -784,7 +532,9 @@ export default function AdminApp() {
             Number(data.found || 0) + " notícias encontradas • " +
             Number(data.newItems || 0) + " inéditas • " +
             Number(data.added || 0) + " adicionadas à fila • " +
-            Number(data.published || 0) + " liberadas."
+            Number(data.published || 0) + " liberadas • " +
+            Number(data.reclassified || 0) + " editorias corrigidas • " +
+            (data.football?.round ? "Brasileirão " + data.football.round + "ª rodada atualizado." : "Tabela consultada.")
           );
         }
       } else {
@@ -1789,7 +1539,7 @@ export default function AdminApp() {
                     )}
                     <span>
                       {autoPilot
-                        ? `Servidor 24/7 ativo: GitHub Actions aciona o Vercel para varrer os 7 sites de Goiás a cada 10 min • Próximo ciclo aprox. em ${Math.floor(autoPilotCountdown / 60).toString().padStart(2, "0")}:${(autoPilotCountdown % 60).toString().padStart(2, "0")}${automationLastRun ? " • Última execução: " + new Date(automationLastRun).toLocaleTimeString("pt-BR", { hour: "2-digit", minute: "2-digit" }) : ""}`
+                        ? `Servidor 24/7 ativo: 1 GitHub Action → 1 comando Vercel a cada 10 min atualiza 📍 Goiânia & Goiás + 🇧🇷 Grandes Jornais + ⚽ Futebol & Brasileirão + ✨ Fofocas & Famosos + 🌐 Todos os Canais + Fila + Publicações + Tabela + Jogos • Próximo ciclo aprox. em ${Math.floor(autoPilotCountdown / 60).toString().padStart(2, "0")}:${(autoPilotCountdown % 60).toString().padStart(2, "0")}${automationLastRun ? " • Última execução: " + new Date(automationLastRun).toLocaleTimeString("pt-BR", { hour: "2-digit", minute: "2-digit" }) : ""}`
                         : automationConfigured
                         ? `Piloto 24/7 pausado no servidor. Clique em ligar para voltar a varrer automaticamente.`
                         : `Configure o Supabase para habilitar o Piloto Automático 24/7 no servidor.`}
@@ -1805,7 +1555,7 @@ export default function AdminApp() {
                         onClick={runAutoPilotCycle}
                         title="Executa agora mesmo o ciclo de busca em todos os sites e agendamento sem esperar os 10 minutos"
                       >
-                        {autoPilotRunning ? "⏳ Varrendo Todos os Sites..." : "⚡ Executar Agora (Todos os Sites)"}
+                        {autoPilotRunning ? "⏳ Varrendo Todos os Sites..." : "⚡ Executar Ciclo Único Agora"}
                       </button>
                     )}
                     <button

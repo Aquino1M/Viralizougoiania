@@ -154,3 +154,7 @@ O agendamento a cada 10 minutos é feito por `.github/workflows/radar-pilot.yml`
 O botão **Executar Agora** do Radar chama o mesmo endpoint do servidor. Ligar/pausar o piloto também é persistido no Supabase, portanto não depende mais de manter a aba do navegador aberta.
 
 O `vercel.json` não usa cron de 10 minutos, mantendo compatibilidade com projetos Vercel que não aceitam cron frequente. A execução pesada continua acontecendo no servidor da Vercel; o GitHub Actions atua apenas como relógio/disparador.
+
+
+### Ciclo único 24/7
+A automação usa somente um disparo do GitHub Actions a cada 10 minutos. Esse único request ao endpoint `/api/automation/radar-cycle` atualiza o Radar de Goiás, Brasil, Futebol e Fofocas, corrige editorias antigas, abastece a fila, publica matérias vencidas e sincroniza tabela/jogos do Brasileirão. O navegador não faz mais polling de publicação a cada 20 segundos e a Vercel não possui cron separado para futebol.

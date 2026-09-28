@@ -3,6 +3,7 @@ import path from "node:path";
 import { randomUUID } from "node:crypto";
 import type { AdminUser, Category, CategoryInput, Post, PostInput, PostStatus, SiteSettings } from "@/lib/types";
 import { slugify } from "@/lib/slug";
+import { classifyEditorial, normalizePostCategory } from "@/lib/category-classifier";
 
 const localFile = path.join(process.cwd(), "data", "posts.json");
 const localCategoriesFile = path.join(process.cwd(), "data", "categories.json");
@@ -156,13 +157,13 @@ export async function getPosts(opts: { includeDrafts?: boolean; category?: strin
     postsList = await readLocal();
   }
 
-  // Garantia absoluta: qualquer matéria agendada cujo horário já chegou passa a ser tratada como 'published'
+  // Corrige status e editoria antes de renderizar.
   const nowMs = Date.now();
   postsList = postsList.map((p) => {
-    if (p.status === "scheduled" && p.published_at && new Date(p.published_at).getTime() <= nowMs) {
-      return { ...p, status: "published" as PostStatus };
-    }
-    return p;
+    const normalizedStatus = p.status === "scheduled" && p.published_at && new Date(p.published_at).getTime() <= nowMs
+      ? { ...p, status: "published" as PostStatus }
+      : p;
+    return normalizePostCategory(normalizedStatus as Post);
   });
 
   let result = postsList;
@@ -209,7 +210,8 @@ export async function createPost(input: PostInput) {
       ? (input.source_name ? `${input.source_author} | ${input.source_name}` : input.source_author)
       : (input.source_name || "Redação");
   }
-  const post: Post = { ...input, author, id: randomUUID(), created_at: now, updated_at: now };
+  const autoCategory = (input.source_name || input.source_url) ? classifyEditorial(input) : input.category;
+  const post: Post = { ...input, category: autoCategory, author, id: randomUUID(), created_at: now, updated_at: now };
   if (hasSupabaseConfig()) {
     try {
       let rows: any;
@@ -283,6 +285,9 @@ export async function updatePost(id: string, input: Partial<PostInput>) {
       ? (patchInput.source_name ? `${patchInput.source_author} | ${patchInput.source_name}` : patchInput.source_author)
       : (patchInput.source_name || "Redação");
   }
+  if ((patchInput.source_name || patchInput.source_url) && (patchInput.title || patchInput.excerpt || patchInput.content || patchInput.category)) {
+    patchInput.category = classifyEditorial(patchInput);
+  }
   const patch = { ...patchInput, updated_at: new Date().toISOString() };
   if (hasSupabaseConfig()) {
     try {
@@ -339,6 +344,65 @@ export async function deletePost(id: string) {
   }
   const posts = (await readLocal()).filter((p) => p.id !== id);
   await writeLocal(posts);
+}
+
+export async function reclassifyExternalPosts(): Promise<{ checked: number; changed: number; byCategory: Record<string, number> }> {
+  let rawPosts: Post[] = [];
+  if (hasSupabaseConfig()) {
+    try {
+      const rows = await sb("posts?select=*&order=created_at.desc");
+      if (Array.isArray(rows)) rawPosts = rows as Post[];
+    } catch (err: any) {
+      console.warn("Erro ao carregar matérias para reclassificação:", err.message);
+    }
+  }
+  if (!rawPosts.length) {
+    try { rawPosts = await readLocal(); } catch { rawPosts = []; }
+  }
+
+  const changes = rawPosts
+    .filter((post) => Boolean(post.source_name || post.source_url))
+    .map((post) => ({ post, target: classifyEditorial(post) }))
+    .filter(({ post, target }) => post.category !== target);
+
+  const byCategory: Record<string, number> = {};
+  for (const { target } of changes) byCategory[target] = (byCategory[target] || 0) + 1;
+
+  if (hasSupabaseConfig() && changes.length) {
+    const grouped = new Map<string, string[]>();
+    for (const { post, target } of changes) {
+      if (!grouped.has(target)) grouped.set(target, []);
+      grouped.get(target)!.push(post.id);
+    }
+    for (const [category, ids] of grouped) {
+      for (let i = 0; i < ids.length; i += 75) {
+        const chunk = ids.slice(i, i + 75);
+        const filter = chunk.map((id) => `"${id.replace(/"/g, "")}"`).join(",");
+        await sb(`posts?id=in.(${filter})`, {
+          method: "PATCH",
+          headers: { Prefer: "return=minimal" },
+          body: JSON.stringify({ category, updated_at: new Date().toISOString() }),
+        });
+      }
+    }
+  }
+
+  try {
+    const local = await readLocal();
+    let localChanged = false;
+    for (const post of local) {
+      if (!post.source_name && !post.source_url) continue;
+      const target = classifyEditorial(post);
+      if (post.category !== target) {
+        post.category = target;
+        post.updated_at = new Date().toISOString();
+        localChanged = true;
+      }
+    }
+    if (localChanged) await writeLocal(local);
+  } catch {}
+
+  return { checked: rawPosts.length, changed: changes.length, byCategory };
 }
 
 export function storageMode() {
