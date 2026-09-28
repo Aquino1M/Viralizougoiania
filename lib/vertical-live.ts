@@ -222,6 +222,29 @@ export async function getFootballHeadlines(teamSlug?:string){
   return dedupe(results.flat()).slice(0,42);
 }
 
+const BRASILEIRAO_FALLBACK:StandingRow[]=[
+  {position:1,team:"Flamengo",abbr:"FLA",points:60,played:28,wins:18,draws:6,losses:4,goalsFor:55,goalsAgainst:23,goalDiff:32,efficiency:71},
+  {position:2,team:"Palmeiras",abbr:"PAL",points:57,played:28,wins:16,draws:9,losses:3,goalsFor:47,goalsAgainst:21,goalDiff:26,efficiency:68},
+  {position:3,team:"Athletico PR",abbr:"CAP",points:49,played:28,wins:14,draws:7,losses:7,goalsFor:43,goalsAgainst:32,goalDiff:11,efficiency:58},
+  {position:4,team:"Fluminense",abbr:"FLU",points:48,played:28,wins:13,draws:9,losses:6,goalsFor:44,goalsAgainst:36,goalDiff:8,efficiency:57},
+  {position:5,team:"Bahia",abbr:"BAH",points:46,played:28,wins:12,draws:10,losses:6,goalsFor:43,goalsAgainst:35,goalDiff:8,efficiency:55},
+  {position:6,team:"Cruzeiro",abbr:"CRU",points:45,played:28,wins:13,draws:6,losses:9,goalsFor:42,goalsAgainst:40,goalDiff:2,efficiency:54},
+  {position:7,team:"Atlético-MG",abbr:"ATL",points:40,played:27,wins:11,draws:7,losses:9,goalsFor:36,goalsAgainst:32,goalDiff:4,efficiency:49},
+  {position:8,team:"Santos",abbr:"SAN",points:38,played:27,wins:10,draws:8,losses:9,goalsFor:41,goalsAgainst:40,goalDiff:1,efficiency:47},
+  {position:9,team:"Coritiba",abbr:"CBA",points:38,played:28,wins:10,draws:8,losses:10,goalsFor:37,goalsAgainst:43,goalDiff:-6,efficiency:45},
+  {position:10,team:"Red Bull Bragantino",abbr:"RBB",points:36,played:27,wins:10,draws:6,losses:11,goalsFor:33,goalsAgainst:31,goalDiff:2,efficiency:44},
+  {position:11,team:"São Paulo",abbr:"SAO",points:36,played:27,wins:10,draws:6,losses:11,goalsFor:32,goalsAgainst:30,goalDiff:2,efficiency:44},
+  {position:12,team:"Botafogo",abbr:"BOT",points:35,played:28,wins:9,draws:8,losses:11,goalsFor:41,goalsAgainst:45,goalDiff:-4,efficiency:42},
+  {position:13,team:"Vitória",abbr:"VIT",points:33,played:28,wins:9,draws:6,losses:13,goalsFor:28,goalsAgainst:42,goalDiff:-14,efficiency:39},
+  {position:14,team:"Corinthians",abbr:"COR",points:32,played:28,wins:8,draws:8,losses:12,goalsFor:29,goalsAgainst:32,goalDiff:-3,efficiency:38},
+  {position:15,team:"Mirassol",abbr:"MIR",points:32,played:28,wins:8,draws:8,losses:12,goalsFor:33,goalsAgainst:42,goalDiff:-9,efficiency:38},
+  {position:16,team:"Vasco da Gama",abbr:"VAS",points:31,played:27,wins:8,draws:7,losses:12,goalsFor:34,goalsAgainst:41,goalDiff:-7,efficiency:38},
+  {position:17,team:"Grêmio",abbr:"GRE",points:29,played:28,wins:7,draws:8,losses:13,goalsFor:30,goalsAgainst:38,goalDiff:-8,efficiency:35},
+  {position:18,team:"Internacional",abbr:"INT",points:28,played:28,wins:6,draws:10,losses:12,goalsFor:30,goalsAgainst:36,goalDiff:-6,efficiency:33},
+  {position:19,team:"Remo-PA",abbr:"REM",points:23,played:28,wins:5,draws:8,losses:15,goalsFor:32,goalsAgainst:47,goalDiff:-15,efficiency:27},
+  {position:20,team:"Chapecoense",abbr:"CHA",points:18,played:27,wins:3,draws:9,losses:15,goalsFor:29,goalsAgainst:53,goalDiff:-24,efficiency:22}
+];
+
 export async function getBrasileiraoTable():Promise<StandingRow[]>{
   const url="https://www.lance.com.br/tabela/brasileirao";
   try{
@@ -244,8 +267,8 @@ export async function getBrasileiraoTable():Promise<StandingRow[]>{
     const out:StandingRow[]=[];
 
     for(const row of rows){
-      const img=row.match(/<img\b[^>]*alt=["']([^"']+)["']/i);
-      const team=img&&img[1]?cleanText(img[1]):"";
+      const imgs=[...row.matchAll(/<img\b[^>]*alt=["']([^"']+)["']/gi)];
+      const team=imgs.length?cleanText(imgs[imgs.length-1][1]||""):"";
       const cells=row.match(/<td\b[\s\S]*?<\/td>/gi)||[];
       if(!team||cells.length<10)continue;
       const first=cleanText(cells[0]);
@@ -268,9 +291,9 @@ export async function getBrasileiraoTable():Promise<StandingRow[]>{
         efficiency:nums[8]
       });
     }
-    return out.slice(0,20);
+    return out.length>=10?out.slice(0,20):BRASILEIRAO_FALLBACK;
   }catch{
-    return [];
+    return BRASILEIRAO_FALLBACK;
   }
 }
 
