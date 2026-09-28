@@ -135,3 +135,22 @@ O importador tenta obter título, descrição, imagem, nome da fonte e link orig
 Nome: **Viralizougoiania**  
 Foco: **notícias locais de Goiânia**  
 Estilo visual: portal moderno, rápido, forte em manchetes e leitura móvel.
+
+
+## Piloto Automático 24/7
+
+O Radar agora possui um ciclo de servidor em `/api/automation/radar-cycle`. Ele:
+
+- libera matérias agendadas cujo horário já chegou;
+- varre os 7 feeds de Goiás/Goiânia no servidor;
+- compara com publicadas, rascunhos e itens já presentes na fila;
+- remove repetidas por URL, slug e similaridade de título;
+- adiciona somente matérias inéditas à Fila de Postagem Automática;
+- distribui a fila no ritmo padrão de uma matéria por editoria a cada 10 minutos;
+- grava em `settings.id = automation` o horário da última execução e os totais encontrados/adicionados.
+
+O agendamento a cada 10 minutos é feito por `.github/workflows/radar-pilot.yml`. O GitHub Actions obtém um token OIDC temporário e chama o endpoint no servidor Vercel. Nenhuma senha fixa precisa ficar salva no workflow.
+
+O botão **Executar Agora** do Radar chama o mesmo endpoint do servidor. Ligar/pausar o piloto também é persistido no Supabase, portanto não depende mais de manter a aba do navegador aberta.
+
+O `vercel.json` não usa cron de 10 minutos, mantendo compatibilidade com projetos Vercel que não aceitam cron frequente. A execução pesada continua acontecendo no servidor da Vercel; o GitHub Actions atua apenas como relógio/disparador.

@@ -169,23 +169,13 @@ export default function AdminApp() {
     return "1_per_category"; // Padrão inteligente: 1 por aba do jornal a cada 10 min!
   });
 
-  // Piloto Automático do Radar (executa a cada 10 min de forma contínua)
-  const [autoPilot, setAutoPilot] = useState<boolean>(() => {
-    if (typeof window !== "undefined") {
-      return localStorage.getItem("viralizou_radar_autopilot") === "true";
-    }
-    return false;
-  });
+  // Piloto Automático 24/7: estado real salvo no servidor/Supabase
+  const [autoPilot, setAutoPilot] = useState<boolean>(false);
   const [autoPilotCountdown, setAutoPilotCountdown] = useState<number>(600);
   const [autoPilotRunning, setAutoPilotRunning] = useState<boolean>(false);
+  const [automationConfigured, setAutomationConfigured] = useState<boolean>(false);
+  const [automationLastRun, setAutomationLastRun] = useState<string>("");
   const [deduplicatingQueue, setDeduplicatingQueue] = useState<boolean>(false);
-
-  // Persiste preferências no navegador
-  useEffect(() => {
-    if (typeof window !== "undefined") {
-      localStorage.setItem("viralizou_radar_autopilot", String(autoPilot));
-    }
-  }, [autoPilot]);
 
   useEffect(() => {
     if (typeof window !== "undefined") {
@@ -693,70 +683,90 @@ export default function AdminApp() {
     setSelectedUrls(deduped.map((item) => item.source_url));
   }
 
-  // Rotina de execução do ciclo do Piloto Automático (Varre TODOS os sites, não apenas 1)
+  async function refreshAutomationStatus() {
+    try {
+      const res = await fetch("/api/automation/status", { cache: "no-store" });
+      if (!res.ok) return;
+      const data = await res.json();
+      const state = data.state || {};
+      setAutomationConfigured(Boolean(data.configured));
+      setAutoPilot(Boolean(state.enabled));
+      setAutomationLastRun(state.last_success_at || state.last_run_at || "");
+      if (state.next_run_at) {
+        const seconds = Math.max(0, Math.ceil((new Date(state.next_run_at).getTime() - Date.now()) / 1000));
+        setAutoPilotCountdown(seconds || 600);
+      }
+    } catch {}
+  }
+
+  useEffect(() => {
+    refreshAutomationStatus();
+    const statusTimer = setInterval(refreshAutomationStatus, 30000);
+    return () => clearInterval(statusTimer);
+  }, []);
+
+  // Execução manual usa exatamente o MESMO ciclo que roda 24/7 no servidor.
   async function runAutoPilotCycle() {
     if (autoPilotRunning || batchQueueing) return;
     setAutoPilotRunning(true);
-    const siteCount = RADAR_SOURCES.filter((s) => s.region === radarRegion).length;
-    const regionLabel = radarRegion === "goias" ? `todos os ${siteCount} sites de Goiás` : `todos os jornais do Brasil`;
-    setImportMessage(`🤖 Piloto Automático: Checando publicações vencidas e varrendo ${regionLabel}...`);
+    setImportMessage("🤖 Servidor Vercel: varrendo os 7 sites de Goiás, removendo repetidas e abastecendo a fila...");
     try {
-      // 1. Libera publicações cujo horário já venceu
-      const pubRes = await fetch("/api/posts/publish-due").catch(() => null);
-      if (pubRes && pubRes.ok) {
-        const pubData = await pubRes.json().catch(() => null);
-        if (pubData && pubData.publishedCount > 0) {
-          setMessage(`🚀 ${pubData.publishedCount} matéria(s) agendada(s) acabaram de ser publicadas no portal com sucesso!`);
-        }
-      }
+      const res = await fetch("/api/automation/radar-cycle?force=1", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+      });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) throw new Error(data.error || "Falha ao executar o ciclo no servidor.");
 
-      // 2. Atualiza lista de posts mais recentes do banco para evitar duplicatas com 100% de precisão
-      const postsRes = await fetch("/api/posts", { cache: "no-store" }).catch(() => null);
-      let freshPosts = posts;
-      if (postsRes && postsRes.ok) {
-        const pData = await postsRes.json();
-        if (Array.isArray(pData.posts)) {
-          freshPosts = pData.posts;
-          setPosts(freshPosts);
-        }
-      }
-
-      // 3. Varre simultaneamente TODOS os sites da região
-      const allNews = await fetchRadarFeeds(radarRegion);
-      setImportItems(allNews);
-
-      // 4. Filtra apenas as notícias que ainda não foram postadas (sem duplicatas no banco nem entre si)
-      const unposted = allNews.filter((it) => !isItemAlreadyPosted(it, freshPosts));
-      if (unposted.length > 0) {
-        setImportMessage(`🤖 Piloto Automático: Encontradas ${unposted.length} notícias inéditas em todos os ${siteCount} sites! Agendando na fila...`);
-        await queueItemsInBatch(unposted, "Piloto Automático (Todos os Sites)", freshPosts);
+      if (data.skipped) {
+        setImportMessage("🤖 Piloto: ciclo ignorado porque outro ciclo já está em execução.");
       } else {
-        setImportMessage(`🤖 Piloto Automático: Verificou ${allNews.length} notícias de todos os ${siteCount} sites. Nenhuma notícia nova pendente. Próxima checagem em 10 minutos.`);
+        setImportMessage(
+          "🤖 Piloto 24/7: " +
+          Number(data.found || 0) + " notícias encontradas • " +
+          Number(data.newItems || 0) + " inéditas • " +
+          Number(data.added || 0) + " adicionadas à fila • " +
+          Number(data.published || 0) + " liberadas."
+        );
       }
       await load();
+      await refreshAutomationStatus();
     } catch (err: any) {
-      console.warn("Aviso no ciclo do Piloto Automático:", err.message);
+      setImportMessage("Erro no Piloto 24/7: " + err.message);
     } finally {
       setAutoPilotRunning(false);
-      setAutoPilotCountdown(600);
     }
   }
 
-  // Timer do Piloto Automático (a cada segundo decrementa até disparar em 0)
+  async function toggleAutoPilot() {
+    try {
+      const nextEnabled = !autoPilot;
+      const res = await fetch("/api/automation/status", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ enabled: nextEnabled, interval_minutes: 10 }),
+      });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) throw new Error(data.error || "Não foi possível alterar o Piloto.");
+      setAutoPilot(Boolean(data.state?.enabled));
+      setAutoPilotCountdown(600);
+      setImportMessage(nextEnabled
+        ? "🟢 Piloto Automático 24/7 ligado no servidor. O GitHub Actions acionará o Vercel a cada 10 minutos."
+        : "⏸️ Piloto Automático 24/7 pausado no servidor.");
+      if (nextEnabled) await runAutoPilotCycle();
+    } catch (err: any) {
+      setImportMessage("Erro ao alterar Piloto 24/7: " + err.message);
+    }
+  }
+
+  // O contador da interface é apenas visual. A execução real ocorre fora do navegador.
   useEffect(() => {
     if (!autoPilot) return;
-    const pilotTimer = setInterval(() => {
-      setAutoPilotCountdown((prev) => {
-        if (autoPilotRunning || batchQueueing) return prev;
-        if (prev <= 1) {
-          runAutoPilotCycle();
-          return 600;
-        }
-        return prev - 1;
-      });
+    const countdownTimer = setInterval(() => {
+      setAutoPilotCountdown((prev) => prev <= 1 ? 600 : prev - 1);
     }, 1000);
-    return () => clearInterval(pilotTimer);
-  }, [autoPilot, autoPilotRunning, batchQueueing, radarRegion, queueScheduleMode]);
+    return () => clearInterval(countdownTimer);
+  }, [autoPilot]);
 
   // Enfileiramento em lote com garantia de ordenação pelas mais recentes, sem repetição e com ritmo configurável
   async function queueItemsInBatch(rawItems: ImportedNews[], batchTypeLabel: string, currentPostsList?: Post[]) {
@@ -1658,8 +1668,10 @@ export default function AdminApp() {
                     )}
                     <span>
                       {autoPilot
-                        ? `Varrendo TODOS os ${radarRegion === "goias" ? "7 sites de Goiás" : "jornais"} e adicionando à fila a cada 10 min • Próximo envio em ${Math.floor(autoPilotCountdown / 60).toString().padStart(2, "0")}:${(autoPilotCountdown % 60).toString().padStart(2, "0")}`
-                        : `Varre todos os sites simultaneamente a cada 10 minutos e adiciona as matérias inéditas à fila sem repetir.`}
+                        ? `Servidor 24/7 ativo: GitHub Actions aciona o Vercel para varrer os 7 sites de Goiás a cada 10 min • Próximo ciclo aprox. em ${Math.floor(autoPilotCountdown / 60).toString().padStart(2, "0")}:${(autoPilotCountdown % 60).toString().padStart(2, "0")}${automationLastRun ? " • Última execução: " + new Date(automationLastRun).toLocaleTimeString("pt-BR", { hour: "2-digit", minute: "2-digit" }) : ""}`
+                        : automationConfigured
+                        ? `Piloto 24/7 pausado no servidor. Clique em ligar para voltar a varrer automaticamente.`
+                        : `Configure o Supabase para habilitar o Piloto Automático 24/7 no servidor.`}
                     </span>
                   </div>
                   <div style={{ display: "flex", gap: 8, alignItems: "center", flexWrap: "wrap" }}>
@@ -1678,16 +1690,7 @@ export default function AdminApp() {
                     <button
                       type="button"
                       className={`btnAutoPilotToggle ${!autoPilot ? "btnAutoPilotOff" : ""}`}
-                      onClick={() => {
-                        if (!autoPilot) {
-                          setAutoPilot(true);
-                          setTimeout(() => {
-                            runAutoPilotCycle();
-                          }, 100);
-                        } else {
-                          setAutoPilot(false);
-                        }
-                      }}
+                      onClick={toggleAutoPilot}
                     >
                       {autoPilot ? "⏸️ Pausar Piloto Automático" : "🚀 Ligar Piloto Automático (Todos os Sites)"}
                     </button>
