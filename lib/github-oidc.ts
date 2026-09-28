@@ -10,20 +10,9 @@ function parseJsonPart(value: string) {
   return JSON.parse(fromBase64Url(value).toString("utf8")) as Record<string, unknown>;
 }
 
-async function verifyRs256(signingInput: string, signature: Buffer, jwk: JsonWebKey) {
-  const key = await crypto.webcrypto.subtle.importKey(
-    "jwk",
-    jwk,
-    { name: "RSASSA-PKCS1-v1_5", hash: "SHA-256" },
-    false,
-    ["verify"],
-  );
-  return crypto.webcrypto.subtle.verify(
-    "RSASSA-PKCS1-v1_5",
-    key,
-    signature,
-    Buffer.from(signingInput),
-  );
+async function verifyRs256(signingInput: string, signature: Buffer, jwk: Record<string, unknown>) {
+  const key = crypto.createPublicKey({ key: jwk as any, format: "jwk" });
+  return crypto.verify("RSA-SHA256", Buffer.from(signingInput), key, signature);
 }
 
 export async function verifyGitHubActionsOidc(token: string): Promise<JwtPayload | null> {
@@ -57,7 +46,7 @@ export async function verifyGitHubActionsOidc(token: string): Promise<JwtPayload
       next: { revalidate: 3600 },
     });
     if (!jwksRes.ok) return null;
-    const jwks = await jwksRes.json() as { keys?: JsonWebKey[] };
+    const jwks = await jwksRes.json() as { keys?: Array<Record<string, unknown>> };
     const jwk = jwks.keys?.find((k) => k.kid === header.kid);
     if (!jwk) return null;
 
