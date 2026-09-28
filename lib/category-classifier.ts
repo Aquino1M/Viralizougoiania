@@ -51,13 +51,13 @@ export function classifyEditorial(input: CategoryInput): EditorialCategory {
   return "Goiânia";
 }
 
-export function normalizePostCategory<T extends Post>(post: T): T {
+export function normalizePostCategory(post: Post): Post {
   if (!post.source_name && !post.source_url) return post;
   const category = classifyEditorial(post);
   return category === post.category ? post : { ...post, category };
 }
 
-export function normalizeImportedCategory<T extends ImportedNews>(item: T, forcedCategory?: string): T {
+export function normalizeImportedCategory(item: ImportedNews, forcedCategory?: string): ImportedNews {
   if (forcedCategory === "Futebol" || forcedCategory === "Fofocas") return { ...item, category: forcedCategory };
   return { ...item, category: classifyEditorial(item) };
 }
