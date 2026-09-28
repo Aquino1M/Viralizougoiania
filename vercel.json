@@ -2,12 +2,9 @@
   "framework": "nextjs",
   "crons": [
     {
-      "path": "/api/posts/publish-due",
-      "schedule": "*/10 * * * *"
-    },
-    {
       "path": "/api/football/sync",
-      "schedule": "0 * * * *"
+      "schedule": "0 4 * * *"
     }
   ]
 }
+
