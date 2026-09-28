@@ -1,6 +1,8 @@
-name: Radar Piloto 24x7
+name: Ciclo Unico 24x7
 
 on:
+  push:
+    branches: [main]
   schedule:
     - cron: "*/10 * * * *"
   workflow_dispatch:
@@ -10,15 +12,15 @@ permissions:
   id-token: write
 
 concurrency:
-  group: viralizougoiania-radar-pilot
+  group: viralizougoiania-ciclo-unico
   cancel-in-progress: false
 
 jobs:
-  radar-cycle:
+  ciclo-unico:
     runs-on: ubuntu-latest
     timeout-minutes: 8
     steps:
-      - name: Obter token OIDC do GitHub Actions
+      - name: Obter token OIDC temporario
         id: oidc
         shell: bash
         run: |
@@ -28,7 +30,7 @@ jobs:
           echo "::add-mask::$TOKEN"
           echo "token=$TOKEN" >> "$GITHUB_OUTPUT"
 
-      - name: Executar ciclo no servidor Vercel
+      - name: Executar 1 comando no servidor Vercel
         shell: bash
         env:
           OIDC_TOKEN: ${{ steps.oidc.outputs.token }}
