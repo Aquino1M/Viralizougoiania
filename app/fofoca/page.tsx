@@ -5,7 +5,6 @@ import Footer from "@/components/Footer";
 import NewsCard from "@/components/NewsCard";
 import { getPosts } from "@/lib/storage";
 import { getGossipHeadlines } from "@/lib/vertical-live";
-import { proxyImageUrl } from "@/lib/image-proxy";
 
 export const dynamic="force-dynamic";
 export const metadata:Metadata={
@@ -48,7 +47,7 @@ export default async function FofocaPage({searchParams}:{searchParams:Promise<{f
     <section className="section gossipLiveSection"><div className="container">
       <div className="sectionHead"><div><span className="sectionLabel">RADAR DE FAMOSOS</span><h2>{filter==="fazenda"?"A Fazenda":filter==="leodias"?"Portal LeoDias":filter==="uol"?"UOL Splash Celebs":"Últimas de famosos e realities"}</h2></div></div>
       {live.length?<div className="gossipLiveGrid">{live.map((item,i)=><a key={item.url} href={item.url} target="_blank" rel="noopener noreferrer nofollow" className={i===0?"gossipLiveCard gossipLiveLead":"gossipLiveCard"}>
-        <div className="gossipLiveImage">{item.image?<img src={proxyImageUrl(item.image,i===0?1100:700)} alt="" loading="lazy"/>:<span>✨</span>}<b>{item.source}</b></div>
+        <div className="gossipLiveImage">{item.image?<img src={item.image} alt="" loading="lazy" referrerPolicy="no-referrer"/>:<span>✨</span>}<b>{item.source}</b></div>
         <div className="gossipLiveBody">{item.publishedText&&<time>{item.publishedText}</time>}<h3>{item.title}</h3><small>Ver na fonte ↗</small></div>
       </a>)}</div>:<div className="empty">Não foi possível carregar as manchetes externas agora.</div>}
     </div></section>

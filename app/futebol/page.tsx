@@ -5,7 +5,6 @@ import Footer from "@/components/Footer";
 import NewsCard from "@/components/NewsCard";
 import { getPosts } from "@/lib/storage";
 import { FOOTBALL_TEAMS, getBrasileiraoTable, getFootballHeadlines, postMatchesTeam } from "@/lib/vertical-live";
-import { proxyImageUrl } from "@/lib/image-proxy";
 
 export const dynamic="force-dynamic";
 export const metadata:Metadata={
@@ -58,7 +57,7 @@ export default async function FutebolPage({searchParams}:{searchParams:Promise<{
         <div className="liveFootballList">
           {live.length?live.map((item,i)=><a key={item.url} href={item.url} target="_blank" rel="noopener noreferrer nofollow" className="liveFootballCard">
             <div className="liveFootballThumb">
-              {item.image?<img src={proxyImageUrl(item.image,620)} alt="" loading="lazy"/>:<span>{selected?.short||"⚽"}</span>}
+              {item.image?<img src={item.image} alt="" loading="lazy" referrerPolicy="no-referrer"/>:<span>{selected?.short||"⚽"}</span>}
             </div>
             <div className="liveFootballBody">
               <div className="liveSourceRow"><span>{item.source}</span>{item.publishedText&&<time>{item.publishedText}</time>}</div>
