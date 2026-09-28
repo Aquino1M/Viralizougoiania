@@ -21,7 +21,13 @@ export default async function FutebolPage({searchParams}:{searchParams:Promise<{
     getBrasileiraoTable()
   ]);
 
-  const published=allPosts.filter(p=>p.status==="published"&&(p.category==="Futebol"||p.category==="Esportes"));
+  const footballTerms=/\b(futebol|seleção brasileira|selecao brasileira|brasileir[aã]o|libertadores|sul-americana|copa do brasil|campeonato|jogo|partida|gol|flamengo|palmeiras|corinthians|santos|vasco|botafogo|fluminense|são paulo|sao paulo|cruzeiro|atlético-mg|atletico-mg|grêmio|gremio|internacional|bahia|athletico|coritiba|mirassol|bragantino|remo|chapecoense|vitória|vitoria)\b/i;
+  const published=allPosts.filter(p=>{
+    if(p.status!=="published")return false;
+    if(p.category==="Futebol")return true;
+    if(p.category!=="Esportes")return false;
+    return footballTerms.test([p.title,p.excerpt,p.content].join(" "));
+  });
   const internal=published.filter(p=>postMatchesTeam([p.title,p.excerpt,p.content].join(" "),selected)).slice(0,9);
   const hero=internal[0];
   const liveTitle=selected?("Notícias do "+selected.name):"Radar do futebol brasileiro";

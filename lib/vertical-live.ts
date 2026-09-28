@@ -151,6 +151,13 @@ function extractHeadlines(html:string,source:PageSource,team?:FootballTeam,sourc
       if(!team.aliases.some(a=>low.includes(a.toLocaleLowerCase("pt-BR"))))continue;
     }
     const canonical=url.split("#")[0];
+    if(/%7b%7b|\{\{/i.test(canonical)||/\{\{/.test(title))continue;
+    if(source.key==="ge"){
+      try{
+        const p=new URL(canonical).pathname;
+        if(p.endsWith("/")&&!/\/noticia\/|\.ghtml$/i.test(p))continue;
+      }catch{}
+    }
     if(seen.has(canonical))continue;
     seen.add(canonical);
     const context=html.slice(m.index,Math.min(html.length,m.index+m[0].length+500));

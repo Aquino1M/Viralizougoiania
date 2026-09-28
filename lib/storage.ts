@@ -365,13 +365,39 @@ export async function getCategories(opts: { includeInactive?: boolean } = {}) {
     try {
       const filters = ["select=*", "order=sort_order.asc,name.asc"];
       if (!includeInactive) filters.push("active=eq.true");
-      const categories = await sb(`categories?${filters.join("&")}`);
+      let categories = await sb(`categories?${filters.join("&")}`);
+
+      const required = [
+        { name: "Futebol", slug: "futebol", active: true, sort_order: 11 },
+        { name: "Fofoca", slug: "fofoca", active: true, sort_order: 12 },
+      ];
+      const present = new Set(Array.isArray(categories) ? categories.map((c: Category) => c.slug) : []);
+      const missing = required.filter((c) => !present.has(c.slug));
+
+      if (missing.length) {
+        await sb("categories?on_conflict=slug", {
+          method: "POST",
+          headers: { Prefer: "resolution=merge-duplicates,return=minimal" },
+          body: JSON.stringify(missing),
+        });
+        categories = await sb(`categories?${filters.join("&")}`);
+      }
+
       if (Array.isArray(categories) && categories.length > 0) return categories as Category[];
     } catch (err: any) {
       console.warn("Aviso ao buscar categorias no Supabase:", err.message);
     }
   }
   const categories = await readLocalCategories();
+  const now = new Date().toISOString();
+  for (const item of [
+    { name: "Futebol", slug: "futebol", active: true, sort_order: 11 },
+    { name: "Fofoca", slug: "fofoca", active: true, sort_order: 12 },
+  ]) {
+    if (!categories.some((c) => c.slug === item.slug)) {
+      categories.push({ ...item, id: randomUUID(), created_at: now, updated_at: now });
+    }
+  }
   let filtered = categories;
   if (!includeInactive) filtered = filtered.filter((c) => c.active);
   return filtered.sort((a, b) => a.sort_order - b.sort_order || a.name.localeCompare(b.name));
