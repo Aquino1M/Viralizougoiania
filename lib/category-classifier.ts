@@ -75,45 +75,73 @@ export function classifyEditorial(input: CategoryInput): EditorialCategory {
     "Fofocas": 0,
   };
 
-  // Seções editoriais explícitas da fonte ajudam, mas não anulam um título claramente de outra editoria.
-  if (/g1\s*>\s*politica|\/politica\//.test(source)) add(scores, "Política", 22);
-  if (/g1\s*>\s*economia|\/economia\//.test(source)) add(scores, "Economia", 22);
+  // A editoria declarada pela fonte ajuda, mas o título da matéria sempre pode superar o sinal da fonte.
+  if (/g1\s*>\s*politica|g1 politica|\/politica\//.test(source)) add(scores, "Política", 22);
+  if (/g1\s*>\s*economia|g1 economia|\/economia\//.test(source)) add(scores, "Economia", 22);
 
-  if (hit(title, /\b(vaga|vagas|emprego|empregos|concurso|concursos|processo seletivo|oportunidades? de trabalho|contratacao|contrata|salarios? de ate|edital)\b/)) add(scores, "Empregos", 34);
+  if (hit(title, /\b(vaga|vagas|emprego|empregos|concurso|concursos|processo seletivo|oportunidades? de trabalho|contratacao|contrata|salarios? de ate|edital)\b/)) {
+    add(scores, "Empregos", 52);
+  }
 
-  if (hit(title, /\b(futebol|brasileirao|serie a|serie b|copa do brasil|libertadores|sul-americana|cbf|amistoso|amistosos|selecao brasileira|ancelotti|mercado da bola|campeonato goiano|escalacao|escalacoes|onde assistir|gol|gols|goleiro|tecnico|torcida|partida|clubes paulistas|palmeiras|flamengo|corinthians|sao paulo|santos|botafogo|vasco|fluminense|gremio|internacional|cruzeiro|atletico-mg|atletico-go|atletico goianiense|goias ec|goias e\.c|vila nova|bragantino|bahia|fortaleza|juventude|cuiaba|criciuma|arrascaeta|raphinha|bruno guimaraes|adson batista|paulo vitor)\b/)) add(scores, "Futebol", 32);
+  if (hit(title, /\b(futebol|brasileirao|serie a|serie b|copa do brasil|libertadores|sul-americana|cbf|amistoso|amistosos|selecao brasileira|ancelotti|mercado da bola|campeonato goiano|escalacao|escalacoes|onde assistir|gol|gols|goleiro|tecnico|torcida|partida|clubes paulistas|palmeiras|flamengo|corinthians|sao paulo|santos|botafogo|vasco|fluminense|gremio|internacional|cruzeiro|atletico-mg|atletico-go|atletico goianiense|goias ec|goias e\.c|vila nova|bragantino|bahia|fortaleza|juventude|cuiaba|criciuma|arrascaeta|raphinha|bruno guimaraes|adson batista|paulo vitor)\b/)) {
+    add(scores, "Futebol", 48);
+  }
 
-  if (hit(title, /\b(volei|basquete|tenis|atletismo|corrida|maratona|mma|ufc|formula 1|f1|f2|natacao|olimpiad|ginastica|mister olympia|nfl|cesar cielo)\b/)) add(scores, "Esportes", 32);
+  if (hit(title, /\b(volei|basquete|tenis|atletismo|corrida|maratona|mma|ufc|formula 1|f1|f2|natacao|olimpiad|ginastica|mister olympia|nfl|cesar cielo)\b/)) {
+    add(scores, "Esportes", 45);
+  }
 
-  const trafficIncident = hit(title, /\b(acidente|colisao|batida|capot|atropel|motorista|carreta|caminhao|ciclista|moto|carro)\b/);
-  const roadContext = hit(title, /\b(transito|rodovia|rodovias|br-\d+|go-\d+|avenida|rua|via |pista|cruzamento|semaforo|ciclovia|pedagio|recapeamento|asfalto|engarraf|interdi[cç]|bloqueio|desvio)\b/);
-  if (roadContext) add(scores, "Trânsito", 24);
-  if (trafficIncident && roadContext) add(scores, "Trânsito", 18);
-  else if (trafficIncident && hit(title, /\b(moto|carro|carreta|caminhao|ciclista|motorista)\b/)) add(scores, "Trânsito", 16);
+  // Trânsito: BR/GO/carro/moto isolados não bastam. É preciso acidente viário, fluxo ou obra na via.
+  const explicitTraffic = hit(title, /\b(transito|engarraf|interdi[cç]|bloqueio|desvio|semaforo|ciclovia|pedagio|recapeamento|asfalto|fluidez|eixo viario|obra viaria|obras na rodovia|obras na via)\b/);
+  const crash = hit(title, /\b(acidente|colisao|batida|capot|atropel|sai da pista|tomba|tombamento)\b/);
+  const roadOrVehicle = hit(title, /\b(rodovia|rodovias|br-\d+|go-\d+|avenida|rua|via |pista|cruzamento|motorista|carreta|caminhao|ciclista|moto|carro|onibus)\b/);
+  if (explicitTraffic) add(scores, "Trânsito", 46);
+  if (crash && roadOrVehicle) add(scores, "Trânsito", 44);
+  else if (crash) add(scores, "Trânsito", 28);
 
-  if (hit(title, /\b(policia|pcdf|pmgo|preso|presa|prisao|crime|homicidio|assassin|matar|balead|tiroteio|assalt|roubo|furto|delegacia|suspeito|arma|trafico|drogas|maconha|mandado|feminicidio|estupro|agressao|tortura|sequestro|golpe|estelionato|pcc|operacao policial|apreende|apreensao|corpo encontrado|corpo carbonizado|incendio|explosao|bombeiros|abus[oa] sexual|criminosos)\b/)) add(scores, "Segurança", 34);
-  if (hit(title, /\b(pega fogo|em chamas|queimado|queimada|carbonizado|carbonizada)\b/)) add(scores, "Segurança", 25);
-  if (hit(title, /\b(ex-namorado|ex-marido|de proposito)\b/) && hit(title, /\b(atropel|agred|amea[cç]|violencia)\b/)) add(scores, "Segurança", 28);
+  if (hit(title, /\b(policia|policia federal|pf |pcdf|pmgo|preso|presa|prisao|crime|homicidio|assassin|matar|balead|tiroteio|assalt|roubo|furto|delegacia|suspeito|arma|trafico|drogas|maconha|mandado|feminicidio|estupro|agressao|tortura|sequestro|golpe|estelionato|pcc|operacao policial|apreende|apreensao|corpo encontrado|corpo carbonizado|incendio|explosao|bombeiros|abus[oa] sexual|criminosos|investiga[cç]|orgao sexual|importunacao sexual)\b/)) {
+    add(scores, "Segurança", 50);
+  }
+  if (hit(title, /\b(pega fogo|em chamas|queimado|queimada|carbonizado|carbonizada)\b/)) add(scores, "Segurança", 45);
+  if (hit(title, /\b(ex-namorado|ex-marido|de proposito)\b/) && hit(title, /\b(atropel|agred|amea[cç]|violencia)\b/)) {
+    add(scores, "Segurança", 62);
+  }
 
-  if (hit(title, /\b(eleicao|eleicoes|candidato|candidata|candidatura|campanha eleitoral|prefeito|vereador|deputado|deputada|governador|assembleia|senado|senador|datafolha|quaest|tse|stf|congresso|partido|debate eleitoral|caiado|daniel vilela|marconi|lula|bolsonaro|gilmar|moraes)\b/)) add(scores, "Política", 30);
-  if (hit(title, /\b(prefeitura|governo de goias|ministro|ministerio|camara municipal)\b/)) add(scores, "Política", 9);
+  // Política é forte o suficiente para não cair em Trânsito quando um acidente é apenas contexto da candidatura.
+  if (hit(title, /\b(eleicao|eleicoes|candidato|candidata|candidatura|campanha eleitoral|agenda dos candidatos|presidenciaveis|prefeito|vereador|deputado|deputada|governador|assembleia|senado|senador|datafolha|atlasintel|quaest|tse|tre-go|stf|congresso|partido|debate eleitoral|caiado|daniel vilela|marconi|lula|bolsonaro|flavio bolsonaro|gilmar|moraes)\b/)) {
+    add(scores, "Política", 58);
+  }
+  if (hit(title, /\b(prefeitura|governo de goias|ministro|ministerio|camara municipal|mpf|procurador-geral|gonet)\b/)) {
+    add(scores, "Política", 20);
+  }
 
-  if (hit(title, /\b(dolar|inflacao|ipca|selic|juros|pix|banco central|credito|ibovespa|petroleo|combustiveis|economia|empresa|empresas|comercio|varejo|negocio|negocios|investimento|imposto|impostos|pib|safra|agronegocio|agro|tarifa|tarifas|salario minimo|correios|pobreza|industria|importacao|exportacao|mei|mega-sena|loteria|premio|tributaria|tributario)\b/)) add(scores, "Economia", 28);
+  if (hit(title, /\b(dolar|inflacao|ipca|selic|juros|pix|banco central|credito|ibovespa|petroleo|combustiveis|economia|empresa|empresas|comercio|varejo|negocio|negocios|investimento|imposto|impostos|pib|safra|agronegocio|agro|tarifa|tarifas|salario minimo|correios|pobreza|industria|importacao|exportacao|mei|mega-sena|loteria|premio|tributaria|tributario|carro eletrico|veiculo eletrico)\b/)) {
+    add(scores, "Economia", 40);
+  }
 
-  if (hit(title, /\b(vacina|vacinacao|saude|sus|hospital|upa|ambulancia|energia|conta de luz|agua|abastecimento|saneamento|cnh|ipva|iptu|educacao|escola|universidade|ufg|matricula|beneficio|servico|servicos|atendimento|curso gratuito|cursos gratuitos|sindrome respiratoria|temperatura|onda de calor|previsao do tempo|inmet|clima)\b/)) add(scores, "Serviços", 28);
+  if (hit(title, /\b(vacina|vacinacao|saude|sus|hospital|upa|ambulancia|energia|conta de luz|agua|abastecimento|saneamento|cnh|ipva|iptu|educacao|escola|universidade|ufg|matricula|beneficio|servico|servicos|atendimento|curso gratuito|cursos gratuitos|sindrome respiratoria|temperatura|onda de calor|previsao do tempo|inmet|clima|pisa|ans)\b/)) {
+    add(scores, "Serviços", 42);
+  }
 
-  if (hit(title, /\b(show|festival|feira|teatro|cinema|concerto|programacao|agenda cultural|ingresso|ingressos|exposicao|gastronomia|rodeio|carnaval|apresentacao|apresenta-se|se apresenta|turne|mostra|espetaculo|forum|premiacao)\b/)) add(scores, "Eventos", 27);
+  if (hit(title, /\b(show|festival|feira|teatro|cinema|concerto|programacao|agenda cultural|ingresso|ingressos|exposicao|gastronomia|rodeio|carnaval|apresentacao|apresenta-se|se apresenta|turne|mostra|espetaculo|forum|premiacao)\b/)) {
+    add(scores, "Eventos", 34);
+  }
 
-  if (hit(title, /\b(atriz|ator|cantor|cantora|sertanejo|celebridade|famoso|famosa|influenciador|influenciadora|namoro|separacao|divorcio|gravidez|gestante|bastidores|reality|bbb|a fazenda|novela|polemica|ensaio|gloria pires|viviane araujo|paolla oliveira|bruna biancardi|virginia fonseca|ze felipe|gusttavo lima|anitta|neymar|leonardo|ticiane|preta gil|bruno gagliasso|luana piovani|tais araujo|poliana rocha|oruam|taylor swift|madonna|bts|blackpink|ricky martin|lindsay lohan|jennifer lopez|tom cruise|luan santana|carreta furacao)\b/)) add(scores, "Fofocas", 26);
+  if (hit(title, /\b(atriz|ator|cantor|cantora|sertanejo|celebridade|famoso|famosa|influenciador|influenciadora|namoro|separacao|divorcio|gravidez|gestante|bastidores|reality|bbb|a fazenda|novela|polemica|ensaio|gloria pires|viviane araujo|paolla oliveira|bruna biancardi|virginia fonseca|ze felipe|gusttavo lima|anitta|neymar|leonardo|ticiane|preta gil|bruno gagliasso|luana piovani|tais araujo|poliana rocha|oruam|taylor swift|madonna|bts|blackpink|ricky martin|lindsay lohan|jennifer lopez|tom cruise|luan santana|carreta furacao|ary fontoura|rick e renner)\b/)) {
+    add(scores, "Fofocas", 44);
+  }
 
-  if (hit(title, /\b(bairro|bairros|setor [a-z]|jardim [a-z]|vila [a-z]|parque [a-z]|residencial [a-z]|regiao noroeste|regiao leste|regiao sul|regiao norte|campinas|setor bueno|setor marista|setor oeste|setor universitario|setor coimbra|negrao de lima|vila viana)\b/)) add(scores, "Bairros", 14);
+  // Bairro só ganha quando o local é o assunto. Um bairro citado em incêndio/crime continua em Segurança.
+  if (hit(title, /\b(bairro|bairros|setor [a-z]|jardim [a-z]|vila [a-z]|parque [a-z]|residencial [a-z]|regiao noroeste|regiao leste|regiao sul|regiao norte|campinas|setor bueno|setor marista|setor oeste|setor universitario|setor coimbra|negrao de lima|vila viana)\b/)) {
+    add(scores, "Bairros", 18);
+  }
 
-  // Desempates pelo resumo, com peso baixo para não repetir o erro antigo de classificar pelo corpo inteiro.
+  // Resumo tem peso baixo: nunca deve derrubar um título claramente classificado.
   if (/\b(famoso|famosa|celebridade|reality|novela)\b/.test(excerpt)) add(scores, "Fofocas", 5);
   if (/\b(brasileirao|futebol|libertadores|copa do brasil)\b/.test(excerpt)) add(scores, "Futebol", 5);
 
   const priority: EditorialCategory[] = [
-    "Fofocas","Futebol","Empregos","Segurança","Trânsito","Política","Economia","Serviços","Esportes","Eventos","Bairros","Goiânia"
+    "Fofocas","Futebol","Empregos","Política","Segurança","Trânsito","Economia","Serviços","Esportes","Eventos","Bairros","Goiânia"
   ];
 
   let winner: EditorialCategory = "Goiânia";
