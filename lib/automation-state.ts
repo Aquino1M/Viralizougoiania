@@ -113,3 +113,69 @@ export async function saveAutomationState(patch: Partial<AutomationState>): Prom
   }
   return next;
 }
+
+
+export type RadarSnapshotItem = {
+  title: string;
+  excerpt: string;
+  category?: string;
+  image_url: string;
+  video_url?: string;
+  source_name: string;
+  source_url: string;
+  source_author?: string;
+  published_at?: string | null;
+  radar_group: "goias" | "brasil" | "futebol" | "fofocas";
+};
+
+export type RadarSnapshot = {
+  updated_at: string | null;
+  items: RadarSnapshotItem[];
+  source_counts: Record<string, number>;
+};
+
+export async function getRadarSnapshot(): Promise<RadarSnapshot> {
+  const cfg = supabaseConfig();
+  if (!cfg) return { updated_at: null, items: [], source_counts: {} };
+  try {
+    const res = await fetch(`${cfg.url}/rest/v1/settings?id=eq.radar_snapshot&select=data,updated_at&limit=1`, {
+      headers: headers(cfg.key),
+      cache: "no-store",
+    });
+    if (!res.ok) throw new Error(`Supabase ${res.status}`);
+    const rows = await res.json();
+    if (!Array.isArray(rows) || !rows[0]?.data) return { updated_at: null, items: [], source_counts: {} };
+    const data = rows[0].data as Partial<RadarSnapshot>;
+    return {
+      updated_at: data.updated_at || rows[0].updated_at || null,
+      items: Array.isArray(data.items) ? data.items : [],
+      source_counts: data.source_counts || {},
+    };
+  } catch {
+    return { updated_at: null, items: [], source_counts: {} };
+  }
+}
+
+export async function saveRadarSnapshot(snapshot: RadarSnapshot): Promise<void> {
+  const cfg = supabaseConfig();
+  if (!cfg) return;
+  const payload: RadarSnapshot = {
+    updated_at: snapshot.updated_at || new Date().toISOString(),
+    items: snapshot.items.slice(0, 700),
+    source_counts: snapshot.source_counts || {},
+  };
+  const res = await fetch(`${cfg.url}/rest/v1/settings?on_conflict=id`, {
+    method: "POST",
+    headers: headers(cfg.key, { Prefer: "resolution=merge-duplicates,return=minimal" }),
+    body: JSON.stringify({
+      id: "radar_snapshot",
+      data: payload,
+      updated_at: payload.updated_at,
+    }),
+    cache: "no-store",
+  });
+  if (!res.ok) {
+    const body = await res.text();
+    throw new Error(`Supabase ${res.status}: ${body}`);
+  }
+}

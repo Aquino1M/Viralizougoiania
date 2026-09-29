@@ -2,7 +2,7 @@ import { createPost, getCategories, getPosts, publishDuePosts, reclassifyExterna
 import { formatViralizouArticle } from "@/lib/rewrite";
 import { slugify } from "@/lib/slug";
 import type { ImportedNews, Post, PostStatus } from "@/lib/types";
-import { getAutomationState, saveAutomationState } from "@/lib/automation-state";
+import { getAutomationState, saveAutomationState, saveRadarSnapshot, type RadarSnapshotItem } from "@/lib/automation-state";
 import { classifyEditorial } from "@/lib/category-classifier";
 import { syncBrasileiraoData } from "@/lib/football-sync";
 
@@ -128,12 +128,40 @@ export async function runServerRadarAutomation(options:{force?:boolean}={}):Prom
       syncBrasileiraoData().then(data=>({ok:true as const,data})).catch(error=>({ok:false as const,error}))
     ]);
     const all:ImportedNews[]=[];
+    const radarSnapshotItems:RadarSnapshotItem[]=[];
     sourceResults.forEach((result,index)=>{
       const src=SOURCES[index];
-      if(result.status==="fulfilled"){all.push(...result.value);sourceCounts[src.group]=(sourceCounts[src.group]||0)+result.value.length;}
-      else errors.push(src.name+": "+(result.reason instanceof Error?result.reason.message:"falha no feed"));
+      if(result.status==="fulfilled"){
+        all.push(...result.value);
+        sourceCounts[src.group]=(sourceCounts[src.group]||0)+result.value.length;
+        for(const item of result.value){
+          radarSnapshotItems.push({
+            title:item.title,
+            excerpt:item.excerpt||"",
+            category:item.category,
+            image_url:item.image_url||"",
+            video_url:item.video_url||"",
+            source_name:item.source_name||src.name,
+            source_url:item.source_url,
+            source_author:item.source_author||"",
+            published_at:item.published_at||null,
+            radar_group:src.group,
+          });
+        }
+      } else {
+        errors.push(src.name+": "+(result.reason instanceof Error?result.reason.message:"falha no feed"));
+      }
     });
     found=all.length;
+    try {
+      await saveRadarSnapshot({
+        updated_at:new Date().toISOString(),
+        items:radarSnapshotItems,
+        source_counts:sourceCounts,
+      });
+    } catch (e) {
+      errors.push("Radar snapshot: "+(e instanceof Error?e.message:"falha ao salvar"));
+    }
     if(footballResult.ok){
       football={updated:true,round:footballResult.data.currentRound,fixtures:footballResult.data.fixtures.length,updatedAt:footballResult.data.updated_at};
     }else errors.push("Tabela/Jogos: "+(footballResult.error instanceof Error?footballResult.error.message:"falha na sincronização"));

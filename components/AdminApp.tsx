@@ -59,6 +59,7 @@ const blank: FormState = {
 };
 
 export type RadarRegion = "goias" | "brasil" | "futebol" | "fofocas" | "all";
+type RadarCachedItem = ImportedNews & { radar_group?: Exclude<RadarRegion, "all"> };
 
 export type RadarSource = {
   name: string;
@@ -96,6 +97,8 @@ const RADAR_SOURCES: RadarSource[] = [
   { name: "Metrópoles Futebol", url: "https://www.metropoles.com/esportes/futebol/feed", label: "Metrópoles Futebol", region: "futebol", tag: "Futebol BR", defaultCategory: "Futebol" },
   { name: "Gazeta Esportiva", url: "https://www.gazetaesportiva.com/feed/", label: "Gazeta Esportiva", region: "futebol", tag: "Paulistão & BR", defaultCategory: "Futebol" },
   { name: "UOL Esporte", url: "https://rss.uol.com.br/feed/esporte.xml", label: "UOL Esporte", region: "futebol", tag: "Esportes & BR", defaultCategory: "Futebol" },
+  { name: "Lance Futebol Nacional", url: "https://www.lance.com.br/futebol-nacional/feed", label: "Lance! Futebol Nacional", region: "futebol", tag: "Futebol BR", defaultCategory: "Futebol" },
+  { name: "Lance Brasileirão", url: "https://www.lance.com.br/brasileirao/feed", label: "Lance! Brasileirão", region: "futebol", tag: "Brasileirão", defaultCategory: "Futebol" },
 
   // FOFOCAS & FAMOSOS
   { name: "Leo Dias", url: "https://portalleodias.com/feed", label: "Portal Leo Dias", region: "fofocas", tag: "Exclusivas & Babados", defaultCategory: "Fofocas" },
@@ -103,6 +106,7 @@ const RADAR_SOURCES: RadarSource[] = [
   { name: "Metrópoles Celebridades", url: "https://www.metropoles.com/celebridades/feed", label: "Metrópoles Celebridades", region: "fofocas", tag: "Fofocas & Reality", defaultCategory: "Fofocas" },
   { name: "Hugo Gloss", url: "https://hugogloss.uol.com.br/feed/", label: "Hugo Gloss", region: "fofocas", tag: "Pop & Famosos", defaultCategory: "Fofocas" },
   { name: "UOL Famosos", url: "https://rss.uol.com.br/feed/entretenimento.xml", label: "UOL Famosos & TV", region: "fofocas", tag: "Bastidores", defaultCategory: "Fofocas" },
+  { name: "OFuxico • A Fazenda", url: "https://ofuxico.com.br/reality-show/a-fazenda/feed/", label: "OFuxico • A Fazenda", region: "fofocas", tag: "Reality & Fofocas", defaultCategory: "Fofocas" },
 ];
 
 function formatRadarDate(dateStr?: string | null): string {
@@ -174,7 +178,6 @@ export default function AdminApp() {
   const [selectedUrls, setSelectedUrls] = useState<string[]>([]);
   const [batchQueueing, setBatchQueueing] = useState(false);
   const [batchProgress, setBatchProgress] = useState("");
-  const [syncingFootball, setSyncingFootball] = useState(false);
 
   // Ritmo de postagem na fila (1 por slot, 2 por slot, 3 por slot, ou 1 por Aba/Editoria)
   type QueueScheduleMode = "1_per_10m" | "2_per_10m" | "3_per_10m" | "1_per_category";
@@ -603,100 +606,36 @@ export default function AdminApp() {
     return deduplicateImportedItems(combined);
   }
 
-  // Carrega na tela do Radar as notícias de TODOS os jornais da região selecionada
+  // O Radar lê o snapshot gerado pelo mesmo Ciclo Único 24/7.
+  // Trocar de aba não varre novamente os jornais e não cria novas execuções pesadas.
   async function importAllFeeds(region: RadarRegion = radarRegion) {
     setImporting(true);
     setImportMessage("");
-    setImportItems([]);
     setSelectedUrls([]);
     try {
-      const items = await fetchRadarFeeds(region);
+      const res = await fetch("/api/automation/radar-cache", { cache: "no-store" });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) throw new Error(data.error || "Não foi possível ler o snapshot do Radar.");
+      const cached = Array.isArray(data.items) ? (data.items as RadarCachedItem[]) : [];
+      const scoped = region === "all" ? cached : cached.filter((item) => item.radar_group === region);
+      const items = deduplicateImportedItems(scoped);
       setImportItems(items);
-      autoHealMissingImages(items);
-      const siteCount = RADAR_SOURCES.filter((s) => s.region === region).length;
       const label =
-        region === "goias"
-          ? "Goiás"
-          : region === "brasil"
-          ? "Grandes Jornais do Brasil"
-          : region === "futebol"
-          ? "Futebol & Brasileirão"
-          : "Fofocas & Famosos";
-      setImportMessage(
-        `📡 Radar: ${items.length} notícias recolhidas simultaneamente de todos os ${siteCount} sites de ${label}! Ordenadas das mais recentes.`
-      );
+        region === "goias" ? "Goiânia & Goiás"
+        : region === "brasil" ? "Grandes Jornais"
+        : region === "futebol" ? "Futebol & Brasileirão"
+        : region === "fofocas" ? "Fofocas & Famosos"
+        : "Todos os Canais";
+      const updated = data.updated_at
+        ? new Date(data.updated_at).toLocaleTimeString("pt-BR", { hour: "2-digit", minute: "2-digit" })
+        : "aguardando primeiro ciclo";
+      setImportMessage(`📡 Snapshot 24/7: ${items.length} notícias de ${label} • Atualizado ${updated}. Nenhum feed foi varrido novamente ao abrir esta aba.`);
     } catch (err: any) {
-      setImportMessage(`Erro ao buscar notícias de todos os sites: ${err.message}`);
+      setImportItems([]);
+      setImportMessage(`Radar aguardando o Ciclo Único 24/7: ${err.message}`);
     } finally {
       setImporting(false);
     }
-  }
-
-  async function handleSyncFootballAdmin() {
-    setSyncingFootball(true);
-    setImportMessage("⚽ Sincronizando tabela e jogos ao vivo com a fonte oficial...");
-    try {
-      const res = await fetch("/api/football/sync?force=true");
-      const data = await res.json();
-      if (res.ok) {
-        setImportMessage(`🏆 Sucesso: Tabela e jogos da ${data.current_round}ª rodada do Brasileirão atualizados com sucesso da fonte oficial!`);
-      } else {
-        setImportMessage(`Erro ao sincronizar futebol: ${data.error}`);
-      }
-    } catch (err: any) {
-      setImportMessage(`Erro ao sincronizar futebol: ${err.message}`);
-    } finally {
-      setSyncingFootball(false);
-    }
-  }
-
-  function autoHealMissingImages(incomingItems: ImportedNews[]) {
-    const missing = incomingItems.filter((it) => !it.image_url && it.source_url);
-    if (!missing.length) return;
-    missing.slice(0, 15).forEach(async (it) => {
-      try {
-        const res = await fetch("/api/import-news", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ url: it.source_url, mode: "article" }),
-        });
-        if (res.ok) {
-          const data = await res.json();
-          const foundImg = data.items?.[0]?.image_url;
-          if (foundImg) {
-            setImportItems((prev) =>
-              prev.map((p) => (p.source_url === it.source_url ? { ...p, image_url: foundImg } : p))
-            );
-          }
-        }
-      } catch {}
-    });
-  }
-
-  // Contagem de matérias que ainda não foram postadas e sem repetição no feed atual
-  const unpostedItemsCount = useMemo(() => {
-    const notInDb = importItems.filter((item) => !isItemAlreadyPosted(item, posts));
-    return deduplicateImportedItems(notInDb).length;
-  }, [importItems, posts]);
-
-  function toggleSelectRadar(url: string) {
-    setSelectedUrls((prev) =>
-      prev.includes(url) ? prev.filter((u) => u !== url) : [...prev, url]
-    );
-  }
-
-  function selectAllRadar() {
-    if (selectedUrls.length === importItems.length) {
-      setSelectedUrls([]);
-    } else {
-      setSelectedUrls(importItems.map((item) => item.source_url));
-    }
-  }
-
-  function selectUnpostedRadar() {
-    const notInDb = importItems.filter((item) => !isItemAlreadyPosted(item, posts));
-    const deduped = deduplicateImportedItems(notInDb);
-    setSelectedUrls(deduped.map((item) => item.source_url));
   }
 
   async function refreshAutomationStatus() {
@@ -721,70 +660,36 @@ export default function AdminApp() {
     return () => clearInterval(statusTimer);
   }, []);
 
-  // Rotina de execução do ciclo do Piloto Automático (Varre TODOS os canais, incluindo Futebol e Fofocas)
+  // Um único comando atualiza Radar, fila, publicações, editorias, tabela e jogos.
   async function runAutoPilotCycle() {
     if (autoPilotRunning || batchQueueing) return;
     setAutoPilotRunning(true);
-    setImportMessage("🤖 Ciclo Único 24/7: Radar + fila + publicações + tabela + jogos em uma única execução do servidor...");
+    setImportMessage("🤖 Ciclo Único 24/7: atualizando todos os canais + fila + publicações + classificação + tabela + jogos...");
     try {
       const res = await fetch("/api/automation/radar-cycle?force=1", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
       });
       const data = await res.json().catch(() => ({}));
-      if (res.ok) {
-        if (data.skipped) {
-          setImportMessage("🤖 Piloto: ciclo ignorado porque outro ciclo já está em execução.");
-        } else {
-          setImportMessage(
-            "🤖 Piloto 24/7: " +
-            Number(data.found || 0) + " notícias encontradas • " +
-            Number(data.newItems || 0) + " inéditas • " +
-            Number(data.added || 0) + " adicionadas à fila • " +
-            Number(data.published || 0) + " liberadas • " +
-            Number(data.reclassified || 0) + " editorias corrigidas • " +
-            (data.football?.round ? "Brasileirão " + data.football.round + "ª rodada atualizado." : "Tabela consultada.")
-          );
-        }
+      if (!res.ok) throw new Error(data.error || data.errors?.[0] || "Falha no Ciclo Único do servidor.");
+
+      if (data.skipped) {
+        setImportMessage("🤖 Ciclo Único já está sendo executado pelo servidor.");
       } else {
-        // Fallback: varredura direta via cliente
-        const pubRes = await fetch("/api/posts/publish-due").catch(() => null);
-        if (pubRes && pubRes.ok) {
-          const pubData = await pubRes.json().catch(() => null);
-          if (pubData && pubData.publishedCount > 0) {
-            setMessage(`🚀 ${pubData.publishedCount} matéria(s) agendada(s) acabaram de ser publicadas no portal com sucesso!`);
-          }
-        }
-
-        const postsRes = await fetch("/api/posts", { cache: "no-store" }).catch(() => null);
-        let freshPosts = posts;
-        if (postsRes && postsRes.ok) {
-          const pData = await postsRes.json();
-          if (Array.isArray(pData.posts)) {
-            freshPosts = pData.posts;
-            setPosts(freshPosts);
-          }
-        }
-
-        const allNews = await fetchRadarFeeds("all");
-        setImportItems(allNews);
-
-        const unpostedWithImage = allNews.filter((it) => {
-          if (isItemAlreadyPosted(it, freshPosts)) return false;
-          return Boolean(it.image_url && it.image_url.trim().length > 10);
-        });
-
-        if (unpostedWithImage.length > 0) {
-          setImportMessage(`🤖 Piloto Automático: Encontradas ${unpostedWithImage.length} notícias inéditas com foto em todos os canais! Agendando na fila...`);
-          await queueItemsInBatch(unpostedWithImage, "Piloto Automático (Todos os Sites)", freshPosts);
-        } else {
-          setImportMessage(`🤖 Piloto Automático: Verificou notícias de todos os portais. Nenhuma matéria pendente com foto. Próxima checagem em 10 minutos.`);
-        }
+        setImportMessage(
+          "🤖 Ciclo Único concluído: " +
+          Number(data.found || 0) + " notícias lidas • " +
+          Number(data.newItems || 0) + " inéditas • " +
+          Number(data.added || 0) + " na fila • " +
+          Number(data.published || 0) + " publicadas • " +
+          Number(data.reclassified || 0) + " editorias corrigidas • " +
+          (data.football?.round ? "Brasileirão " + data.football.round + "ª rodada/tabela atualizados." : "Tabela consultada.")
+        );
       }
-      await load();
-      await refreshAutomationStatus();
+      await Promise.all([load(), refreshAutomationStatus()]);
+      await importAllFeeds(radarRegion);
     } catch (err: any) {
-      setImportMessage("Erro no Piloto: " + err.message);
+      setImportMessage("Erro no Ciclo Único 24/7: " + err.message);
     } finally {
       setAutoPilotRunning(false);
     }
@@ -1719,16 +1624,11 @@ export default function AdminApp() {
                     )}
                     <button
                       className="btn"
-                      disabled={importing || batchQueueing}
-                      onClick={() => {
-                        if (activeSourceUrl === "ALL") {
-                          importAllFeeds(radarRegion);
-                        } else {
-                          importNews("feed", activeSourceUrl);
-                        }
-                      }}
+                      disabled={autoPilotRunning || batchQueueing}
+                      onClick={runAutoPilotCycle}
+                      title="Um único comando atualiza Radar, fila, publicações, classificação, tabela e jogos"
                     >
-                      {importing ? "Carregando..." : "🔄 Atualizar Notícias"}
+                      {autoPilotRunning ? "⏳ Atualizando tudo..." : "⚡ Atualizar Tudo Agora"}
                     </button>
                     <button className="btn secondary" onClick={() => setView("list")}>Voltar</button>
                   </div>
@@ -1748,7 +1648,7 @@ export default function AdminApp() {
                     )}
                     <span>
                       {autoPilot
-                        ? `Servidor 24/7 ativo: 1 GitHub Action → 1 comando Vercel a cada 10 min atualiza 📍 Goiânia & Goiás + 🇧🇷 Grandes Jornais + ⚽ Futebol & Brasileirão + ✨ Fofocas & Famosos + 🌐 Todos os Canais + Fila + Publicações + Tabela + Jogos • Próximo ciclo aprox. em ${Math.floor(autoPilotCountdown / 60).toString().padStart(2, "0")}:${(autoPilotCountdown % 60).toString().padStart(2, "0")}${automationLastRun ? " • Última execução: " + new Date(automationLastRun).toLocaleTimeString("pt-BR", { hour: "2-digit", minute: "2-digit" }) : ""}`
+                        ? `Servidor 24/7 ativo: 1 GitHub Action → 1 comando Vercel a cada 10 min atualiza 📍 Goiânia & Goiás + 🇧🇷 Grandes Jornais + ⚽ Futebol & Brasileirão + ✨ Fofocas & Famosos + 🌐 Todos os Canais (Goiás + Nacional + Futebol + Fofocas) + Fila + Publicações + Classificação + Tabela + Jogos • Próximo ciclo aprox. em ${Math.floor(autoPilotCountdown / 60).toString().padStart(2, "0")}:${(autoPilotCountdown % 60).toString().padStart(2, "0")}${automationLastRun ? " • Última execução: " + new Date(automationLastRun).toLocaleTimeString("pt-BR", { hour: "2-digit", minute: "2-digit" }) : ""}`
                         : automationConfigured
                         ? `Piloto 24/7 pausado no servidor. Clique em ligar para voltar a varrer automaticamente.`
                         : `Configure o Supabase para habilitar o Piloto Automático 24/7 no servidor.`}
@@ -1864,7 +1764,7 @@ export default function AdminApp() {
                   </button>
                 </div>
 
-                {/* Banner de Sincronização da Tabela e Rodadas quando estiver na aba Futebol */}
+                {/* Futebol também é atualizado pelo mesmo Ciclo Único 24/7 */}
                 {radarRegion === "futebol" && (
                   <div
                     style={{
@@ -1873,11 +1773,6 @@ export default function AdminApp() {
                       borderRadius: 12,
                       padding: "12px 16px",
                       marginBottom: 16,
-                      display: "flex",
-                      justifyContent: "space-between",
-                      alignItems: "center",
-                      flexWrap: "wrap",
-                      gap: 12,
                       boxShadow: "0 2px 10px rgba(16, 185, 129, 0.08)",
                     }}
                   >
@@ -1885,30 +1780,13 @@ export default function AdminApp() {
                       <span style={{ fontSize: 22, background: "#dcfce7", padding: "6px", borderRadius: 8 }}>🏆</span>
                       <div>
                         <b style={{ color: "#065f46", fontSize: 13, display: "block" }}>
-                          Tabela & Rodada do Brasileirão (Atualização Automática Ativa)
+                          Tabela, classificação e jogos fazem parte do Ciclo Único 24/7
                         </b>
                         <span style={{ color: "#047857", fontSize: 11 }}>
-                          Cron ativo na Vercel/Supabase. Os jogos e posições são atualizados ao final de cada partida.
+                          Sem botão separado: a mesma execução de 10 minutos atualiza Radar, fila, tabela e rodada.
                         </span>
                       </div>
                     </div>
-                    <button
-                      type="button"
-                      className="btn"
-                      style={{
-                        background: "#047857",
-                        color: "#fff",
-                        fontSize: 12,
-                        fontWeight: 800,
-                        padding: "8px 16px",
-                        borderRadius: 8,
-                        boxShadow: "0 2px 6px rgba(4, 120, 87, 0.3)",
-                      }}
-                      disabled={syncingFootball}
-                      onClick={handleSyncFootballAdmin}
-                    >
-                      {syncingFootball ? "⏳ Sincronizando..." : "🔄 Atualizar Tabela e Jogos Agora"}
-                    </button>
                   </div>
                 )}
 
