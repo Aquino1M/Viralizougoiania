@@ -34,4 +34,4 @@ jobs:
           OIDC_TOKEN: ${{ steps.oidc.outputs.token }}
         run: |
           set -euo pipefail
-          curl -fsS --retry 2 --retry-delay 5             -X POST             -H "Authorization: Bearer $OIDC_TOKEN"             -H "Content-Type: application/json"             "https://viralizougoiania.vercel.app/api/automation/radar-cycle"
+          curl -fsS --retry 2 --retry-delay 5             -X POST             -H "Authorization: Bearer $OIDC_TOKEN"             -H "Content-Type: application/json"             "https://viralizougoiania-grupo-aquino.vercel.app/api/automation/radar-cycle"
