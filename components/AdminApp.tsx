@@ -1697,7 +1697,7 @@ export default function AdminApp() {
                     )}
                     <span>
                       {autoPilot
-                        ? `Servidor 24/7 ativo: 1 GitHub Action → 1 comando Vercel a cada 10 min atualiza 📍 Goiânia & Goiás + 🇧🇷 Grandes Jornais + ⚽ Futebol & Brasileirão + ✨ Fofocas & Famosos + 🌐 Todos os Canais (Goiás + Nacional + Futebol + Fofocas) + Fila + Publicações + Classificação + Tabela + Jogos • Próximo ciclo aprox. em ${Math.floor(autoPilotCountdown / 60).toString().padStart(2, "0")}:${(autoPilotCountdown % 60).toString().padStart(2, "0")}${automationLastRun ? " • Última execução: " + new Date(automationLastRun).toLocaleTimeString("pt-BR", { hour: "2-digit", minute: "2-digit" }) : ""}`
+                        ? `Servidor 24/7 ativo: GitHub Actions → 1 comando único no Vercel a cada 10 min atualiza 📍 Goiânia & Goiás + 🇧🇷 Grandes Jornais + ⚽ Futebol & Brasileirão + ✨ Fofocas & Famosos + 🌐 Todos os Canais (Goiás + Nacional + Futebol + Fofocas) + Radar + Fila + Publicações + Classificação + Tabela + Jogos • Próximo ciclo aprox. em ${Math.floor(autoPilotCountdown / 60).toString().padStart(2, "0")}:${(autoPilotCountdown % 60).toString().padStart(2, "0")}${automationLastRun ? " • Última execução: " + new Date(automationLastRun).toLocaleTimeString("pt-BR", { hour: "2-digit", minute: "2-digit" }) : ""}`
                         : automationConfigured
                         ? `Piloto 24/7 pausado no servidor. Clique em ligar para voltar a varrer automaticamente.`
                         : `Configure o Supabase para habilitar o Piloto Automático 24/7 no servidor.`}

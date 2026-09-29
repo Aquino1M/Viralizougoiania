@@ -116,7 +116,7 @@ export default function FootballHub({ posts, liveData }: FootballHubProps) {
                   </div>
                   <div style={{ display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap" }}>
                     <span className="liveAutoSyncBadge" title="Tabela e jogos atualizados pelo mesmo Piloto 24/7 que atualiza o Radar e a fila">
-                      <span className="liveDot"></span> Servidor 24/7 • a cada 10 min
+                      <span className="liveDot"></span> Servidor 24/7 ativo: GitHub Actions • ciclo único a cada 10 min
                     </span>
                     {updatedAt && (
                       <span style={{ fontSize: 10, color: "#64748b", fontWeight: 700 }}>
