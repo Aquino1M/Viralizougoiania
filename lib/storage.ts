@@ -180,13 +180,14 @@ export async function getPostBySlug(slug: string, includeDrafts = false) {
     try {
       const status = includeDrafts ? "" : "&status=eq.published";
       const rows = await sb(`posts?select=*&slug=eq.${encodeURIComponent(slug)}${status}&limit=1`);
-      if (rows?.[0]) return rows[0] as Post;
+      if (rows?.[0]) return normalizePostCategory(rows[0] as Post);
     } catch (err: any) {
       console.warn("Aviso ao buscar slug no Supabase:", err.message);
     }
   }
   const posts = await readLocal();
-  return posts.find((p) => p.slug === slug && (includeDrafts || p.status === "published"));
+  const found = posts.find((p) => p.slug === slug && (includeDrafts || p.status === "published"));
+  return found ? normalizePostCategory(found) : undefined;
 }
 
 export async function getPostById(id: string) {
@@ -194,12 +195,13 @@ export async function getPostById(id: string) {
   if (hasSupabaseConfig()) {
     try {
       const rows = await sb(`posts?select=*&id=eq.${encodeURIComponent(id)}&limit=1`);
-      if (rows?.[0]) return rows[0] as Post;
+      if (rows?.[0]) return normalizePostCategory(rows[0] as Post);
     } catch (err: any) {
       console.warn("Aviso ao buscar post no Supabase:", err.message);
     }
   }
-  return (await readLocal()).find((p) => p.id === id);
+  const found = (await readLocal()).find((p) => p.id === id);
+  return found ? normalizePostCategory(found) : undefined;
 }
 
 export async function createPost(input: PostInput) {
