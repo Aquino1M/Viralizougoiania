@@ -638,6 +638,55 @@ export default function AdminApp() {
     }
   }
 
+  function autoHealMissingImages(incomingItems: ImportedNews[]) {
+    const missing = incomingItems.filter((it) => !it.image_url && it.source_url);
+    if (!missing.length) return;
+    missing.slice(0, 15).forEach(async (it) => {
+      try {
+        const res = await fetch("/api/import-news", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ url: it.source_url, mode: "article" }),
+        });
+        if (res.ok) {
+          const data = await res.json();
+          const foundImg = data.items?.[0]?.image_url;
+          if (foundImg) {
+            setImportItems((prev) =>
+              prev.map((p) => (p.source_url === it.source_url ? { ...p, image_url: foundImg } : p))
+            );
+          }
+        }
+      } catch {}
+    });
+  }
+
+  // Contagem de matérias que ainda não foram postadas e sem repetição no feed atual
+  const unpostedItemsCount = useMemo(() => {
+    const notInDb = importItems.filter((item) => !isItemAlreadyPosted(item, posts));
+    return deduplicateImportedItems(notInDb).length;
+  }, [importItems, posts]);
+
+  function toggleSelectRadar(url: string) {
+    setSelectedUrls((prev) =>
+      prev.includes(url) ? prev.filter((u) => u !== url) : [...prev, url]
+    );
+  }
+
+  function selectAllRadar() {
+    if (selectedUrls.length === importItems.length) {
+      setSelectedUrls([]);
+    } else {
+      setSelectedUrls(importItems.map((item) => item.source_url));
+    }
+  }
+
+  function selectUnpostedRadar() {
+    const notInDb = importItems.filter((item) => !isItemAlreadyPosted(item, posts));
+    const deduped = deduplicateImportedItems(notInDb);
+    setSelectedUrls(deduped.map((item) => item.source_url));
+  }
+
   async function refreshAutomationStatus() {
     try {
       const res = await fetch("/api/automation/status", { cache: "no-store" });
