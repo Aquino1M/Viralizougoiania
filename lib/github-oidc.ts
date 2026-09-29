@@ -36,7 +36,8 @@ export async function verifyGitHubActionsOidcDetailed(token: string): Promise<Oi
     if (payload.iss !== "https://token.actions.githubusercontent.com") return { payload: null, error: "issuer" };
 
     const aud = payload.aud;
-    const audienceOk = aud === "viralizougoiania" || (Array.isArray(aud) && aud.includes("viralizougoiania"));
+    const allowedAudiences = new Set(["viralizougoiania", "https://github.com/Aquino1M"]);
+    const audienceOk = typeof aud === "string" ? allowedAudiences.has(aud) : Array.isArray(aud) && aud.some((value) => allowedAudiences.has(String(value)));
     if (!audienceOk) return { payload: null, error: "audience" };
     if (payload.repository !== "Aquino1M/Viralizougoiania") return { payload: null, error: "repository" };
 
