@@ -84,7 +84,7 @@ export function classifyEditorial(input: CategoryInput): EditorialCategory {
   }
 
   if (hit(title, /\b(futebol|brasileirao|serie a|serie b|copa do brasil|libertadores|sul-americana|cbf|amistoso|amistosos|selecao brasileira|ancelotti|mercado da bola|campeonato goiano|escalacao|escalacoes|onde assistir|gol|gols|goleiro|tecnico|torcida|partida|clubes paulistas|palmeiras|flamengo|corinthians|sao paulo|santos|botafogo|vasco|fluminense|gremio|internacional|cruzeiro|atletico-mg|atletico-go|atletico goianiense|goias ec|goias e\.c|vila nova|bragantino|bahia|fortaleza|juventude|cuiaba|criciuma|arrascaeta|raphinha|bruno guimaraes|adson batista|paulo vitor)\b/)) {
-    add(scores, "Futebol", 48);
+    add(scores, "Futebol", 72);
   }
 
   if (hit(title, /\b(volei|basquete|tenis|atletismo|corrida|maratona|mma|ufc|formula 1|f1|f2|natacao|olimpiad|ginastica|mister olympia|nfl|cesar cielo)\b/)) {
@@ -99,7 +99,7 @@ export function classifyEditorial(input: CategoryInput): EditorialCategory {
   if (crash && roadOrVehicle) add(scores, "Trânsito", 44);
   else if (crash) add(scores, "Trânsito", 28);
 
-  if (hit(title, /\b(policia|policia federal|pf |pcdf|pmgo|preso|presa|prisao|crime|homicidio|assassin|matar|balead|tiroteio|assalt|roubo|furto|delegacia|suspeito|arma|trafico|drogas|maconha|mandado|feminicidio|estupro|agressao|tortura|sequestro|golpe|estelionato|pcc|operacao policial|apreende|apreensao|corpo encontrado|corpo carbonizado|incendio|explosao|bombeiros|abus[oa] sexual|criminosos|investiga[cç]|orgao sexual|importunacao sexual)\b/)) {
+  if (hit(title, /\b(policia|policia federal|pf |pcdf|pmgo|preso|presa|prisao|crime|homicidio|assassinad[oa]s?|assassinato|matar|balead[oa]s?|tiroteio|assaltad[oa]s?|assalto|roubo|furto|delegacia|suspeito|arma|trafico|drogas|maconha|mandado|feminicidio|estupro|agredid[oa]s?|agressao|tortura|sequestro|golpe|estelionato|pcc|operacao policial|apreendid[oa]s?|apreensao|corpo encontrado|corpo carbonizado|incendio|explosao|bombeiros|abus[oa] sexual|criminosos|investigacao|investiga|orgao sexual|importunacao sexual)\b/)) {
     add(scores, "Segurança", 50);
   }
   if (hit(title, /\b(pega fogo|em chamas|queimado|queimada|carbonizado|carbonizada)\b/)) add(scores, "Segurança", 45);
@@ -108,23 +108,23 @@ export function classifyEditorial(input: CategoryInput): EditorialCategory {
   }
 
   // Política é forte o suficiente para não cair em Trânsito quando um acidente é apenas contexto da candidatura.
-  if (hit(title, /\b(eleicao|eleicoes|candidato|candidata|candidatura|campanha eleitoral|agenda dos candidatos|presidenciaveis|prefeito|vereador|deputado|deputada|governador|assembleia|senado|senador|datafolha|atlasintel|quaest|tse|tre-go|stf|congresso|partido|debate eleitoral|caiado|daniel vilela|marconi|lula|bolsonaro|flavio bolsonaro|gilmar|moraes)\b/)) {
-    add(scores, "Política", 58);
+  if (hit(title, /\b(eleicao|eleicoes|candidato|candidata|candidatura|campanha eleitoral|dia dos candidatos|agenda dos candidatos|agenda de candidatos|presidenciaveis|prefeito|vereador|deputado|deputada|governador|assembleia|senado|senador|datafolha|atlasintel|quaest|tse|tre-go|stf|congresso|partido|debate eleitoral|caiado|daniel vilela|marconi|lula|bolsonaro|flavio bolsonaro|gilmar|moraes)\b/)) {
+    add(scores, "Política", 78);
   }
   if (hit(title, /\b(prefeitura|governo de goias|ministro|ministerio|camara municipal|mpf|procurador-geral|gonet)\b/)) {
     add(scores, "Política", 20);
   }
 
-  if (hit(title, /\b(dolar|inflacao|ipca|selic|juros|pix|banco central|credito|ibovespa|petroleo|combustiveis|economia|empresa|empresas|comercio|varejo|negocio|negocios|investimento|imposto|impostos|pib|safra|agronegocio|agro|tarifa|tarifas|salario minimo|correios|pobreza|industria|importacao|exportacao|mei|mega-sena|loteria|premio|tributaria|tributario|carro eletrico|veiculo eletrico)\b/)) {
+  if (hit(title, /\b(dolar|inflacao|ipca|selic|juros|pix|banco central|credito|ibovespa|petroleo|combustiveis|economia|empresa|empresas|comercio|varejo|negocio|negocios|investimento|imposto|impostos|pib|safra|agronegocio|agro|tarifa|tarifas|salario minimo|correios|pobreza|industria|importacao|exportacao|mei|mega-sena|loteria|inadimplencia|divida|endividamento|tributaria|tributario|carro eletrico|veiculo eletrico)\b/)) {
     add(scores, "Economia", 40);
   }
 
   if (hit(title, /\b(vacina|vacinacao|saude|sus|hospital|upa|ambulancia|energia|conta de luz|agua|abastecimento|saneamento|cnh|ipva|iptu|educacao|escola|universidade|ufg|matricula|beneficio|servico|servicos|atendimento|curso gratuito|cursos gratuitos|sindrome respiratoria|temperatura|onda de calor|previsao do tempo|inmet|clima|pisa|ans)\b/)) {
-    add(scores, "Serviços", 42);
+    add(scores, "Serviços", 50);
   }
 
   if (hit(title, /\b(show|festival|feira|teatro|cinema|concerto|programacao|agenda cultural|ingresso|ingressos|exposicao|gastronomia|rodeio|carnaval|apresentacao|apresenta-se|se apresenta|turne|mostra|espetaculo|forum|premiacao)\b/)) {
-    add(scores, "Eventos", 34);
+    add(scores, "Eventos", 32);
   }
 
   if (hit(title, /\b(atriz|ator|cantor|cantora|sertanejo|celebridade|famoso|famosa|influenciador|influenciadora|namoro|separacao|divorcio|gravidez|gestante|bastidores|reality|bbb|a fazenda|novela|polemica|ensaio|gloria pires|viviane araujo|paolla oliveira|bruna biancardi|virginia fonseca|ze felipe|gusttavo lima|anitta|neymar|leonardo|ticiane|preta gil|bruno gagliasso|luana piovani|tais araujo|poliana rocha|oruam|taylor swift|madonna|bts|blackpink|ricky martin|lindsay lohan|jennifer lopez|tom cruise|luan santana|carreta furacao|ary fontoura|rick e renner)\b/)) {
