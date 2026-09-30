@@ -49,7 +49,7 @@ export const FOOTBALL_TEAMS: FootballTeam[] = [
     popularRank: 1,
     primaryColor: "#000000",
     secondaryColor: "#ffffff",
-    badgeUrl: "https://images.weserv.nl/?url=ssl.gstatic.com/onebox/media/sports/logos/reLnvAdfM6dnw_p5x_Vflw_96x96.png",
+    badgeUrl: "https://assets.footylogos.com/logos/corinthians/corinthians-logo-footylogos.svg",
     keywords: ["corinthians", "timão", "timao", "alvinegro", "neo química", "yuri alberto", "memphis depay", "ramón díaz", "fagner"],
   },
   {
@@ -225,7 +225,7 @@ export const FOOTBALL_TEAMS: FootballTeam[] = [
     popularRank: 17,
     primaryColor: "#dc2626",
     secondaryColor: "#ffffff",
-    badgeUrl: "https://images.weserv.nl/?url=ssl.gstatic.com/onebox/media/sports/logos/bkUaBfU_f3xH9uG2Q0bA0w_96x96.png",
+    badgeUrl: "https://assets.footylogos.com/logos/rb-bragantino/rb-bragantino-logo-footylogos.svg",
     keywords: ["bragantino", "red bull", "massa bruta", "nabi abi chedid"],
   },
   // CLUBES DE GOIÁS
