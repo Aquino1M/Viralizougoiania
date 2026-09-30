@@ -4,6 +4,7 @@ import { randomUUID } from "node:crypto";
 import type { AdminUser, Category, CategoryInput, Post, PostInput, PostStatus, SiteSettings } from "@/lib/types";
 import { slugify } from "@/lib/slug";
 import { classifyEditorial, normalizePostCategory } from "@/lib/category-classifier";
+import { buildEditorialExcerpt, formatViralizouArticle, needsEditorialRepair } from "@/lib/rewrite";
 
 const localFile = path.join(process.cwd(), "data", "posts.json");
 const localCategoriesFile = path.join(process.cwd(), "data", "categories.json");
@@ -57,6 +58,29 @@ function headers(extra: Record<string, string> = {}) {
     Authorization: `Bearer ${key}`,
     "Content-Type": "application/json",
     ...extra,
+  };
+}
+
+function normalizePublicEditorial(post: Post): Post {
+  const sourceText = post.source_content || post.content || post.excerpt || post.title;
+  const excerpt = buildEditorialExcerpt(post.excerpt || sourceText, post.title, 240);
+  if (!needsEditorialRepair(post)) {
+    return { ...post, excerpt: excerpt || post.excerpt };
+  }
+
+  const content = formatViralizouArticle({
+    title: post.title,
+    excerpt: post.excerpt,
+    sourceText,
+    sourceName: post.source_name,
+    category: post.category,
+  });
+
+  return {
+    ...post,
+    excerpt: excerpt || post.excerpt,
+    content: content || post.content,
+    seo_description: buildEditorialExcerpt(post.seo_description || post.excerpt || sourceText, post.title, 240),
   };
 }
 
@@ -173,7 +197,11 @@ export async function getPosts(opts: { includeDrafts?: boolean; category?: strin
   });
 
   let result = postsList;
-  if (!includeDrafts) result = result.filter((p) => p.status === "published");
+  if (!includeDrafts) {
+    result = result
+      .filter((p) => p.status === "published")
+      .map(normalizePublicEditorial);
+  }
   if (category) result = result.filter((p) => p.category.toLowerCase() === category.toLowerCase());
   result = result.sort((a, b) => +new Date(b.published_at || b.created_at) - +new Date(a.published_at || a.created_at));
   if (limit) result = result.slice(0, limit);
@@ -188,14 +216,19 @@ export async function getPostBySlug(slug: string, includeDrafts = false) {
     try {
       const status = includeDrafts ? "" : "&status=eq.published";
       const rows = await sb(`posts?select=*&slug=eq.${encodeURIComponent(slug)}${status}&limit=1`);
-      if (rows?.[0]) return normalizePostCategory(rows[0] as Post);
+      if (rows?.[0]) {
+        const normalized = normalizePostCategory(rows[0] as Post);
+        return includeDrafts ? normalized : normalizePublicEditorial(normalized);
+      }
     } catch (err: any) {
       console.warn("Aviso ao buscar slug no Supabase:", err.message);
     }
   }
   const posts = await readLocal();
   const found = posts.find((p) => p.slug === slug && (includeDrafts || p.status === "published"));
-  return found ? normalizePostCategory(found) : undefined;
+  if (!found) return undefined;
+  const normalized = normalizePostCategory(found);
+  return includeDrafts ? normalized : normalizePublicEditorial(normalized);
 }
 
 export async function getPostById(id: string) {

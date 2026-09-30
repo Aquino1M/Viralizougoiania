@@ -1,31 +1,165 @@
 function cleanEditorialText(text: string): string {
   if (!text) return "";
-  let s = text
-    // Remove entidades HTML e marcas de corte de WordPress como [&hellip;], [&#8230;], [...], […], etc.
+  return text
+    .replace(/<!\[CDATA\[([\s\S]*?)\]\]>/g, "$1")
+    .replace(/<br\s*\/?>/gi, "\n")
+    .replace(/<\/(?:p|div|li|h[1-6]|section|article)>/gi, "\n")
+    .replace(/<[^>]+>/g, " ")
     .replace(/\[\s*(&hellip;|&#8230;|…|\.{3})\s*\]/gi, "")
     .replace(/(&hellip;|&#8230;)/gi, "")
-    .replace(/\[\s*\.\.\.\s*\]/g, "")
-    .replace(/\[\s*…\s*\]/g, "")
-    .replace(/\[\s*&nbsp;\s*\]/gi, "")
     .replace(/&nbsp;/gi, " ")
-    .replace(/\s+/g, " ")
+    .replace(/&amp;/gi, "&")
+    .replace(/&quot;/gi, '"')
+    .replace(/&#39;|&apos;/gi, "'")
+    .replace(/[ \t]+/g, " ")
+    .replace(/\s*\n\s*/g, "\n")
+    .replace(/\n{3,}/g, "\n\n")
+    .replace(/✅\s*Clique e siga o canal[^\n.!?]*(?:WhatsApp)?/gi, "")
+    .replace(/📱\s*Veja outras notícias[^\n.!?]*(?:\.|$)/gi, "")
+    .replace(/VÍDEOS?\s*:\s*últimas notícias[^\n.!?]*(?:\.|$)/gi, "")
+    .replace(/\bO post\s+.+?\s+(?:apareceu|foi publicado)\s+primeiro\s+em\s+[^\n.]+\.?/gi, "")
+    .replace(/[ \t]+/g, " ")
+    .replace(/\s*\n\s*/g, "\n")
     .trim();
-
-  // Remove preposições ou conjunções órfãs deixadas no final de cortes abruptos
-  s = s.replace(/\s+(de|da|do|das|dos|em|no|na|nos|nas|com|para|por|a|o|ao|aos|que|e)$/i, "");
-  s = s.trim();
-
-  // Garante fechamento correto da frase
-  if (s && !/[.!?]$/.test(s)) {
-    s += ".";
-  }
-  return s;
 }
 
-/**
- * Formata o texto bruto capturado da fonte em uma versão editorial limpa
- * e estruturada para publicação imediata no Viralizougoiania.
- */
+function isBoilerplateLine(line: string): boolean {
+  const lower = line.toLowerCase().trim();
+  if (!lower) return true;
+  if (/^(?:foto|imagem|divulgação|reprodução)(?:\s*:|\/)/i.test(line)) return true;
+  if (/^(?:leia|veja) também\s*:?$/i.test(line)) return true;
+  if (/^agora no g1$/i.test(line)) return true;
+  if (/^vídeos?\s*:/i.test(line)) return true;
+  if (/^(?:✅|📱|🔔)/.test(line)) return true;
+  if (lower.includes("todos os direitos reservados")) return true;
+  if (lower.includes("inscreva-se no canal")) return true;
+  if (lower.includes("clique e siga") || lower.includes("clique aqui")) return true;
+  if (lower.includes("compartilhe no whatsapp") || lower.includes("compartilhe esta notícia")) return true;
+  if (lower.includes("siga o canal do g1") || lower.includes("canal do g1 no whatsapp")) return true;
+  if (lower.includes("fale com o g1") || lower.includes("veja outras notícias da região")) return true;
+  if (/^o post .+ (?:apareceu|foi publicado) primeiro em /i.test(line)) return true;
+  return false;
+}
+
+function splitLongParagraph(text: string): string[] {
+  if (text.length <= 700) return [text];
+
+  const sentences = text
+    .split(/(?<=[.!?…”"])\s+(?=[A-ZÁÉÍÓÚÂÊÔÃÕÇ“])/u)
+    .map((s) => s.trim())
+    .filter(Boolean);
+
+  if (sentences.length < 2) {
+    const chunks: string[] = [];
+    let rest = text.trim();
+    while (rest.length > 620) {
+      let cut = rest.lastIndexOf(" ", 620);
+      if (cut < 300) cut = 620;
+      chunks.push(rest.slice(0, cut).trim());
+      rest = rest.slice(cut).trim();
+    }
+    if (rest) chunks.push(rest);
+    return chunks;
+  }
+
+  const groups: string[] = [];
+  let current = "";
+  for (const sentence of sentences) {
+    if (!current) {
+      current = sentence;
+      continue;
+    }
+    if ((current + " " + sentence).length <= 520) current += " " + sentence;
+    else {
+      groups.push(current);
+      current = sentence;
+    }
+  }
+  if (current) groups.push(current);
+  return groups;
+}
+
+export function buildEditorialParagraphs(sourceText = ""): string[] {
+  const source = cleanEditorialText(sourceText)
+    .replace(/\bLEIA TAMBÉM\s*:\s*[\s\S]*?\bAgora no g1\b/gi, "\n")
+    .replace(/\b(?:CONVOCAÇÃO|PRÓXIMO CONCURSO)\s*:\s*[^\n]+/gi, "\n");
+
+  const lines = source.split(/\n+/).map((p) => p.trim()).filter(Boolean);
+  const accepted: string[] = [];
+  let skippingRelated = false;
+
+  for (let line of lines) {
+    if (/^(?:leia|veja) também\s*:?$/i.test(line)) {
+      skippingRelated = true;
+      continue;
+    }
+
+    if (skippingRelated) {
+      const realParagraph = line.length >= 150 && /[.!?…”"]$/.test(line);
+      if (!realParagraph) continue;
+      skippingRelated = false;
+    }
+
+    line = line
+      .replace(/\s+O post\s+.+?\s+(?:apareceu|foi publicado)\s+primeiro\s+em\s+[^.]+\.?$/i, "")
+      .trim();
+
+    if (isBoilerplateLine(line)) continue;
+    if (line.length < 35 && !/[.!?]$/.test(line)) continue;
+
+    for (const paragraph of splitLongParagraph(line)) {
+      const p = paragraph.trim();
+      if (p.length < 20 || isBoilerplateLine(p)) continue;
+      accepted.push(p);
+    }
+  }
+
+  const result: string[] = [];
+  const seen = new Set<string>();
+  for (const paragraph of accepted) {
+    const key = paragraph
+      .toLowerCase()
+      .normalize("NFD")
+      .replace(/[\u0300-\u036f]/g, "")
+      .replace(/[^a-z0-9]+/g, " ")
+      .trim();
+    if (!key || seen.has(key)) continue;
+    seen.add(key);
+    result.push(paragraph);
+  }
+  return result;
+}
+
+export function buildEditorialExcerpt(text = "", fallback = "", maxLength = 240): string {
+  const paragraphs = buildEditorialParagraphs(text);
+  let base = paragraphs.find((p) => p.length >= 55) || paragraphs[0] || cleanEditorialText(fallback);
+  base = base.replace(/\s+/g, " ").trim();
+  if (!base) return "";
+  if (base.length <= maxLength) return base;
+
+  let cut = base.lastIndexOf(" ", maxLength);
+  if (cut < Math.floor(maxLength * 0.65)) cut = maxLength;
+  return base.slice(0, cut).trim().replace(/[,:;\-–—]+$/, "") + "…";
+}
+
+export function needsEditorialRepair(input: {
+  excerpt?: string | null;
+  content?: string | null;
+  source_content?: string | null;
+}): boolean {
+  const excerpt = String(input.excerpt || "");
+  const content = String(input.content || "");
+  const joined = excerpt + "\n" + content;
+
+  if (excerpt.length > 360) return true;
+  if ((excerpt.match(/\n/g) || []).length >= 2) return true;
+  if (/LEIA TAMBÉM|Clique e siga|Veja outras notícias|VÍDEOS?\s*:|O post .+ primeiro em/i.test(joined)) return true;
+
+  const paragraphs = content.split(/\n\n+/).filter((p) => p.trim().length > 0);
+  if (content.length > 700 && paragraphs.length <= 1) return true;
+  return false;
+}
+
 export function formatViralizouArticle(params: {
   title: string;
   excerpt?: string;
@@ -33,62 +167,9 @@ export function formatViralizouArticle(params: {
   sourceName?: string;
   category?: string;
 }): string {
-  const { title, excerpt = "", sourceText = "", sourceName = "", category = "" } = params;
+  const { title, excerpt = "", sourceText = "" } = params;
+  const paragraphs = buildEditorialParagraphs(sourceText || excerpt);
+  if (paragraphs.length) return paragraphs.join("\n\n");
 
-  // Se o texto da fonte tiver parágrafos, limpa e organiza
-  const rawParagraphs = sourceText
-    .split(/\n\n+/)
-    .map((p) => cleanEditorialText(p))
-    .filter((p) => {
-      if (p.length < 20) return false;
-      const lower = p.toLowerCase();
-      if (lower.startsWith("foto:") || lower.startsWith("imagem:")) return false;
-      if (lower.includes("todos os direitos reservados")) return false;
-      if (lower.includes("inscreva-se no canal")) return false;
-      if (lower.includes("clique aqui") || lower.includes("clique e siga")) return false;
-      if (lower.includes("leia também") || lower.includes("veja também") || lower.includes("leia mais")) return false;
-      if (lower.includes("compartilhe no whatsapp") || lower.includes("compartilhe esta notícia")) return false;
-      if (lower.includes("siga o canal do g1") || lower.includes("canal do g1 no whatsapp")) return false;
-      if (lower.includes("fale com o g1") || lower.includes("vídeos: últimas notícias")) return false;
-      if (lower.includes("veja outras notícias da região")) return false;
-      return true;
-    });
-
-  if (rawParagraphs.length >= 2) {
-    // Retorna os parágrafos jornalísticos limpos com quebra dupla
-    return rawParagraphs.join("\n\n");
-  }
-
-  // Fallback caso a fonte tenha apenas o resumo ou seja um texto curto
-  const cleanExcerpt = cleanEditorialText(excerpt);
-  const base = cleanExcerpt || cleanEditorialText(title);
-
-  // Fechamentos editoriais contextuais por categoria
-  const cat = (category || "").toLowerCase();
-  let closing1 = "";
-  let closing2 = "";
-
-  if (cat.includes("futebol") || cat.includes("esporte")) {
-    closing1 = "A movimentação nos bastidores, o ritmo de preparação e os próximos desafios continuam no centro das atenções da torcida e do clube.";
-    closing2 = "A equipe de esportes do Viralizougoiania acompanha cada lance, escalações, negociações e tabela de jogos em tempo real.";
-  } else if (cat.includes("fofoca") || cat.includes("famoso") || cat.includes("celebridade")) {
-    closing1 = "A novidade repercutiu rapidamente nas redes sociais e movimentou as discussões entre fãs e seguidores ao longo do dia.";
-    closing2 = "Todos os detalhes, declarações oficiais e os bastidores mais quentes dos famosos você acompanha em tempo real na aba de Fofocas do Viralizougoiania.";
-  } else if (cat.includes("política") || cat.includes("politica")) {
-    closing1 = "O tema movimenta os bastidores do poder e gera expectativa quanto aos próximos posicionamentos e articulações políticas.";
-    closing2 = "Novos desdobramentos, notas oficiais e análises completas serão atualizados pela equipe do portal Viralizougoiania.";
-  } else if (cat.includes("trânsito") || cat.includes("transito")) {
-    closing1 = "Motoristas que circulam pela região devem redobrar a atenção e buscar rotas alternativas nos horários de maior fluxo.";
-    closing2 = "Mais informações sobre as condições de tráfego e eventuais desvios serão atualizadas pela redação do Viralizougoiania.";
-  } else if (cat.includes("segurança") || cat.includes("polícia") || cat.includes("policia")) {
-    closing1 = "O caso segue sendo apurado pelas autoridades competentes para esclarecimento completo das circunstâncias.";
-    closing2 = "Novas atualizações oficiais sobre as investigações serão divulgadas no portal Viralizougoiania assim que confirmadas.";
-  } else {
-    closing1 = "Os acontecimentos seguem mobilizando a atenção da comunidade e de equipes locais para novos esclarecimentos.";
-    closing2 = "Acompanhe as atualizações e a repercussão completa dos fatos ao longo do dia no portal Viralizougoiania.";
-  }
-
-  return `${base}\n\n${closing1}\n\n${closing2}`;
+  return buildEditorialExcerpt(excerpt || title, title, 420) || cleanEditorialText(title);
 }
-
-

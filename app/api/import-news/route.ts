@@ -3,7 +3,7 @@ import { lookup } from "node:dns/promises";
 import { isIP } from "node:net";
 import { isAdmin } from "@/lib/session";
 import type { ImportedNews } from "@/lib/types";
-import { formatViralizouArticle } from "@/lib/rewrite";
+import { buildEditorialExcerpt, formatViralizouArticle } from "@/lib/rewrite";
 import { classifyEditorial } from "@/lib/category-classifier";
 import { readResponseTextSmart, repairMojibake } from "@/lib/text-encoding";
 
@@ -27,13 +27,21 @@ function decodeEntities(value: string) {
 }
 
 function cleanText(value = "") {
-  let cleaned = decodeEntities(value.replace(/<!\[CDATA\[([\s\S]*?)\]\]>/g, "$1").replace(/<[^>]*>/g, " "));
+  let cleaned = decodeEntities(
+    value
+      .replace(/<!\[CDATA\[([\s\S]*?)\]\]>/g, "$1")
+      .replace(/<br\s*\/?>/gi, "\n")
+      .replace(/<\/(?:p|div|li|h[1-6]|section|article)>/gi, "\n")
+      .replace(/<[^>]*>/g, " ")
+  );
   cleaned = cleaned
     .replace(/\[\s*(&hellip;|&#8230;|…|\.{3})\s*\]/gi, "")
     .replace(/(&hellip;|&#8230;)/gi, "")
     .replace(/\[\s*\.\.\.\s*\]/g, "")
     .replace(/\[\s*…\s*\]/g, "")
-    .replace(/\s+/g, " ")
+    .replace(/[ \t]+/g, " ")
+    .replace(/\s*\n\s*/g, "\n")
+    .replace(/\n{3,}/g, "\n\n")
     .trim();
   return repairMojibake(cleaned);
 }
@@ -475,7 +483,7 @@ async function extractArticle(html: string, finalUrl: string): Promise<ImportedN
 
   return {
     title,
-    excerpt: excerpt || (fullText ? fullText.slice(0, 180) + "..." : title),
+    excerpt: buildEditorialExcerpt(excerpt || fullText, title, 240),
     content: formattedContent,
     source_content: fullText || excerpt,
     category: autoCategory,
@@ -552,7 +560,7 @@ async function parseFeed(xml: string, feedUrl: string, defaultCategory?: string)
     const title = cleanText(tag(item, "title"));
     const rawContent = tag(item, "content:encoded") || tag(item, "content") || tag(item, "description");
     const cleanContent = cleanText(rawContent);
-    const excerpt = cleanText(tag(item, "description") || tag(item, "summary") || cleanContent).slice(0, 500);
+    const excerpt = buildEditorialExcerpt(cleanText(tag(item, "description") || tag(item, "summary") || cleanContent), title, 240);
     let category = classifyCategory(title, cleanContent || excerpt, sourceName, link || feedUrl);
     if (defaultCategory) category = defaultCategory;
     const author = feedAuthor(item);

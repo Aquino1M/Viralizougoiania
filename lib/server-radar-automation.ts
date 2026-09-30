@@ -1,5 +1,5 @@
 import { createPost, getCategories, getPosts, publishDuePosts, reclassifyExternalPosts, updatePost } from "@/lib/storage";
-import { formatViralizouArticle } from "@/lib/rewrite";
+import { buildEditorialExcerpt, formatViralizouArticle, needsEditorialRepair } from "@/lib/rewrite";
 import { slugify } from "@/lib/slug";
 import type { ImportedNews, Post, PostStatus } from "@/lib/types";
 import { getAutomationState, saveAutomationState, saveRadarSnapshot, type RadarSnapshotItem } from "@/lib/automation-state";
@@ -54,7 +54,7 @@ function decodeEntities(value=""){
     return named[code.toLowerCase()]||"&"+code+";";
   });
 }
-function cleanText(value=""){return repairMojibake(decodeEntities(value.replace(/<!\[CDATA\[([\s\S]*?)\]\]>/g,"$1").replace(/<br\s*\/?>/gi,"\n").replace(/<[^>]+>/g," ")).replace(/\s*\n\s*/g,"\n").replace(/[ \t]+/g," ").replace(/\[\s*(?:…|\.{3}|&hellip;)\s*\]/gi,"").trim());}
+function cleanText(value=""){return repairMojibake(decodeEntities(value.replace(/<!\[CDATA\[([\s\S]*?)\]\]>/g,"$1").replace(/<br\s*\/?>/gi,"\n").replace(/<\/(?:p|div|li|h[1-6]|section|article)>/gi,"\n").replace(/<[^>]+>/g," ")).replace(/\s*\n\s*/g,"\n").replace(/[ \t]+/g," ").replace(/\n{3,}/g,"\n\n").replace(/\[\s*(?:…|\.{3}|&hellip;)\s*\]/gi,"").trim());}
 function tag(block:string,name:string){const safe=name.replace(/[.*+?^$()|[\]\\]/g,"\\$&");const m=block.match(new RegExp("<"+safe+"\\b[^>]*>([\\s\\S]*?)<\\/"+safe+">","i"));return m&&m[1]?m[1]:"";}
 function absoluteUrl(value:string,base:string){try{return new URL(value,base).toString();}catch{return "";}}
 function safeIso(value=""){if(!value||Number.isNaN(Date.parse(value)))return null;return new Date(value).toISOString();}
@@ -81,7 +81,8 @@ async function fetchSource(source:RadarSource):Promise<ImportedNews[]>{
     const sourceText=encoded.length>desc.length?encoded:desc;
     const pub=cleanText(tag(block,"pubDate")||tag(block,"published")||tag(block,"updated"));
     const category=source.category||classifyEditorial({title,excerpt:sourceText,source_name:source.name,source_url:link});
-    items.push({title,excerpt:desc||sourceText.slice(0,220)||title,content:"",source_content:sourceText,category,image_url:feedImage(block,source.feedUrl),image_credit:"Foto: Reprodução / "+source.name,video_url:"",source_name:source.name,source_url:link,source_author:"",published_at:safeIso(pub)});
+    const excerpt=buildEditorialExcerpt(desc||sourceText,title,240);
+    items.push({title,excerpt:excerpt||title,content:"",source_content:sourceText,category,image_url:feedImage(block,source.feedUrl),image_credit:"Foto: Reprodução / "+source.name,video_url:"",source_name:source.name,source_url:link,source_author:"",published_at:safeIso(pub)});
   }
   return items;
 }
@@ -155,6 +156,35 @@ async function repairSavedEncoding(posts:Post[],items:ImportedNews[],errors:stri
   });
   return results.filter(Boolean).length;
 }
+async function repairSavedEditorialFormatting(posts:Post[],errors:string[]){
+  const candidates=posts.filter((post)=>Boolean(post.source_name||post.source_url)&&needsEditorialRepair(post)).slice(0,50);
+  if(!candidates.length)return 0;
+
+  const results=await parallelMap(candidates,6,async(post)=>{
+    const sourceText=post.source_content||post.content||post.excerpt||post.title;
+    const excerpt=buildEditorialExcerpt(post.excerpt||sourceText,post.title,240);
+    const content=formatViralizouArticle({
+      title:post.title,
+      excerpt:post.excerpt,
+      sourceText,
+      sourceName:post.source_name,
+      category:post.category,
+    });
+    try{
+      await updatePost(post.id,{
+        excerpt:excerpt||post.excerpt,
+        content:content||post.content,
+        seo_description:buildEditorialExcerpt(post.seo_description||post.excerpt||sourceText,post.title,240),
+      });
+      return true;
+    }catch(e){
+      errors.push("Formatação editorial: "+(e instanceof Error?e.message:"falha ao atualizar"));
+      return false;
+    }
+  });
+  return results.filter(Boolean).length;
+}
+
 function planSchedule(items:ImportedNews[],posts:Post[],intervalMinutes:number){
   const future=posts.filter(p=>p.status==="scheduled"&&p.published_at&&new Date(p.published_at).getTime()>Date.now()).sort((a,b)=>+new Date(a.published_at||0)-+new Date(b.published_at||0));
   let baseTime=Date.now();if(future.length)baseTime=Math.max(baseTime,+new Date(future[future.length-1].published_at||0));
@@ -213,6 +243,7 @@ export async function runServerRadarAutomation(options:{force?:boolean}={}):Prom
     // Corrige automaticamente matérias antigas que foram salvas com �/Ã/Â,
     // usando a mesma URL da fonte e o texto recém-lido com o charset correto.
     await repairSavedEncoding(posts,all,errors);
+    const formattedRepairs=await repairSavedEditorialFormatting(posts,errors);
 
     try {
       await saveRadarSnapshot({
@@ -239,7 +270,7 @@ export async function runServerRadarAutomation(options:{force?:boolean}={}):Prom
     });
     added=created.filter(Boolean).length;
     const finishedAt=new Date().toISOString();
-    await saveAutomationState({running_until:null,last_success_at:finishedAt,next_run_at:new Date(Date.now()+intervalMinutes*60000).toISOString(),last_found:found,last_added:added,last_published:published,last_hydrated:0,last_reclassified:reclassified,last_football_sync:football.updatedAt,last_round:football.round,last_fixtures:football.fixtures,last_source_counts:sourceCounts,last_error:errors.join(" | ").slice(0,1500)});
+    await saveAutomationState({running_until:null,last_success_at:finishedAt,next_run_at:new Date(Date.now()+intervalMinutes*60000).toISOString(),last_found:found,last_added:added,last_published:published,last_hydrated:formattedRepairs,last_reclassified:reclassified,last_football_sync:football.updatedAt,last_round:football.round,last_fixtures:football.fixtures,last_source_counts:sourceCounts,last_error:errors.join(" | ").slice(0,1500)});
     return{ok:true,found,newItems,added,published,reclassified,football,sourceCounts,errors,startedAt,finishedAt};
   }catch(e){
     const message=e instanceof Error?e.message:"Erro inesperado";errors.push(message);const finishedAt=new Date().toISOString();
