@@ -371,3 +371,24 @@ main{min-height:65vh}.heroSection{padding:30px 0 25px}.cityEyebrow{font-size:12p
 
 /* Futebol é atualizado exclusivamente pelo Ciclo Único 24/7 no servidor. */
 .footballRefreshBtn{display:none!important}
+
+
+/* Escudos reais: arquivo passa pelo proxy/CDN do próprio Viralizougoiania. */
+.teamShieldImageBox{
+  display:inline-flex;
+  align-items:center;
+  justify-content:center;
+  flex:0 0 auto;
+  border-radius:8px;
+  overflow:visible;
+}
+.teamShieldImage{
+  display:block;
+  width:100%;
+  height:100%;
+  object-fit:contain;
+  object-position:center;
+  filter:drop-shadow(0 1px 2px rgba(15,23,42,.18));
+  user-select:none;
+  -webkit-user-drag:none;
+}
