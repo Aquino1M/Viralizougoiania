@@ -60,7 +60,7 @@ export const FOOTBALL_TEAMS: FootballTeam[] = [
     popularRank: 2,
     primaryColor: "#c21822",
     secondaryColor: "#000000",
-    badgeUrl: "https://images.weserv.nl/?url=ssl.gstatic.com/onebox/media/sports/logos/orE554jpKfnzAHRScQNsHg_96x96.png",
+    badgeUrl: "https://assets.footylogos.com/logos/flamengo/flamengo-logo-footylogos.svg",
     keywords: ["flamengo", "mengão", "mengao", "rubro-negro", "maracanã", "gabi", "gabigol", "arrascaeta", "filipe luís", "pedro"],
   },
   {
@@ -71,7 +71,7 @@ export const FOOTBALL_TEAMS: FootballTeam[] = [
     popularRank: 3,
     primaryColor: "#e11d48",
     secondaryColor: "#000000",
-    badgeUrl: "https://images.weserv.nl/?url=ssl.gstatic.com/onebox/media/sports/logos/4w2HHcSF6vufhujMR15L9A_96x96.png",
+    badgeUrl: "https://assets.footylogos.com/logos/sao-paulo/sao-paulo-logo-footylogos.svg",
     keywords: ["são paulo", "sao paulo", "tricolor", "morumbi", "calleri", "lucas moura", "zubeldía"],
   },
   {
@@ -82,7 +82,7 @@ export const FOOTBALL_TEAMS: FootballTeam[] = [
     popularRank: 4,
     primaryColor: "#047857",
     secondaryColor: "#ffffff",
-    badgeUrl: "https://images.weserv.nl/?url=ssl.gstatic.com/onebox/media/sports/logos/7spurne-xDt2p6C0FsVomg_96x96.png",
+    badgeUrl: "https://assets.footylogos.com/logos/palmeiras/palmeiras-logo-footylogos.svg",
     keywords: ["palmeiras", "verdão", "verdao", "alviverde", "allianz parque", "abel ferreira", "estêvão", "veiga"],
   },
   {
@@ -93,7 +93,7 @@ export const FOOTBALL_TEAMS: FootballTeam[] = [
     popularRank: 5,
     primaryColor: "#111827",
     secondaryColor: "#ffffff",
-    badgeUrl: "https://images.weserv.nl/?url=ssl.gstatic.com/onebox/media/sports/logos/VHvhU4gt-V9F_wN4u2802w_96x96.png",
+    badgeUrl: "https://assets.footylogos.com/logos/santos-fc/santos-fc-logo-footylogos.svg",
     keywords: ["santos", "peixe", "vila belmiro", "santista", "alvinegro praiano"],
   },
   {
@@ -104,7 +104,7 @@ export const FOOTBALL_TEAMS: FootballTeam[] = [
     popularRank: 6,
     primaryColor: "#000000",
     secondaryColor: "#ffffff",
-    badgeUrl: "https://images.weserv.nl/?url=ssl.gstatic.com/onebox/media/sports/logos/SnAigLOKfvbp0fnq2934zA_96x96.png",
+    badgeUrl: "https://assets.footylogos.com/logos/vasco-da-gama/vasco-da-gama-logo-footylogos.svg",
     keywords: ["vasco", "vasco da gama", "cruzmaltino", "são januário", "vegetti", "coutinho"],
   },
   {
@@ -115,7 +115,7 @@ export const FOOTBALL_TEAMS: FootballTeam[] = [
     popularRank: 7,
     primaryColor: "#0284c7",
     secondaryColor: "#000000",
-    badgeUrl: "https://images.weserv.nl/?url=ssl.gstatic.com/onebox/media/sports/logos/0iOCGVmf6xUTh1AGACQIMg_96x96.png",
+    badgeUrl: "https://assets.footylogos.com/logos/gremio/gremio-logo-footylogos.svg",
     keywords: ["grêmio", "gremio", "imortal", "tricolor gaúcho", "arena do grêmio", "renato gaúcho"],
   },
   {
@@ -126,7 +126,7 @@ export const FOOTBALL_TEAMS: FootballTeam[] = [
     popularRank: 8,
     primaryColor: "#dc2626",
     secondaryColor: "#ffffff",
-    badgeUrl: "https://images.weserv.nl/?url=ssl.gstatic.com/onebox/media/sports/logos/OWVpQSF4NFf1CiA21xOBCQ_96x96.png",
+    badgeUrl: "https://assets.footylogos.com/logos/sc-internacional/sc-internacional-logo-footylogos.svg",
     keywords: ["internacional", "inter", "colorado", "beira-rio", "alan patrick", "borré"],
   },
   {
@@ -137,7 +137,7 @@ export const FOOTBALL_TEAMS: FootballTeam[] = [
     popularRank: 9,
     primaryColor: "#1d4ed8",
     secondaryColor: "#ffffff",
-    badgeUrl: "https://images.weserv.nl/?url=ssl.gstatic.com/onebox/media/sports/logos/cf6TqWv9NFW6t-cRhZ27fA_96x96.png",
+    badgeUrl: "https://assets.footylogos.com/logos/cruzeiro/cruzeiro-logo-footylogos.svg",
     keywords: ["cruzeiro", "raposa", "celeste", "mineirão", "diniz", "matheus pereira"],
   },
   {
@@ -148,7 +148,7 @@ export const FOOTBALL_TEAMS: FootballTeam[] = [
     popularRank: 10,
     primaryColor: "#000000",
     secondaryColor: "#ffffff",
-    badgeUrl: "https://images.weserv.nl/?url=ssl.gstatic.com/onebox/media/sports/logos/q9fhIk-qiqtwR_J146UtLQ_96x96.png",
+    badgeUrl: "https://assets.footylogos.com/logos/atletico-mineiro/atletico-mineiro-logo-footylogos.svg",
     keywords: ["atlético-mg", "atletico-mg", "galo", "alvinegro", "arena mrv", "hulk", "paulino", "milito"],
   },
   {
@@ -159,7 +159,7 @@ export const FOOTBALL_TEAMS: FootballTeam[] = [
     popularRank: 11,
     primaryColor: "#000000",
     secondaryColor: "#ffffff",
-    badgeUrl: "https://images.weserv.nl/?url=ssl.gstatic.com/onebox/media/sports/logos/KLDwyGNOoyLAneXdAT0hgA_96x96.png",
+    badgeUrl: "https://assets.footylogos.com/logos/botafogo/botafogo-logo-footylogos.svg",
     keywords: ["botafogo", "fogão", "glorioso", "nilton santos", "artur jorge", "luiz henrique", "savarino"],
   },
   {
@@ -170,7 +170,7 @@ export const FOOTBALL_TEAMS: FootballTeam[] = [
     popularRank: 12,
     primaryColor: "#831843",
     secondaryColor: "#047857",
-    badgeUrl: "https://images.weserv.nl/?url=ssl.gstatic.com/onebox/media/sports/logos/f6-RPk1kvA_nZ1Ym6k0UBA_96x96.png",
+    badgeUrl: "https://assets.footylogos.com/logos/fluminense/fluminense-logo-footylogos.svg",
     keywords: ["fluminense", "flu", "tricolor carioca", "maracanã", "cano", "marlon", "arias", "thiago silva"],
   },
   {
@@ -181,7 +181,7 @@ export const FOOTBALL_TEAMS: FootballTeam[] = [
     popularRank: 13,
     primaryColor: "#0284c7",
     secondaryColor: "#dc2626",
-    badgeUrl: "https://images.weserv.nl/?url=ssl.gstatic.com/onebox/media/sports/logos/nIdbR6qLLvsAPFymfKQQtA_96x96.png",
+    badgeUrl: "https://assets.footylogos.com/logos/bahia/bahia-logo-footylogos.svg",
     keywords: ["bahia", "tricolor de aço", "fonte nova", "rogério ceni", "everton ribeiro"],
   },
   {
@@ -192,7 +192,7 @@ export const FOOTBALL_TEAMS: FootballTeam[] = [
     popularRank: 14,
     primaryColor: "#1e3a8a",
     secondaryColor: "#dc2626",
-    badgeUrl: "https://images.weserv.nl/?url=ssl.gstatic.com/onebox/media/sports/logos/me10eLWRP2HYIag0QYsmng_96x96.png",
+    badgeUrl: "https://assets.footylogos.com/logos/fortaleza/fortaleza-logo-footylogos.svg",
     keywords: ["fortaleza", "leão", "tricolor do pici", "castelão", "vojvoda", "lucero"],
   },
   {
@@ -203,7 +203,7 @@ export const FOOTBALL_TEAMS: FootballTeam[] = [
     popularRank: 15,
     primaryColor: "#dc2626",
     secondaryColor: "#000000",
-    badgeUrl: "https://images.weserv.nl/?url=ssl.gstatic.com/onebox/media/sports/logos/wkkA9u0wA0eU5xH4_y2Lyg_96x96.png",
+    badgeUrl: "https://assets.footylogos.com/logos/athletico-paranaense/athletico-paranaense-logo-footylogos.svg",
     keywords: ["athletico-pr", "furacão", "ligga arena", "rubro-negro"],
   },
   {
@@ -214,7 +214,7 @@ export const FOOTBALL_TEAMS: FootballTeam[] = [
     popularRank: 16,
     primaryColor: "#dc2626",
     secondaryColor: "#000000",
-    badgeUrl: "https://images.weserv.nl/?url=ssl.gstatic.com/onebox/media/sports/logos/M_kE6KqV3q2uBwJ6yL7fzA_96x96.png",
+    badgeUrl: "https://assets.footylogos.com/logos/vitoria/vitoria-logo-footylogos.svg",
     keywords: ["vitória", "vitoria", "leão da barra", "barradão", "rubro-negro baiano"],
   },
   {
@@ -237,7 +237,7 @@ export const FOOTBALL_TEAMS: FootballTeam[] = [
     popularRank: 18,
     primaryColor: "#047857",
     secondaryColor: "#ffffff",
-    badgeUrl: "https://upload.wikimedia.org/wikipedia/commons/7/7f/Goias_Esporte_Clube_logo.svg",
+    badgeUrl: "https://assets.footylogos.com/logos/goias/goias-logo-footylogos.svg",
     keywords: ["goiás", "goias", "esmeraldino", "verdão da serra", "haile pinheiro", "serrinha"],
   },
   {
@@ -248,7 +248,7 @@ export const FOOTBALL_TEAMS: FootballTeam[] = [
     popularRank: 19,
     primaryColor: "#dc2626",
     secondaryColor: "#ffffff",
-    badgeUrl: "https://upload.wikimedia.org/wikipedia/commons/c/c3/Vila_Nova_Logo_Oficial.svg",
+    badgeUrl: "https://assets.footylogos.com/logos/vila-nova/vila-nova-logo-footylogos.svg",
     keywords: ["vila nova", "tigre", "colorado", "oba", "onésio brasileiro alvarenga"],
   },
   {
@@ -259,7 +259,7 @@ export const FOOTBALL_TEAMS: FootballTeam[] = [
     popularRank: 20,
     primaryColor: "#dc2626",
     secondaryColor: "#000000",
-    badgeUrl: "https://upload.wikimedia.org/wikipedia/commons/0/0a/Atl%C3%A9tico_Clube_Goianiense_logo.svg",
+    badgeUrl: "https://assets.footylogos.com/logos/atletico-goianiense/atletico-goianiense-logo-footylogos.svg",
     keywords: ["atlético-go", "atletico-go", "dragão", "antônio accioly", "rubro-negro goiano"],
   },
   {
@@ -270,7 +270,7 @@ export const FOOTBALL_TEAMS: FootballTeam[] = [
     popularRank: 21,
     primaryColor: "#047857",
     secondaryColor: "#ffffff",
-    badgeUrl: "https://upload.wikimedia.org/wikipedia/commons/b/bd/Coritiba_Foot_Ball_Club_logo.svg",
+    badgeUrl: "https://assets.footylogos.com/logos/coritiba/coritiba-logo-footylogos.svg",
     keywords: ["coritiba", "coxa", "couto pereira"],
   },
   {
@@ -281,7 +281,7 @@ export const FOOTBALL_TEAMS: FootballTeam[] = [
     popularRank: 22,
     primaryColor: "#eab308",
     secondaryColor: "#047857",
-    badgeUrl: "https://upload.wikimedia.org/wikipedia/commons/2/2c/Mirassol_Futebol_Clube_logo.svg",
+    badgeUrl: "https://assets.footylogos.com/logos/mirassol-fc/mirassol-fc-logo-footylogos.svg",
     keywords: ["mirassol", "leão da alta araraquarense", "maião"],
   },
   {
@@ -292,7 +292,7 @@ export const FOOTBALL_TEAMS: FootballTeam[] = [
     popularRank: 23,
     primaryColor: "#047857",
     secondaryColor: "#ffffff",
-    badgeUrl: "https://upload.wikimedia.org/wikipedia/commons/4/4e/Logo_Associa%C3%A7%C3%A3o_Chapecoense_de_Futebol.svg",
+    badgeUrl: "https://assets.footylogos.com/logos/chapecoense/chapecoense-logo-footylogos.svg",
     keywords: ["chapecoense", "chape", "arena condá"],
   },
   {
@@ -303,7 +303,7 @@ export const FOOTBALL_TEAMS: FootballTeam[] = [
     popularRank: 24,
     primaryColor: "#1e3a8a",
     secondaryColor: "#ffffff",
-    badgeUrl: "https://upload.wikimedia.org/wikipedia/commons/7/70/Clube_do_Remo.svg",
+    badgeUrl: "https://assets.footylogos.com/logos/club-de-remo/club-de-remo-logo-footylogos.svg",
     keywords: ["remo", "leão azul", "baenão", "mangueirão"],
   },
 ];
