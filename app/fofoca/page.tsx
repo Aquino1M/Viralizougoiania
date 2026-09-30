@@ -1,21 +1,37 @@
 import type { Metadata } from "next";
+import { unstable_cache } from "next/cache";
 import Header from "@/components/Header";
 import Footer from "@/components/Footer";
 import NewsCard from "@/components/NewsCard";
 import { getPosts } from "@/lib/storage";
 
-export const dynamic = "force-dynamic";
+export const revalidate = 60;
+
+const getFofocaPosts = unstable_cache(
+  async () => {
+    const direct = await getPosts({ category: "Fofocas", limit: 36 });
+    if (direct.length > 0) return direct;
+
+    const fallback = await getPosts({ limit: 120 });
+    return fallback
+      .filter((p) => {
+        const category = (p.category || "").toLowerCase();
+        return category.includes("fofoc") || category.includes("celebrid") || category.includes("famoso");
+      })
+      .slice(0, 36);
+  },
+  ["public-fofoca-posts-v2"],
+  { revalidate: 60 }
+);
+
 export const metadata: Metadata = {
   title: "Fofoca | Viralizougoiania",
   description: "Famosos, celebridades, realities e bastidores em notícias 100% nativas no Viralizougoiania."
 };
 
 export default async function FofocaPage() {
-  const allPosts = await getPosts();
-  const fofocaPosts = allPosts.filter(
-    p => p.status === "published" && 
-    (p.category.toLowerCase().includes("fofoc") || p.category.toLowerCase().includes("celebrid") || p.category.toLowerCase().includes("famoso")) &&
-    Boolean(p.image_url && p.image_url.trim())
+  const fofocaPosts = (await getFofocaPosts()).filter(
+    (p) => p.status === "published" && Boolean(p.image_url && p.image_url.trim())
   );
 
   const lead = fofocaPosts[0];
@@ -46,7 +62,7 @@ export default async function FofocaPage() {
 
             {fofocaPosts.length > 0 ? (
               <div className="cardGrid">
-                {fofocaPosts.map(p => (
+                {fofocaPosts.map((p) => (
                   <NewsCard key={p.id} post={p} />
                 ))}
               </div>
@@ -62,4 +78,3 @@ export default async function FofocaPage() {
     </>
   );
 }
-

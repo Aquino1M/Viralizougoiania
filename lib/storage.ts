@@ -133,8 +133,14 @@ export async function publishDuePosts(): Promise<Post[]> {
 }
 
 export async function getPosts(opts: { includeDrafts?: boolean; category?: string; limit?: number } = {}) {
-  await publishDuePosts();
   const { includeDrafts = false, category, limit } = opts;
+
+  // O Ciclo Único 24/7 já libera os agendamentos no servidor.
+  // Leituras públicas ficam sem efeito colateral para evitar um PATCH ao Supabase
+  // em cada troca de aba. O painel/admin continua garantindo a liberação.
+  if (includeDrafts) {
+    await publishDuePosts();
+  }
 
   let postsList: Post[] = [];
 
@@ -175,7 +181,9 @@ export async function getPosts(opts: { includeDrafts?: boolean; category?: strin
 }
 
 export async function getPostBySlug(slug: string, includeDrafts = false) {
-  await publishDuePosts();
+  if (includeDrafts) {
+    await publishDuePosts();
+  }
   if (hasSupabaseConfig()) {
     try {
       const status = includeDrafts ? "" : "&status=eq.published";

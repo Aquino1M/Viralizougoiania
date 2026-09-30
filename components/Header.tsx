@@ -3,9 +3,16 @@ import BrandLogo from "@/components/BrandLogo";
 import NavBar from "@/components/NavBar";
 import HeaderSearch from "@/components/HeaderSearch";
 import { getCategories } from "@/lib/storage";
+import { unstable_cache } from "next/cache";
+
+const getHeaderCategories = unstable_cache(
+  async () => getCategories(),
+  ["public-header-categories-v1"],
+  { revalidate: 300 }
+);
 
 export default async function Header({ breakingTitle }: { breakingTitle?: string }) {
-  const categories = await getCategories();
+  const categories = await getHeaderCategories();
   const today = new Intl.DateTimeFormat("pt-BR", {
     weekday: "long",
     day: "numeric",
