@@ -36,7 +36,7 @@ export default function FootballHub({ posts, liveData }: FootballHubProps) {
     if (!selectedTeam) return posts;
     const keywords = selectedTeam.keywords.map((k) => k.toLowerCase());
     return posts.filter((p) => {
-      const searchTarget = `${p.title} ${p.excerpt} ${p.content} ${p.seo_keywords || ""}`.toLowerCase();
+      const searchTarget = `${p.title} ${p.excerpt} ${p.seo_keywords || ""}`.toLowerCase();
       return keywords.some((kw) => searchTarget.includes(kw));
     });
   }, [posts, selectedTeam]);

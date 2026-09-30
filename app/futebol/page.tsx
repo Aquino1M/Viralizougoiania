@@ -9,7 +9,7 @@ import { getLiveFootballData } from "@/lib/football-sync";
 export const revalidate = 60;
 
 const getFootballPosts = unstable_cache(
-  async () => getPosts({ category: "Futebol", limit: 30 }),
+  async () => getPosts({ category: "Futebol", limit: 24 }),
   ["public-football-posts-v2"],
   { revalidate: 60 }
 );
@@ -31,10 +31,14 @@ export default async function FutebolPage() {
     getCachedFootballData(),
   ]);
 
-  const posts = allPosts.filter((p) => {
-    if (!p.image_url || p.image_url.trim().length < 10) return false;
-    return (p.category || "").toLowerCase().trim() === "futebol";
-  });
+  const posts = allPosts
+    .filter((p) => {
+      if (!p.image_url || p.image_url.trim().length < 10) return false;
+      return (p.category || "").toLowerCase().trim() === "futebol";
+    })
+    // FootballHub é Client Component; não enviar o corpo completo de cada matéria
+    // evita centenas de KB no RSC/HTML ao trocar para a aba Futebol.
+    .map((p) => ({ ...p, content: "" }));
 
   return (
     <>

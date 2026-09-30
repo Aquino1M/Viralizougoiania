@@ -68,7 +68,8 @@ export default async function CategoryPage({
       if (isFofocas) return postCat === "fofocas" || postCat === "fofoca";
       return postCat === canonical.toLowerCase().trim();
     })
-    .slice(0, 36);
+    .slice(0, isFutebol ? 24 : 36)
+    .map((p) => (isFutebol ? { ...p, content: "" } : p));
 
   return (
     <>
