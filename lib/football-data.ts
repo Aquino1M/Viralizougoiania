@@ -49,7 +49,7 @@ export const FOOTBALL_TEAMS: FootballTeam[] = [
     popularRank: 1,
     primaryColor: "#000000",
     secondaryColor: "#ffffff",
-    badgeUrl: "https://ssl.gstatic.com/onebox/media/sports/logos/reLnvAdfM6dnw_p5x_Vflw_96x96.png",
+    badgeUrl: "https://images.weserv.nl/?url=ssl.gstatic.com/onebox/media/sports/logos/reLnvAdfM6dnw_p5x_Vflw_96x96.png",
     keywords: ["corinthians", "timão", "timao", "alvinegro", "neo química", "yuri alberto", "memphis depay", "ramón díaz", "fagner"],
   },
   {
@@ -60,7 +60,7 @@ export const FOOTBALL_TEAMS: FootballTeam[] = [
     popularRank: 2,
     primaryColor: "#c21822",
     secondaryColor: "#000000",
-    badgeUrl: "https://ssl.gstatic.com/onebox/media/sports/logos/orE554jpKfnzAHRScQNsHg_96x96.png",
+    badgeUrl: "https://images.weserv.nl/?url=ssl.gstatic.com/onebox/media/sports/logos/orE554jpKfnzAHRScQNsHg_96x96.png",
     keywords: ["flamengo", "mengão", "mengao", "rubro-negro", "maracanã", "gabi", "gabigol", "arrascaeta", "filipe luís", "pedro"],
   },
   {
@@ -71,7 +71,7 @@ export const FOOTBALL_TEAMS: FootballTeam[] = [
     popularRank: 3,
     primaryColor: "#e11d48",
     secondaryColor: "#000000",
-    badgeUrl: "https://ssl.gstatic.com/onebox/media/sports/logos/4w2HHcSF6vufhujMR15L9A_96x96.png",
+    badgeUrl: "https://images.weserv.nl/?url=ssl.gstatic.com/onebox/media/sports/logos/4w2HHcSF6vufhujMR15L9A_96x96.png",
     keywords: ["são paulo", "sao paulo", "tricolor", "morumbi", "calleri", "lucas moura", "zubeldía"],
   },
   {
@@ -82,7 +82,7 @@ export const FOOTBALL_TEAMS: FootballTeam[] = [
     popularRank: 4,
     primaryColor: "#047857",
     secondaryColor: "#ffffff",
-    badgeUrl: "https://ssl.gstatic.com/onebox/media/sports/logos/7spurne-xDt2p6C0FsVomg_96x96.png",
+    badgeUrl: "https://images.weserv.nl/?url=ssl.gstatic.com/onebox/media/sports/logos/7spurne-xDt2p6C0FsVomg_96x96.png",
     keywords: ["palmeiras", "verdão", "verdao", "alviverde", "allianz parque", "abel ferreira", "estêvão", "veiga"],
   },
   {
@@ -93,7 +93,7 @@ export const FOOTBALL_TEAMS: FootballTeam[] = [
     popularRank: 5,
     primaryColor: "#111827",
     secondaryColor: "#ffffff",
-    badgeUrl: "https://ssl.gstatic.com/onebox/media/sports/logos/VHvhU4gt-V9F_wN4u2802w_96x96.png",
+    badgeUrl: "https://images.weserv.nl/?url=ssl.gstatic.com/onebox/media/sports/logos/VHvhU4gt-V9F_wN4u2802w_96x96.png",
     keywords: ["santos", "peixe", "vila belmiro", "santista", "alvinegro praiano"],
   },
   {
@@ -104,7 +104,7 @@ export const FOOTBALL_TEAMS: FootballTeam[] = [
     popularRank: 6,
     primaryColor: "#000000",
     secondaryColor: "#ffffff",
-    badgeUrl: "https://ssl.gstatic.com/onebox/media/sports/logos/SnAigLOKfvbp0fnq2934zA_96x96.png",
+    badgeUrl: "https://images.weserv.nl/?url=ssl.gstatic.com/onebox/media/sports/logos/SnAigLOKfvbp0fnq2934zA_96x96.png",
     keywords: ["vasco", "vasco da gama", "cruzmaltino", "são januário", "vegetti", "coutinho"],
   },
   {
@@ -115,7 +115,7 @@ export const FOOTBALL_TEAMS: FootballTeam[] = [
     popularRank: 7,
     primaryColor: "#0284c7",
     secondaryColor: "#000000",
-    badgeUrl: "https://ssl.gstatic.com/onebox/media/sports/logos/0iOCGVmf6xUTh1AGACQIMg_96x96.png",
+    badgeUrl: "https://images.weserv.nl/?url=ssl.gstatic.com/onebox/media/sports/logos/0iOCGVmf6xUTh1AGACQIMg_96x96.png",
     keywords: ["grêmio", "gremio", "imortal", "tricolor gaúcho", "arena do grêmio", "renato gaúcho"],
   },
   {
@@ -126,7 +126,7 @@ export const FOOTBALL_TEAMS: FootballTeam[] = [
     popularRank: 8,
     primaryColor: "#dc2626",
     secondaryColor: "#ffffff",
-    badgeUrl: "https://ssl.gstatic.com/onebox/media/sports/logos/OWVpQSF4NFf1CiA21xOBCQ_96x96.png",
+    badgeUrl: "https://images.weserv.nl/?url=ssl.gstatic.com/onebox/media/sports/logos/OWVpQSF4NFf1CiA21xOBCQ_96x96.png",
     keywords: ["internacional", "inter", "colorado", "beira-rio", "alan patrick", "borré"],
   },
   {
@@ -137,7 +137,7 @@ export const FOOTBALL_TEAMS: FootballTeam[] = [
     popularRank: 9,
     primaryColor: "#1d4ed8",
     secondaryColor: "#ffffff",
-    badgeUrl: "https://ssl.gstatic.com/onebox/media/sports/logos/cf6TqWv9NFW6t-cRhZ27fA_96x96.png",
+    badgeUrl: "https://images.weserv.nl/?url=ssl.gstatic.com/onebox/media/sports/logos/cf6TqWv9NFW6t-cRhZ27fA_96x96.png",
     keywords: ["cruzeiro", "raposa", "celeste", "mineirão", "diniz", "matheus pereira"],
   },
   {
@@ -148,7 +148,7 @@ export const FOOTBALL_TEAMS: FootballTeam[] = [
     popularRank: 10,
     primaryColor: "#000000",
     secondaryColor: "#ffffff",
-    badgeUrl: "https://ssl.gstatic.com/onebox/media/sports/logos/q9fhIk-qiqtwR_J146UtLQ_96x96.png",
+    badgeUrl: "https://images.weserv.nl/?url=ssl.gstatic.com/onebox/media/sports/logos/q9fhIk-qiqtwR_J146UtLQ_96x96.png",
     keywords: ["atlético-mg", "atletico-mg", "galo", "alvinegro", "arena mrv", "hulk", "paulino", "milito"],
   },
   {
@@ -159,7 +159,7 @@ export const FOOTBALL_TEAMS: FootballTeam[] = [
     popularRank: 11,
     primaryColor: "#000000",
     secondaryColor: "#ffffff",
-    badgeUrl: "https://ssl.gstatic.com/onebox/media/sports/logos/KLDwyGNOoyLAneXdAT0hgA_96x96.png",
+    badgeUrl: "https://images.weserv.nl/?url=ssl.gstatic.com/onebox/media/sports/logos/KLDwyGNOoyLAneXdAT0hgA_96x96.png",
     keywords: ["botafogo", "fogão", "glorioso", "nilton santos", "artur jorge", "luiz henrique", "savarino"],
   },
   {
@@ -170,7 +170,7 @@ export const FOOTBALL_TEAMS: FootballTeam[] = [
     popularRank: 12,
     primaryColor: "#831843",
     secondaryColor: "#047857",
-    badgeUrl: "https://ssl.gstatic.com/onebox/media/sports/logos/f6-RPk1kvA_nZ1Ym6k0UBA_96x96.png",
+    badgeUrl: "https://images.weserv.nl/?url=ssl.gstatic.com/onebox/media/sports/logos/f6-RPk1kvA_nZ1Ym6k0UBA_96x96.png",
     keywords: ["fluminense", "flu", "tricolor carioca", "maracanã", "cano", "marlon", "arias", "thiago silva"],
   },
   {
@@ -181,7 +181,7 @@ export const FOOTBALL_TEAMS: FootballTeam[] = [
     popularRank: 13,
     primaryColor: "#0284c7",
     secondaryColor: "#dc2626",
-    badgeUrl: "https://ssl.gstatic.com/onebox/media/sports/logos/nIdbR6qLLvsAPFymfKQQtA_96x96.png",
+    badgeUrl: "https://images.weserv.nl/?url=ssl.gstatic.com/onebox/media/sports/logos/nIdbR6qLLvsAPFymfKQQtA_96x96.png",
     keywords: ["bahia", "tricolor de aço", "fonte nova", "rogério ceni", "everton ribeiro"],
   },
   {
@@ -192,7 +192,7 @@ export const FOOTBALL_TEAMS: FootballTeam[] = [
     popularRank: 14,
     primaryColor: "#1e3a8a",
     secondaryColor: "#dc2626",
-    badgeUrl: "https://ssl.gstatic.com/onebox/media/sports/logos/me10eLWRP2HYIag0QYsmng_96x96.png",
+    badgeUrl: "https://images.weserv.nl/?url=ssl.gstatic.com/onebox/media/sports/logos/me10eLWRP2HYIag0QYsmng_96x96.png",
     keywords: ["fortaleza", "leão", "tricolor do pici", "castelão", "vojvoda", "lucero"],
   },
   {
@@ -203,7 +203,7 @@ export const FOOTBALL_TEAMS: FootballTeam[] = [
     popularRank: 15,
     primaryColor: "#dc2626",
     secondaryColor: "#000000",
-    badgeUrl: "https://ssl.gstatic.com/onebox/media/sports/logos/wkkA9u0wA0eU5xH4_y2Lyg_96x96.png",
+    badgeUrl: "https://images.weserv.nl/?url=ssl.gstatic.com/onebox/media/sports/logos/wkkA9u0wA0eU5xH4_y2Lyg_96x96.png",
     keywords: ["athletico-pr", "furacão", "ligga arena", "rubro-negro"],
   },
   {
@@ -214,7 +214,7 @@ export const FOOTBALL_TEAMS: FootballTeam[] = [
     popularRank: 16,
     primaryColor: "#dc2626",
     secondaryColor: "#000000",
-    badgeUrl: "https://ssl.gstatic.com/onebox/media/sports/logos/M_kE6KqV3q2uBwJ6yL7fzA_96x96.png",
+    badgeUrl: "https://images.weserv.nl/?url=ssl.gstatic.com/onebox/media/sports/logos/M_kE6KqV3q2uBwJ6yL7fzA_96x96.png",
     keywords: ["vitória", "vitoria", "leão da barra", "barradão", "rubro-negro baiano"],
   },
   {
@@ -225,7 +225,7 @@ export const FOOTBALL_TEAMS: FootballTeam[] = [
     popularRank: 17,
     primaryColor: "#dc2626",
     secondaryColor: "#ffffff",
-    badgeUrl: "https://ssl.gstatic.com/onebox/media/sports/logos/bkUaBfU_f3xH9uG2Q0bA0w_96x96.png",
+    badgeUrl: "https://images.weserv.nl/?url=ssl.gstatic.com/onebox/media/sports/logos/bkUaBfU_f3xH9uG2Q0bA0w_96x96.png",
     keywords: ["bragantino", "red bull", "massa bruta", "nabi abi chedid"],
   },
   // CLUBES DE GOIÁS
