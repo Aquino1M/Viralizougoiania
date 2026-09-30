@@ -5,6 +5,7 @@ import { isAdmin } from "@/lib/session";
 import type { ImportedNews } from "@/lib/types";
 import { formatViralizouArticle } from "@/lib/rewrite";
 import { classifyEditorial } from "@/lib/category-classifier";
+import { readResponseTextSmart, repairMojibake } from "@/lib/text-encoding";
 
 const MAX_HTML = 2_000_000;
 
@@ -34,7 +35,7 @@ function cleanText(value = "") {
     .replace(/\[\s*…\s*\]/g, "")
     .replace(/\s+/g, " ")
     .trim();
-  return cleaned;
+  return repairMojibake(cleaned);
 }
 
 function attrMap(tag: string) {
@@ -150,7 +151,7 @@ async function safeFetch(raw: string) {
     if (!res.ok) throw new Error(`A fonte respondeu com erro ${res.status}.`);
     const length = Number(res.headers.get("content-length") || 0);
     if (length > MAX_HTML) throw new Error("A página é grande demais para importar.");
-    const text = (await res.text()).slice(0, MAX_HTML);
+    const text = await readResponseTextSmart(res, MAX_HTML);
     return { text, url: current.toString(), contentType: res.headers.get("content-type") || "" };
   }
   throw new Error("Muitos redirecionamentos.");

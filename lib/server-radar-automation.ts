@@ -1,10 +1,11 @@
-import { createPost, getCategories, getPosts, publishDuePosts, reclassifyExternalPosts } from "@/lib/storage";
+import { createPost, getCategories, getPosts, publishDuePosts, reclassifyExternalPosts, updatePost } from "@/lib/storage";
 import { formatViralizouArticle } from "@/lib/rewrite";
 import { slugify } from "@/lib/slug";
 import type { ImportedNews, Post, PostStatus } from "@/lib/types";
 import { getAutomationState, saveAutomationState, saveRadarSnapshot, type RadarSnapshotItem } from "@/lib/automation-state";
 import { classifyEditorial } from "@/lib/category-classifier";
 import { syncBrasileiraoData } from "@/lib/football-sync";
+import { hasBrokenEncoding, readResponseTextSmart, repairMojibake } from "@/lib/text-encoding";
 
 type RadarGroup = "goias" | "brasil" | "futebol" | "fofocas";
 type RadarSource = { name:string; feedUrl:string; hosts:string[]; group:RadarGroup; category?: "Futebol" | "Fofocas" };
@@ -53,7 +54,7 @@ function decodeEntities(value=""){
     return named[code.toLowerCase()]||"&"+code+";";
   });
 }
-function cleanText(value=""){return decodeEntities(value.replace(/<!\[CDATA\[([\s\S]*?)\]\]>/g,"$1").replace(/<br\s*\/?>/gi,"\n").replace(/<[^>]+>/g," ")).replace(/\s*\n\s*/g,"\n").replace(/[ \t]+/g," ").replace(/\[\s*(?:…|\.{3}|&hellip;)\s*\]/gi,"").trim();}
+function cleanText(value=""){return repairMojibake(decodeEntities(value.replace(/<!\[CDATA\[([\s\S]*?)\]\]>/g,"$1").replace(/<br\s*\/?>/gi,"\n").replace(/<[^>]+>/g," ")).replace(/\s*\n\s*/g,"\n").replace(/[ \t]+/g," ").replace(/\[\s*(?:…|\.{3}|&hellip;)\s*\]/gi,"").trim());}
 function tag(block:string,name:string){const safe=name.replace(/[.*+?^$()|[\]\\]/g,"\\$&");const m=block.match(new RegExp("<"+safe+"\\b[^>]*>([\\s\\S]*?)<\\/"+safe+">","i"));return m&&m[1]?m[1]:"";}
 function absoluteUrl(value:string,base:string){try{return new URL(value,base).toString();}catch{return "";}}
 function safeIso(value=""){if(!value||Number.isNaN(Date.parse(value)))return null;return new Date(value).toISOString();}
@@ -66,7 +67,7 @@ function canonicalUrl(raw:string){try{const u=new URL(raw);u.hash="";["utm_sourc
 function titleTokens(title:string){return slugify(title).split("-").filter(w=>w.length>2&&!STOP.has(w));}
 function titleSimilarity(a:string,b:string){const aa=new Set(titleTokens(a)),bb=new Set(titleTokens(b));if(!aa.size||!bb.size)return 0;let common=0;aa.forEach(w=>{if(bb.has(w))common++;});return common/Math.max(aa.size,bb.size);}
 function isAllowedArticleUrl(raw:string,source:RadarSource){try{const u=new URL(raw);if(u.protocol!=="http:"&&u.protocol!=="https:")return false;const host=u.hostname.toLowerCase();return source.hosts.some(h=>{const base=h.replace(/^www\./,"");return host===h||host===base||host.endsWith("."+base);});}catch{return false;}}
-async function fetchText(url:string,timeout=9000){const res=await fetch(url,{cache:"no-store",signal:AbortSignal.timeout(timeout),headers:{"User-Agent":"Mozilla/5.0 (compatible; ViralizougoianiaBot/2.0; +https://viralizougoiania.vercel.app)","Accept-Language":"pt-BR,pt;q=0.9",Accept:"text/html,application/xhtml+xml,application/xml,text/xml;q=0.9,*/*;q=0.7"}});if(!res.ok)throw new Error("HTTP "+res.status);return(await res.text()).slice(0,3000000);}
+async function fetchText(url:string,timeout=9000){const res=await fetch(url,{cache:"no-store",signal:AbortSignal.timeout(timeout),headers:{"User-Agent":"Mozilla/5.0 (compatible; ViralizougoianiaBot/2.0; +https://viralizougoiania.vercel.app)","Accept-Language":"pt-BR,pt;q=0.9",Accept:"text/html,application/xhtml+xml,application/xml,text/xml;q=0.9,*/*;q=0.7"}});if(!res.ok)throw new Error("HTTP "+res.status);return await readResponseTextSmart(res,3000000);}
 
 async function fetchSource(source:RadarSource):Promise<ImportedNews[]>{
   const xml=await fetchText(source.feedUrl,10000);
@@ -99,6 +100,61 @@ function dedupeIncoming(items:ImportedNews[],posts:Post[]){
   return result;
 }
 async function parallelMap<T,R>(items:T[],concurrency:number,worker:(item:T,index:number)=>Promise<R>){const out=new Array<R>(items.length);let cursor=0;async function runner(){while(true){const index=cursor++;if(index>=items.length)return;out[index]=await worker(items[index],index);}}await Promise.all(Array.from({length:Math.min(concurrency,items.length)},()=>runner()));return out;}
+
+async function repairSavedEncoding(posts:Post[],items:ImportedNews[],errors:string[]){
+  const freshByUrl=new Map<string,ImportedNews>();
+  for(const item of items){
+    const key=canonicalUrl(item.source_url||"");
+    if(key&&!freshByUrl.has(key))freshByUrl.set(key,item);
+  }
+
+  const candidates=posts.flatMap(post=>{
+    const broken=[post.title,post.excerpt,post.content,post.source_content,post.seo_title,post.seo_description].some(hasBrokenEncoding);
+    if(!broken||!post.source_url)return[];
+    const fresh=freshByUrl.get(canonicalUrl(post.source_url));
+    return fresh?[{post,fresh}]:[];
+  });
+
+  if(!candidates.length)return 0;
+
+  const results=await parallelMap(candidates,4,async({post,fresh})=>{
+    const sourceText=repairMojibake(fresh.source_content||fresh.excerpt||fresh.title||"");
+    const cleanTitle=repairMojibake(fresh.title||"");
+    const cleanExcerpt=repairMojibake(fresh.excerpt||"");
+    const patch:Record<string,unknown>={
+      source_name:post.source_name||fresh.source_name,
+      source_url:post.source_url,
+    };
+    let changed=false;
+
+    if(hasBrokenEncoding(post.title)&&cleanTitle&&!hasBrokenEncoding(cleanTitle)){patch.title=cleanTitle;changed=true;}
+    if(hasBrokenEncoding(post.excerpt)&&cleanExcerpt&&!hasBrokenEncoding(cleanExcerpt)){patch.excerpt=cleanExcerpt;changed=true;}
+    if(hasBrokenEncoding(post.source_content)&&sourceText&&!hasBrokenEncoding(sourceText)){patch.source_content=sourceText;changed=true;}
+    if(hasBrokenEncoding(post.seo_title)&&cleanTitle&&!hasBrokenEncoding(cleanTitle)){patch.seo_title=cleanTitle;changed=true;}
+    if(hasBrokenEncoding(post.seo_description)&&cleanExcerpt&&!hasBrokenEncoding(cleanExcerpt)){patch.seo_description=cleanExcerpt;changed=true;}
+
+    if(hasBrokenEncoding(post.content)&&sourceText&&!hasBrokenEncoding(sourceText)){
+      patch.content=formatViralizouArticle({
+        title:(patch.title as string)||post.title,
+        excerpt:(patch.excerpt as string)||post.excerpt,
+        sourceText,
+        sourceName:fresh.source_name||post.source_name||"Fonte",
+        category:post.category,
+      });
+      changed=true;
+    }
+
+    if(!changed)return false;
+    try{
+      await updatePost(post.id,patch);
+      return true;
+    }catch(e){
+      errors.push("Correção de acentuação: "+(e instanceof Error?e.message:"falha ao atualizar"));
+      return false;
+    }
+  });
+  return results.filter(Boolean).length;
+}
 function planSchedule(items:ImportedNews[],posts:Post[],intervalMinutes:number){
   const future=posts.filter(p=>p.status==="scheduled"&&p.published_at&&new Date(p.published_at).getTime()>Date.now()).sort((a,b)=>+new Date(a.published_at||0)-+new Date(b.published_at||0));
   let baseTime=Date.now();if(future.length)baseTime=Math.max(baseTime,+new Date(future[future.length-1].published_at||0));
@@ -153,6 +209,11 @@ export async function runServerRadarAutomation(options:{force?:boolean}={}):Prom
       }
     });
     found=all.length;
+
+    // Corrige automaticamente matérias antigas que foram salvas com �/Ã/Â,
+    // usando a mesma URL da fonte e o texto recém-lido com o charset correto.
+    await repairSavedEncoding(posts,all,errors);
+
     try {
       await saveRadarSnapshot({
         updated_at:new Date().toISOString(),
