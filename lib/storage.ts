@@ -100,6 +100,86 @@ async function sb(pathname: string, init?: RequestInit) {
   return text ? JSON.parse(text) : null;
 }
 
+async function sbExactCount(pathname: string): Promise<number> {
+  if (!hasSupabaseConfig()) throw new Error("Supabase não configurado.");
+  const base = getSupabaseUrl().replace(/\/$/, "");
+  const res = await fetch(`${base}/rest/v1/${pathname}`, {
+    method: "GET",
+    headers: { ...headers(), Prefer: "count=exact", Range: "0-0" },
+    cache: "no-store",
+  });
+  if (!res.ok) {
+    const errText = await res.text();
+    throw new Error(`Supabase ${res.status}: ${errText}`);
+  }
+  const contentRange = res.headers.get("content-range") || "";
+  const total = Number(contentRange.split("/").pop());
+  return Number.isFinite(total) ? total : 0;
+}
+
+export async function getPostStats(): Promise<{ total: number; published: number; scheduled: number; draft: number }> {
+  if (hasSupabaseConfig()) {
+    try {
+      const [total, published, scheduled, draft] = await Promise.all([
+        sbExactCount("posts?select=id"),
+        sbExactCount("posts?select=id&status=eq.published"),
+        sbExactCount("posts?select=id&status=eq.scheduled"),
+        sbExactCount("posts?select=id&status=eq.draft"),
+      ]);
+      return { total, published, scheduled, draft };
+    } catch (err: any) {
+      console.warn("Aviso ao contar posts no Supabase:", err.message);
+    }
+  }
+  const posts = await readLocal();
+  return {
+    total: posts.length,
+    published: posts.filter((p) => p.status === "published").length,
+    scheduled: posts.filter((p) => p.status === "scheduled").length,
+    draft: posts.filter((p) => p.status === "draft").length,
+  };
+}
+
+export async function getScheduledPostsAll(): Promise<Post[]> {
+  if (hasSupabaseConfig()) {
+    const pageSize = 1000;
+    const all: Post[] = [];
+    for (let offset = 0; offset < 100000; offset += pageSize) {
+      const rows = await sb(
+        `posts?select=*&status=eq.scheduled&order=published_at.asc.nullslast,created_at.asc&limit=${pageSize}&offset=${offset}`
+      );
+      if (!Array.isArray(rows) || rows.length === 0) break;
+      all.push(...(rows as Post[]).map((p) => normalizePostCategory(p)));
+      if (rows.length < pageSize) break;
+    }
+    return all;
+  }
+  const posts = await readLocal();
+  return posts
+    .filter((p) => p.status === "scheduled")
+    .map((p) => normalizePostCategory(p))
+    .sort((a, b) => +new Date(a.published_at || 0) - +new Date(b.published_at || 0));
+}
+
+export async function patchPostsPublishedAt(ids: string[], publishedAt: string): Promise<void> {
+  if (!ids.length) return;
+  const updatedAt = new Date().toISOString();
+  if (hasSupabaseConfig()) {
+    for (let i = 0; i < ids.length; i += 150) {
+      const batch = ids.slice(i, i + 150);
+      await sb(`posts?id=in.(${batch.map(encodeURIComponent).join(",")})`, {
+        method: "PATCH",
+        headers: { Prefer: "return=minimal" },
+        body: JSON.stringify({ published_at: publishedAt, updated_at: updatedAt }),
+      });
+    }
+    return;
+  }
+  const posts = await readLocal();
+  const wanted = new Set(ids);
+  await writeLocal(posts.map((p) => wanted.has(p.id) ? { ...p, published_at: publishedAt, updated_at: updatedAt } : p));
+}
+
 async function readLocal(): Promise<Post[]> {
   const raw = await fs.readFile(localFile, "utf8");
   return JSON.parse(raw);
