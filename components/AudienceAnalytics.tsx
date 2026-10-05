@@ -83,7 +83,7 @@ export default function AudienceAnalytics({ onBack }: { onBack: () => void }) {
             <div className="audienceMetric">
               <b>{Number(data.average30.visitors || 0).toLocaleString("pt-BR", { maximumFractionDigits: 1 })}</b>
               <span>Média diária de visitantes</span>
-              <small>Média dos últimos 30 dias</small>
+              <small>Média do período monitorado (até 30 dias)</small>
             </div>
             <div className="audienceMetric">
               <b>{Number(data.today.articleViews || 0).toLocaleString("pt-BR")}</b>
