@@ -253,6 +253,53 @@ export async function publishAllScheduledNow(): Promise<number> {
   }
 }
 
+export async function publishDuePostsBatch(limit = 300): Promise<Post[]> {
+  const now = new Date().toISOString();
+  const safeLimit = Math.max(1, Math.min(1000, Math.floor(limit)));
+  let updatedPosts: Post[] = [];
+
+  if (hasSupabaseConfig()) {
+    try {
+      const dueRows = await sb(
+        `posts?select=id&status=eq.scheduled&published_at=lte.${encodeURIComponent(now)}&order=published_at.asc.nullslast,created_at.asc&limit=${safeLimit}`
+      );
+      const ids = Array.isArray(dueRows) ? dueRows.map((row: any) => String(row.id || "")).filter(Boolean) : [];
+      if (ids.length) {
+        const res = await sb(`posts?id=in.(${ids.map(encodeURIComponent).join(",")})`, {
+          method: "PATCH",
+          headers: { Prefer: "return=representation" },
+          body: JSON.stringify({ status: "published", updated_at: now }),
+        });
+        if (Array.isArray(res)) updatedPosts = res;
+      }
+      return updatedPosts;
+    } catch (err: any) {
+      console.warn("Erro ao liberar lote de agendamentos no Supabase:", err.message);
+    }
+  }
+
+  try {
+    const posts = await readLocal();
+    const due = posts
+      .filter((post) => post.status === "scheduled" && post.published_at && new Date(post.published_at).getTime() <= Date.now())
+      .sort((a, b) => +new Date(a.published_at || 0) - +new Date(b.published_at || 0))
+      .slice(0, safeLimit);
+    const wanted = new Set(due.map((post) => post.id));
+    if (wanted.size) {
+      for (const post of posts) {
+        if (wanted.has(post.id)) {
+          post.status = "published";
+          post.updated_at = now;
+          updatedPosts.push(post);
+        }
+      }
+      await writeLocal(posts);
+    }
+  } catch {}
+
+  return updatedPosts;
+}
+
 export async function publishDuePosts(): Promise<Post[]> {
   const now = new Date().toISOString();
   let updatedPosts: Post[] = [];
@@ -310,10 +357,7 @@ export async function getPosts(opts: { includeDrafts?: boolean; category?: strin
   if (hasSupabaseConfig()) {
     try {
       const filters = ["select=*", "order=published_at.desc.nullslast,created_at.desc"];
-      if (!includeDrafts) {
-        const nowIso = new Date().toISOString();
-        filters.push(`or=(status.eq.published,and(status.eq.scheduled,published_at.lte.${encodeURIComponent(nowIso)}))`);
-      }
+      if (!includeDrafts) filters.push("status=eq.published");
       if (category) filters.push(`category=eq.${encodeURIComponent(category)}`);
       if (limit) filters.push(`limit=${limit}`);
       const posts: Post[] = await sb(`posts?${filters.join("&")}`);
@@ -356,15 +400,10 @@ export async function getPostBySlug(slug: string, includeDrafts = false) {
   }
   if (hasSupabaseConfig()) {
     try {
-      const nowIso = new Date().toISOString();
-      const visibility = includeDrafts
-        ? ""
-        : `&or=(status.eq.published,and(status.eq.scheduled,published_at.lte.${encodeURIComponent(nowIso)}))`;
-      const rows = await sb(`posts?select=*&slug=eq.${encodeURIComponent(slug)}${visibility}&limit=1`);
+      const status = includeDrafts ? "" : "&status=eq.published";
+      const rows = await sb(`posts?select=*&slug=eq.${encodeURIComponent(slug)}${status}&limit=1`);
       if (rows?.[0]) {
-        const row = rows[0] as Post;
-        const due = row.status === "scheduled" && row.published_at && new Date(row.published_at).getTime() <= Date.now();
-        const normalized = normalizePostCategory(due ? { ...row, status: "published" as PostStatus } : row);
+        const normalized = normalizePostCategory(rows[0] as Post);
         return includeDrafts ? normalized : normalizePublicEditorial(normalized);
       }
     } catch (err: any) {
