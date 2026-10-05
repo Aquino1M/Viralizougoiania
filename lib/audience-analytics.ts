@@ -130,6 +130,28 @@ async function fetchAudienceRowsSince(sinceIso: string): Promise<AudienceRow[]> 
   return rows;
 }
 
+export async function refreshAudienceSnapshot(): Promise<{ updatedAt: string; pageviewsToday: number; articleViewsToday: number }> {
+  const overview = await getAnalyticsOverview();
+  const cfg = config();
+  const updatedAt = new Date().toISOString();
+  const res = await fetch(cfg.url + "/rest/v1/settings?on_conflict=id", {
+    method: "POST",
+    headers: headers(cfg.key, { Prefer: "resolution=merge-duplicates,return=minimal" }),
+    body: JSON.stringify({
+      id: "audience_snapshot",
+      data: { ...overview, updatedAt },
+      updated_at: updatedAt,
+    }),
+    cache: "no-store",
+  });
+  if (!res.ok) throw new Error("Audience snapshot " + res.status);
+  return {
+    updatedAt,
+    pageviewsToday: Number(overview.today.pageviews || 0),
+    articleViewsToday: Number(overview.today.articleViews || 0),
+  };
+}
+
 export async function getAnalyticsOverview(): Promise<AnalyticsOverview> {
   const now = new Date();
   const today = localDateKey(now);
