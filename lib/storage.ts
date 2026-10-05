@@ -140,6 +140,25 @@ export async function getPostStats(): Promise<{ total: number; published: number
   };
 }
 
+export async function getPostIdentityIndex(): Promise<Array<Pick<Post, "id" | "slug" | "title" | "source_url">>> {
+  if (hasSupabaseConfig()) {
+    const pageSize = 1000;
+    const all: Array<Pick<Post, "id" | "slug" | "title" | "source_url">> = [];
+    for (let offset = 0; offset < 100000; offset += pageSize) {
+      const rows = await sb(
+        `posts?select=id,slug,title,source_url&order=created_at.desc&limit=${pageSize}&offset=${offset}`
+      );
+      if (!Array.isArray(rows) || rows.length === 0) break;
+      all.push(...rows);
+      if (rows.length < pageSize) break;
+    }
+    return all;
+  }
+
+  const posts = await readLocal();
+  return posts.map((p) => ({ id: p.id, slug: p.slug, title: p.title, source_url: p.source_url }));
+}
+
 export async function getScheduledPostsAll(): Promise<Post[]> {
   if (hasSupabaseConfig()) {
     const pageSize = 1000;
