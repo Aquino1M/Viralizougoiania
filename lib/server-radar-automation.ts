@@ -185,12 +185,38 @@ async function repairSavedEditorialFormatting(posts:Post[],errors:string[]){
   return results.filter(Boolean).length;
 }
 
-function planSchedule(items:ImportedNews[],posts:Post[],intervalMinutes:number){
+type ServerQueueMode="1_per_10m"|"2_per_10m"|"3_per_10m"|"1_per_category"|"3_per_category";
+
+function planSchedule(items:ImportedNews[],posts:Post[],intervalMinutes:number,queueMode:ServerQueueMode){
   const future=posts.filter(p=>p.status==="scheduled"&&p.published_at&&new Date(p.published_at).getTime()>Date.now()).sort((a,b)=>+new Date(a.published_at||0)-+new Date(b.published_at||0));
   let baseTime=Date.now();if(future.length)baseTime=Math.max(baseTime,+new Date(future[future.length-1].published_at||0));
-  const groups=new Map<string,ImportedNews[]>();for(const item of items){const cat=item.category||"Goiânia";if(!groups.has(cat))groups.set(cat,[]);groups.get(cat)!.push(item);}
-  const planned:Array<{item:ImportedNews;publishedAt:string}>=[];let step=1,hasMore=true;
-  while(hasMore){hasMore=false;groups.forEach(list=>{const item=list.shift();if(!item)return;hasMore=true;planned.push({item,publishedAt:new Date(baseTime+step*intervalMinutes*60000).toISOString()});});if(hasMore)step++;}
+  const planned:Array<{item:ImportedNews;publishedAt:string}>=[];
+
+  if(queueMode==="1_per_category"||queueMode==="3_per_category"){
+    const perCategory=queueMode==="3_per_category"?3:1;
+    const groups=new Map<string,ImportedNews[]>();
+    for(const item of items){const cat=item.category||"Goiânia";if(!groups.has(cat))groups.set(cat,[]);groups.get(cat)!.push(item);}
+    let step=1,hasMore=true;
+    while(hasMore){
+      hasMore=false;
+      groups.forEach(list=>{
+        for(let i=0;i<perCategory;i++){
+          const item=list.shift();
+          if(!item)break;
+          hasMore=true;
+          planned.push({item,publishedAt:new Date(baseTime+step*intervalMinutes*60000).toISOString()});
+        }
+      });
+      if(hasMore)step++;
+    }
+    return planned;
+  }
+
+  const perSlot=queueMode==="3_per_10m"?3:queueMode==="2_per_10m"?2:1;
+  items.forEach((item,index)=>{
+    const step=Math.floor(index/perSlot)+1;
+    planned.push({item,publishedAt:new Date(baseTime+step*intervalMinutes*60000).toISOString()});
+  });
   return planned;
 }
 
@@ -260,7 +286,7 @@ export async function runServerRadarAutomation(options:{force?:boolean}={}):Prom
 
     const categoryNames=new Set(categories.map(c=>c.name.toLowerCase()));const builtIn=new Set(["fofocas","fofoca","futebol"]);
     all.forEach(item=>{const cat=(item.category||"").toLowerCase();if(!cat||(!categoryNames.has(cat)&&!builtIn.has(cat)))item.category="Goiânia";});
-    const unseen=dedupeIncoming(all,posts);newItems=unseen.length;const planned=planSchedule(unseen,posts,intervalMinutes);
+    const unseen=dedupeIncoming(all,posts);newItems=unseen.length;const planned=planSchedule(unseen,posts,intervalMinutes,state.queue_mode as ServerQueueMode);
     const created=await parallelMap(planned,6,async plannedItem=>{
       const item=plannedItem.item;const sourceText=item.source_content||item.excerpt||item.title;
       const content=formatViralizouArticle({title:item.title,excerpt:item.excerpt,sourceText,sourceName:item.source_name,category:item.category});

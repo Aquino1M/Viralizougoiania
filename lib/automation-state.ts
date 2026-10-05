@@ -1,7 +1,7 @@
 export type AutomationState = {
   enabled: boolean;
   interval_minutes: number;
-  queue_mode: "1_per_category";
+  queue_mode: "1_per_10m" | "2_per_10m" | "3_per_10m" | "1_per_category" | "3_per_category";
   last_run_at: string | null;
   last_success_at: string | null;
   next_run_at: string | null;
