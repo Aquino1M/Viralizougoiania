@@ -28,7 +28,7 @@ jobs:
           echo "::add-mask::$TOKEN"
           echo "token=$TOKEN" >> "$GITHUB_OUTPUT"
 
-      - name: Executar ciclo unico no servidor Vercel
+      - name: Executar Radar + fila + publicacoes + futebol + audiencia
         shell: bash
         env:
           OIDC_TOKEN: ${{ steps.oidc.outputs.token }}
