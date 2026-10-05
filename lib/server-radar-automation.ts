@@ -1,4 +1,4 @@
-import { createPost, getCategories, getPostIdentityIndex, getPosts, publishAllScheduledNow, publishDuePosts, reclassifyExternalPosts, updatePost } from "@/lib/storage";
+import { createPost, getCategories, getPostIdentityIndex, getPosts, publishAllScheduledNow, publishDuePostsBatch, reclassifyExternalPosts, updatePost } from "@/lib/storage";
 import { buildEditorialExcerpt, formatViralizouArticle, needsEditorialRepair } from "@/lib/rewrite";
 import { slugify } from "@/lib/slug";
 import type { ImportedNews, Post, PostStatus } from "@/lib/types";
@@ -186,7 +186,7 @@ async function repairSavedEditorialFormatting(posts:Post[],errors:string[]){
   return results.filter(Boolean).length;
 }
 
-type ServerQueueMode="1_per_10m"|"2_per_10m"|"3_per_10m"|"50_per_10m"|"50_per_1m"|"1_per_category"|"3_per_category";
+type ServerQueueMode="1_per_10m"|"2_per_10m"|"3_per_10m"|"50_per_10m"|"50_per_1m"|"300_per_10m"|"1_per_category"|"3_per_category";
 
 function planSchedule(items:ImportedNews[],posts:Post[],intervalMinutes:number,queueMode:ServerQueueMode){
   const future=posts.filter(p=>p.status==="scheduled"&&p.published_at&&new Date(p.published_at).getTime()>Date.now()).sort((a,b)=>+new Date(a.published_at||0)-+new Date(b.published_at||0));
@@ -213,7 +213,7 @@ function planSchedule(items:ImportedNews[],posts:Post[],intervalMinutes:number,q
     return planned;
   }
 
-  const perSlot=(queueMode==="50_per_1m"||queueMode==="50_per_10m")?50:queueMode==="3_per_10m"?3:queueMode==="2_per_10m"?2:1;
+  const perSlot=queueMode==="300_per_10m"?300:queueMode==="3_per_10m"?3:queueMode==="2_per_10m"?2:1;
   items.forEach((item,index)=>{
     const step=Math.floor(index/perSlot)+1;
     planned.push({item,publishedAt:new Date(baseTime+step*intervalMinutes*60000).toISOString()});
@@ -228,8 +228,12 @@ export async function runServerRadarAutomation(options:{force?:boolean}={}):Prom
   const emptyFootball={updated:false,round:0,fixtures:0,updatedAt:null as string|null};
   if(!options.force&&!state.enabled)return{ok:true,skipped:true,reason:"paused",found:0,newItems:0,added:0,published:0,reclassified:0,football:emptyFootball,sourceCounts:{},errors:[],startedAt,finishedAt:new Date().toISOString()};
   if(!options.force&&state.running_until&&new Date(state.running_until).getTime()>Date.now())return{ok:true,skipped:true,reason:"already-running",found:0,newItems:0,added:0,published:0,reclassified:0,football:emptyFootball,sourceCounts:{},errors:[],startedAt,finishedAt:new Date().toISOString()};
-  const queueMode:ServerQueueMode=(state.queue_mode==="50_per_10m"?"50_per_1m":state.queue_mode) as ServerQueueMode;
-  const intervalMinutes=queueMode==="50_per_1m"?1:Math.max(1,Number(state.interval_minutes||1));
+  const queueMode:ServerQueueMode=(
+    state.queue_mode==="50_per_10m"||state.queue_mode==="50_per_1m"
+      ?"300_per_10m"
+      :state.queue_mode
+  ) as ServerQueueMode;
+  const intervalMinutes=10;
   await saveAutomationState({running_until:new Date(Date.now()+8*60000).toISOString(),last_run_at:startedAt,last_error:""});
   const errors:string[]=[];let found=0,newItems=0,added=0,published=0,resetPublished=0,reclassified=0;const sourceCounts:Record<string,number>={goias:0,brasil:0,futebol:0,fofocas:0};let football=emptyFootball;let audience:null|{updatedAt:string;pageviewsToday:number;articleViewsToday:number}=null;
   try{
@@ -241,8 +245,8 @@ export async function runServerRadarAutomation(options:{force?:boolean}={}):Prom
         resetPublished=await publishAllScheduledNow();
         published+=resetPublished;
         await saveAutomationState({
-          queue_mode:"50_per_1m",
-          interval_minutes:1,
+          queue_mode:"300_per_10m",
+          interval_minutes:10,
           queue_reflow_version:1,
           queue_reset_version:1,
         });
@@ -251,7 +255,7 @@ export async function runServerRadarAutomation(options:{force?:boolean}={}):Prom
       }
     }
 
-    const released=await publishDuePosts();published+=released.length;
+    const released=await publishDuePostsBatch(300);published+=released.length;
 
     // Mesma execução do GitHub Actions atualiza também o resumo de audiência.
     try{
@@ -327,7 +331,7 @@ export async function runServerRadarAutomation(options:{force?:boolean}={}):Prom
     return{ok:true,found,newItems,added,published,resetPublished,reclassified,audience,football,sourceCounts,errors,startedAt,finishedAt};
   }catch(e){
     const message=e instanceof Error?e.message:"Erro inesperado";errors.push(message);const finishedAt=new Date().toISOString();
-    try{await saveAutomationState({running_until:null,next_run_at:new Date(Date.now()+intervalMinutes*60000).toISOString(),last_error:errors.join(" | ").slice(0,1500)});}catch{}
+    try{await saveAutomationState({running_until:null,next_run_at:new Date(Date.now()+10*60000).toISOString(),last_error:errors.join(" | ").slice(0,1500)});}catch{}
     return{ok:false,found,newItems,added,published,resetPublished,reclassified,audience,football,sourceCounts,errors,startedAt,finishedAt};
   }
 }
