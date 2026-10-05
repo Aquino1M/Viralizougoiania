@@ -1,12 +1,14 @@
 "use client";
 
-import { ChangeEvent, useEffect, useMemo, useRef, useState } from "react";
+import { ChangeEvent, useEffect, useRef, useState } from "react";
 import type { Post } from "@/lib/types";
 
 type Props = {
   posts: Post[];
   onBack: () => void;
 };
+
+type FeedPost = Pick<Post, "slug" | "title" | "image_url" | "category" | "city" | "created_at" | "updated_at">;
 
 const W = 1080;
 const H = 1350;
@@ -73,18 +75,14 @@ function fitHeadline(ctx: CanvasRenderingContext2D, text: string, maxWidth: numb
 export default function SocialFeedCreator({ posts, onBack }: Props) {
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
   const [articleUrl, setArticleUrl] = useState("");
-  const [selectedSlug, setSelectedSlug] = useState("");
+  const [selectedPost, setSelectedPost] = useState<FeedPost | null>(null);
   const [title, setTitle] = useState("");
+  const [loadingArticle, setLoadingArticle] = useState(false);
   const [handle, setHandle] = useState("@viralizougoiania");
   const [logoData, setLogoData] = useState("");
   const [imagePosition, setImagePosition] = useState(0);
   const [message, setMessage] = useState("");
   const [rendering, setRendering] = useState(false);
-
-  const selectedPost = useMemo(
-    () => posts.find((p) => p.slug === selectedSlug) || null,
-    [posts, selectedSlug],
-  );
 
   useEffect(() => {
     try {
@@ -192,22 +190,52 @@ export default function SocialFeedCreator({ posts, onBack }: Props) {
   useEffect(() => {
     renderCard();
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [selectedSlug, title, logoData, handle, imagePosition]);
+  }, [selectedPost?.slug, selectedPost?.updated_at, title, logoData, handle, imagePosition]);
 
-  function loadArticle() {
+  async function loadArticle() {
     const slug = slugFromInput(articleUrl);
-    const post = posts.find((p) => p.slug === slug);
-    if (!post) {
-      setMessage("Notícia não encontrada. Cole um link /noticia/... que exista no Viralizougoiania.");
+    if (!slug) {
+      setMessage("Cole o link completo de uma notícia do Viralizougoiania.");
       return;
     }
-    if (!post.image_url) {
-      setMessage("Essa notícia não possui imagem de capa.");
-      return;
+
+    setLoadingArticle(true);
+    setMessage("");
+
+    try {
+      // Primeiro tenta a lista já carregada no painel para resposta instantânea.
+      const localPost = posts.find((p) => p.slug === slug);
+      let post: FeedPost | null = localPost || null;
+
+      // Notícias mais novas podem ainda não estar no lote carregado pelo painel.
+      // Nesse caso buscamos diretamente pelo slug no banco.
+      if (!post) {
+        const response = await fetch(`/api/admin/feed-article?slug=${encodeURIComponent(slug)}`, {
+          cache: "no-store",
+        });
+        const data = await response.json().catch(() => ({}));
+        if (!response.ok) {
+          throw new Error(data.error || "Notícia não encontrada.");
+        }
+        post = data.post || null;
+      }
+
+      if (!post) throw new Error("Notícia não encontrada.");
+      if (!post.image_url) throw new Error("Essa notícia não possui imagem de capa.");
+
+      setSelectedPost(post);
+      setTitle(post.title);
+      setMessage("✅ Notícia carregada. A arte já foi montada abaixo.");
+    } catch (err) {
+      setSelectedPost(null);
+      setMessage(
+        err instanceof Error
+          ? err.message
+          : "Notícia não encontrada. Cole um link /noticia/... que exista no Viralizougoiania.",
+      );
+    } finally {
+      setLoadingArticle(false);
     }
-    setSelectedSlug(post.slug);
-    setTitle(post.title);
-    setMessage("✅ Notícia carregada. A arte já foi montada abaixo.");
   }
 
   function onLogoChange(event: ChangeEvent<HTMLInputElement>) {
@@ -282,7 +310,9 @@ export default function SocialFeedCreator({ posts, onBack }: Props) {
                 onChange={(e) => setArticleUrl(e.target.value)}
                 onKeyDown={(e) => { if (e.key === "Enter") { e.preventDefault(); loadArticle(); } }}
               />
-              <button type="button" className="btn" onClick={loadArticle}>Carregar notícia</button>
+              <button type="button" className="btn" onClick={loadArticle} disabled={loadingArticle}>
+                {loadingArticle ? "Carregando..." : "Carregar notícia"}
+              </button>
             </div>
           </div>
 
