@@ -51,7 +51,7 @@ export default function InstagramVideoDownloader({ onBack }: Props) {
         <div>
           <h1>⬇️ Baixar Vídeo do Instagram</h1>
           <div style={{ color: "#68736e", fontSize: 13 }}>
-            Baixe Reels e vídeos públicos para uso editorial. O sistema não acessa contas privadas nem contorna login/proteções do Instagram.
+            Baixe Reels e vídeos públicos para uso editorial. O sistema tenta a página pública e o embed oficial do Instagram, sem acessar contas privadas nem contornar login.
           </div>
         </div>
         <button type="button" className="btn secondary" onClick={onBack}>Voltar</button>
@@ -78,7 +78,7 @@ export default function InstagramVideoDownloader({ onBack }: Props) {
       </form>
 
       <div className="adminIgHelp">
-        Funciona quando o próprio Instagram entrega o arquivo de vídeo publicamente na página. Conteúdo privado, Stories restritos ou páginas que exigem autenticação não são burlados.
+        Funciona quando o Instagram disponibiliza o vídeo publicamente na página ou no embed oficial. Conteúdo privado, Stories restritos ou páginas que exigem autenticação não são burlados.
       </div>
 
       {result && (
