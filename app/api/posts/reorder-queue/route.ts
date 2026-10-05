@@ -5,8 +5,8 @@ import { saveAutomationState } from "@/lib/automation-state";
 
 export const dynamic = "force-dynamic";
 
-type QueueMode = "1_per_10m" | "2_per_10m" | "3_per_10m" | "1_per_category" | "3_per_category";
-const MODES = new Set<QueueMode>(["1_per_10m","2_per_10m","3_per_10m","1_per_category","3_per_category"]);
+type QueueMode = "1_per_10m" | "2_per_10m" | "3_per_10m" | "50_per_10m" | "1_per_category" | "3_per_category";
+const MODES = new Set<QueueMode>(["1_per_10m","2_per_10m","3_per_10m","50_per_10m","1_per_category","3_per_category"]);
 
 export async function POST(request: Request) {
   if (!(await isAdmin())) return NextResponse.json({ error: "Não autorizado" }, { status: 401 });
@@ -41,7 +41,7 @@ export async function POST(request: Request) {
         if (hasMore) step++;
       }
     } else {
-      const perSlot = mode === "3_per_10m" ? 3 : mode === "2_per_10m" ? 2 : 1;
+      const perSlot = mode === "50_per_10m" ? 50 : mode === "3_per_10m" ? 3 : mode === "2_per_10m" ? 2 : 1;
       posts.forEach((post, index) => {
         planned.push({ id: post.id, publishedAt: new Date(baseTime + (Math.floor(index / perSlot) + 1) * interval * 60000).toISOString() });
       });
