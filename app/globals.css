@@ -392,3 +392,40 @@ main{min-height:65vh}.heroSection{padding:30px 0 25px}.cityEyebrow{font-size:12p
   user-select:none;
   -webkit-user-drag:none;
 }
+
+
+/* ==========================================================================
+   PAINEL ADMIN — CRIADOR DE FEED E DOWNLOADER DO INSTAGRAM
+   ========================================================================== */
+.adminFeedGrid{display:grid;grid-template-columns:minmax(0,1fr) minmax(300px,480px);gap:26px;align-items:start}
+.adminFeedControls{display:flex;flex-direction:column;gap:15px}
+.adminFeedUrlRow{display:grid;grid-template-columns:minmax(0,1fr) auto;gap:8px}
+.adminFeedUrlRow input{min-width:0}
+.adminFeedPreview{display:flex;flex-direction:column;gap:8px;align-items:center;position:sticky;top:88px}
+.adminFeedCanvasFrame{width:min(100%,480px);aspect-ratio:4/5;background:#0b0b0b;border-radius:18px;overflow:hidden;box-shadow:0 14px 36px rgba(15,23,42,.18);border:1px solid #dce2ea}
+.adminFeedCanvasFrame canvas{width:100%;height:100%;display:block}
+.adminFeedLogoSaved{margin-top:9px;padding:10px;border:1px solid #e2e8f0;border-radius:10px;display:flex;align-items:center;justify-content:space-between;gap:12px;background:#f8fafc}
+.adminFeedLogoSaved img{max-width:150px;max-height:55px;object-fit:contain;background:#1e293b;border-radius:7px;padding:5px}
+.adminFeedSelected{padding:12px 14px;background:#f0fdf4;border:1px solid #bbf7d0;border-radius:11px;display:flex;flex-direction:column;gap:4px}
+.adminFeedSelected b{font-size:13px;color:#14532d}
+.adminFeedSelected span{font-size:11px;color:#64748b}
+.adminFeedActions{display:flex;gap:9px;flex-wrap:wrap}
+.adminFeedCreator input[type="range"]{width:100%}
+
+.adminIgForm{margin-top:10px}
+.adminIgHelp{margin-top:14px;padding:12px 14px;border:1px solid #e2e8f0;border-radius:10px;background:#f8fafc;color:#64748b;font-size:12px;line-height:1.5}
+.adminIgResult{margin-top:20px;display:grid;grid-template-columns:200px minmax(0,1fr);gap:18px;align-items:center;padding:16px;border:1px solid #dbe2ea;border-radius:14px;background:#fff}
+.adminIgResult img,.adminIgNoThumb{width:200px;height:200px;object-fit:cover;border-radius:12px;background:#111827}
+.adminIgNoThumb{display:flex;align-items:center;justify-content:center;font-size:54px}
+.adminIgResult small{font-size:11px;color:#64748b;font-weight:700}
+.adminIgResult h3{font-size:17px;line-height:1.3;margin:5px 0 14px;color:#0f172a}
+
+@media(max-width:980px){
+  .adminFeedGrid{grid-template-columns:1fr}
+  .adminFeedPreview{position:static}
+}
+@media(max-width:620px){
+  .adminFeedUrlRow{grid-template-columns:1fr}
+  .adminIgResult{grid-template-columns:1fr}
+  .adminIgResult img,.adminIgNoThumb{width:100%;height:auto;aspect-ratio:1/1}
+}

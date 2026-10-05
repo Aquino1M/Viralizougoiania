@@ -5,8 +5,10 @@ import { useRouter } from "next/navigation";
 import type { AdminUser, Category, ImportedNews, Post, PostStatus, SocialLinks } from "@/lib/types";
 import { slugify } from "@/lib/slug";
 import { formatViralizouArticle } from "@/lib/rewrite";
+import SocialFeedCreator from "@/components/SocialFeedCreator";
+import InstagramVideoDownloader from "@/components/InstagramVideoDownloader";
 
-type View = "list" | "form" | "import" | "categories" | "socials" | "queue" | "admins";
+type View = "list" | "form" | "import" | "categories" | "socials" | "queue" | "admins" | "feedCreator" | "instagramDownloader";
 type FormState = {
   id?: string;
   title: string;
@@ -1580,6 +1582,8 @@ export default function AdminApp() {
             </a>
             <a href="#" onClick={(e) => { e.preventDefault(); setView("categories"); setCategoryMessage(""); }}>🗂️ Abas / editorias</a>
             <a href="#" onClick={(e) => { e.preventDefault(); setView("socials"); setSocialMessage(""); }}>📱 Redes Sociais</a>
+            <a href="#" onClick={(e) => { e.preventDefault(); setView("feedCreator"); setMessage(""); }}>🎨 Criador de Post Feed</a>
+            <a href="#" onClick={(e) => { e.preventDefault(); setView("instagramDownloader"); setMessage(""); }}>⬇️ Baixar Vídeo Instagram</a>
             <a
               href="#"
               onClick={(e) => {
@@ -2434,6 +2438,16 @@ export default function AdminApp() {
                   })}
                 </div>
               </section>
+            )}
+
+            {/* Criador de arte para o feed — somente no painel administrativo */}
+            {view === "feedCreator" && (
+              <SocialFeedCreator posts={posts} onBack={() => setView("list")} />
+            )}
+
+            {/* Downloader de vídeos públicos do Instagram — somente no painel administrativo */}
+            {view === "instagramDownloader" && (
+              <InstagramVideoDownloader onBack={() => setView("list")} />
             )}
 
             {/* Redes Sociais */}
