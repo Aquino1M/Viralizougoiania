@@ -229,6 +229,16 @@ export async function getAnalyticsOverview(): Promise<AnalyticsOverview> {
   const topPages = rankedPages.slice(0, 10);
   const topArticles = rankedPages.filter((row) => row.path.startsWith("/noticia/")).slice(0, 10);
 
+  // A média não divide por 30 dias vazios quando a coleta acabou de começar.
+  // Usa os dias transcorridos desde o primeiro acesso monitorado, limitado a 30 dias.
+  let trackedDays = 1;
+  if (trackingSince) {
+    const firstKey = localDateKey(new Date(trackingSince));
+    const first = new Date(firstKey + "T12:00:00-03:00").getTime();
+    const current = new Date(today + "T12:00:00-03:00").getTime();
+    trackedDays = Math.min(30, Math.max(1, Math.floor((current - first) / 86400000) + 1));
+  }
+
   return {
     today: {
       // Regra editorial do painel: cada abertura conta como 1 visitante/visita.
@@ -242,9 +252,9 @@ export async function getAnalyticsOverview(): Promise<AnalyticsOverview> {
       articleViews: monthArticleViews,
     },
     average30: {
-      visitors: Number((sum.pageviews / 30).toFixed(1)),
-      pageviews: Number((sum.pageviews / 30).toFixed(1)),
-      articleViews: Number((sum.articleViews / 30).toFixed(1)),
+      visitors: Number((sum.pageviews / trackedDays).toFixed(1)),
+      pageviews: Number((sum.pageviews / trackedDays).toFixed(1)),
+      articleViews: Number((sum.articleViews / trackedDays).toFixed(1)),
     },
     daily,
     topPages,
