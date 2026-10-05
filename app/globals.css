@@ -429,3 +429,22 @@ main{min-height:65vh}.heroSection{padding:30px 0 25px}.cityEyebrow{font-size:12p
   .adminIgResult{grid-template-columns:1fr}
   .adminIgResult img,.adminIgNoThumb{width:100%;height:auto;aspect-ratio:1/1}
 }
+
+
+/* Audiência & Patrocínio */
+.audienceSummaryGrid{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:12px;margin:16px 0}
+.audienceMetric{background:#fff;border:1px solid #e2e8f0;border-radius:13px;padding:16px}
+.audienceMetric b{display:block;font-size:27px;line-height:1;color:#0f172a;margin-bottom:7px}
+.audienceMetric span{font-size:11px;font-weight:800;text-transform:uppercase;letter-spacing:.05em;color:#64748b}
+.audienceMetric small{display:block;margin-top:7px;color:#94a3b8;font-size:11px}
+.audienceChart{display:flex;align-items:end;gap:5px;height:190px;padding:18px 8px 8px;border:1px solid #e2e8f0;border-radius:12px;background:#fff;overflow-x:auto}
+.audienceBarWrap{min-width:22px;height:100%;display:flex;flex-direction:column;justify-content:flex-end;align-items:center;gap:5px}
+.audienceBar{width:14px;min-height:2px;border-radius:5px 5px 2px 2px;background:#ff5a1f}
+.audienceBarWrap small{font-size:8px;color:#94a3b8;white-space:nowrap}
+.audienceSponsorBox{margin:16px 0;padding:15px 17px;border:1px solid #fed7aa;background:#fff7ed;border-radius:12px;color:#9a3412}
+.audienceSponsorBox b{color:#7c2d12}
+.audienceTopPages{width:100%;border-collapse:collapse;margin-top:10px}
+.audienceTopPages th,.audienceTopPages td{padding:9px 8px;border-bottom:1px solid #eef2f7;text-align:left;font-size:12px}
+.audienceTopPages th{color:#64748b;font-size:10px;text-transform:uppercase;letter-spacing:.04em}
+@media(max-width:900px){.audienceSummaryGrid{grid-template-columns:repeat(2,minmax(0,1fr))}}
+@media(max-width:560px){.audienceSummaryGrid{grid-template-columns:1fr}}

@@ -7,8 +7,9 @@ import { slugify } from "@/lib/slug";
 import { formatViralizouArticle } from "@/lib/rewrite";
 import SocialFeedCreator from "@/components/SocialFeedCreator";
 import InstagramVideoDownloader from "@/components/InstagramVideoDownloader";
+import AudienceAnalytics from "@/components/AudienceAnalytics";
 
-type View = "list" | "form" | "import" | "categories" | "socials" | "queue" | "admins" | "feedCreator" | "instagramDownloader";
+type View = "list" | "form" | "import" | "categories" | "socials" | "queue" | "admins" | "feedCreator" | "instagramDownloader" | "analytics";
 type FormState = {
   id?: string;
   title: string;
@@ -180,13 +181,14 @@ export default function AdminApp() {
   const [selectedUrls, setSelectedUrls] = useState<string[]>([]);
   const [batchQueueing, setBatchQueueing] = useState(false);
   const [batchProgress, setBatchProgress] = useState("");
+  const [postStats, setPostStats] = useState({ total: 0, published: 0, scheduled: 0, draft: 0 });
 
-  // Ritmo de postagem na fila (1 por slot, 2 por slot, 3 por slot, ou 1 por Aba/Editoria)
-  type QueueScheduleMode = "1_per_10m" | "2_per_10m" | "3_per_10m" | "1_per_category";
+  // Ritmo de postagem na fila, incluindo modos inteligentes por Aba/Editoria.
+  type QueueScheduleMode = "1_per_10m" | "2_per_10m" | "3_per_10m" | "1_per_category" | "3_per_category";
   const [queueScheduleMode, setQueueScheduleMode] = useState<QueueScheduleMode>(() => {
     if (typeof window !== "undefined") {
       const saved = localStorage.getItem("viralizou_radar_schedule_mode");
-      if (saved === "1_per_10m" || saved === "2_per_10m" || saved === "3_per_10m" || saved === "1_per_category") {
+      if (saved === "1_per_10m" || saved === "2_per_10m" || saved === "3_per_10m" || saved === "1_per_category" || saved === "3_per_category") {
         return saved as QueueScheduleMode;
       }
     }
@@ -263,11 +265,12 @@ export default function AdminApp() {
 
   async function load() {
     setLoading(true);
-    const [postsResponse, categoriesResponse, settingsResponse, adminsResponse] = await Promise.all([
+    const [postsResponse, categoriesResponse, settingsResponse, adminsResponse, statsResponse] = await Promise.all([
       fetch("/api/posts", { cache: "no-store" }),
       fetch("/api/categories", { cache: "no-store" }),
       fetch("/api/settings", { cache: "no-store" }),
       fetch("/api/admins", { cache: "no-store" }).catch(() => null),
+      fetch("/api/posts/stats", { cache: "no-store" }).catch(() => null),
     ]);
     if (postsResponse.status === 401 || categoriesResponse.status === 401) {
       router.push("/admin/login");
@@ -282,6 +285,12 @@ export default function AdminApp() {
       try {
         const adminsData = await adminsResponse.json();
         setAdmins(adminsData.admins || []);
+      } catch {}
+    }
+    if (statsResponse && statsResponse.ok) {
+      try {
+        const statsData = await statsResponse.json();
+        if (statsData.stats) setPostStats(statsData.stats);
       } catch {}
     }
     setPosts(postsData.posts || []);
@@ -697,6 +706,11 @@ export default function AdminApp() {
       const state = data.state || {};
       setAutomationConfigured(Boolean(data.configured));
       setAutoPilot(Boolean(state.enabled));
+      const serverMode = state.queue_mode as QueueScheduleMode | undefined;
+      if (serverMode && ["1_per_10m","2_per_10m","3_per_10m","1_per_category","3_per_category"].includes(serverMode)) {
+        setQueueScheduleMode(serverMode);
+        try { localStorage.setItem("viralizou_radar_schedule_mode", serverMode); } catch {}
+      }
       setAutomationLastRun(state.last_success_at || state.last_run_at || "");
       if (state.next_run_at) {
         const seconds = Math.max(0, Math.ceil((new Date(state.next_run_at).getTime() - Date.now()) / 1000));
@@ -710,6 +724,18 @@ export default function AdminApp() {
     const statusTimer = setInterval(refreshAutomationStatus, 60000);
     return () => clearInterval(statusTimer);
   }, []);
+
+  async function applyQueueScheduleMode(nextMode: QueueScheduleMode) {
+    setQueueScheduleMode(nextMode);
+    try { localStorage.setItem("viralizou_radar_schedule_mode", nextMode); } catch {}
+    try {
+      await fetch("/api/automation/status", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ queue_mode: nextMode, interval_minutes: queueInterval }),
+      });
+    } catch {}
+  }
 
   // Um único comando atualiza Radar, fila, publicações, editorias, tabela e jogos.
   async function runAutoPilotCycle() {
@@ -793,11 +819,11 @@ export default function AdminApp() {
       return;
     }
 
-    // 4. Planejamento de horários conforme o ritmo escolhido (1 por slot, 2 por slot, 3 por slot ou 1 por Aba/Editoria)
+    // 4. Planejamento de horários conforme o ritmo escolhido.
     let plannedSchedule: { item: ImportedNews; slotMinutes: number }[] = [];
 
-    if (queueScheduleMode === "1_per_category") {
-      // 🌟 Modo inteligente: 1 notícia por Aba do Jornal a cada 10 minutos
+    if (queueScheduleMode === "1_per_category" || queueScheduleMode === "3_per_category") {
+      const perCategory = queueScheduleMode === "3_per_category" ? 3 : 1;
       const byCategory: Record<string, ImportedNews[]> = {};
       for (const it of uniqueItems) {
         const cat = it.category || "Goiânia";
@@ -810,8 +836,9 @@ export default function AdminApp() {
       while (hasMore) {
         hasMore = false;
         for (const cat of Object.keys(byCategory)) {
-          if (byCategory[cat].length > 0) {
-            const nextItem = byCategory[cat].shift()!;
+          for (let take = 0; take < perCategory; take++) {
+            const nextItem = byCategory[cat].shift();
+            if (!nextItem) break;
             plannedSchedule.push({
               item: nextItem,
               slotMinutes: currentStep * queueInterval,
@@ -944,7 +971,9 @@ export default function AdminApp() {
     setBatchProgress("");
 
     const modeDescription =
-      queueScheduleMode === "1_per_category"
+      queueScheduleMode === "3_per_category"
+        ? "🚀 3 matérias por Aba/Editoria a cada 10 min"
+        : queueScheduleMode === "1_per_category"
         ? "🌟 1 matéria por Aba/Editoria a cada 10 min"
         : queueScheduleMode === "2_per_10m"
         ? "2 matérias a cada 10 min"
@@ -973,49 +1002,26 @@ export default function AdminApp() {
   }
 
   async function reorderQueue(intervalMin = queueInterval) {
-    if (queuedPosts.length === 0) return;
+    if (postStats.scheduled === 0 && queuedPosts.length === 0) return;
     setLoading(true);
-    let startTime = Date.now();
-
-    let planned: { post: Post; slotMinutes: number }[] = [];
-    if (queueScheduleMode === "1_per_category") {
-      const byCat: Record<string, Post[]> = {};
-      for (const p of queuedPosts) {
-        const cat = p.category || "Goiânia";
-        if (!byCat[cat]) byCat[cat] = [];
-        byCat[cat].push(p);
-      }
-      let step = 1;
-      let hasMore = true;
-      while (hasMore) {
-        hasMore = false;
-        for (const c of Object.keys(byCat)) {
-          if (byCat[c].length > 0) {
-            const nextP = byCat[c].shift()!;
-            planned.push({ post: nextP, slotMinutes: step * intervalMin });
-            hasMore = true;
-          }
-        }
-        if (hasMore) step++;
-      }
-    } else {
-      const perSlot = queueScheduleMode === "3_per_10m" ? 3 : queueScheduleMode === "2_per_10m" ? 2 : 1;
-      planned = queuedPosts.map((post, idx) => ({
-        post,
-        slotMinutes: (Math.floor(idx / perSlot) + 1) * intervalMin,
-      }));
-    }
-
-    for (const item of planned) {
-      const newTime = new Date(startTime + item.slotMinutes * 60 * 1000).toISOString();
-      await fetch(`/api/posts/${item.post.id}`, {
-        method: "PATCH",
+    try {
+      const res = await fetch("/api/posts/reorder-queue", {
+        method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ published_at: newTime }),
+        body: JSON.stringify({
+          interval_minutes: Math.max(10, intervalMin),
+          queue_mode: queueScheduleMode,
+        }),
       });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) throw new Error(data.error || "Erro ao reorganizar a fila.");
+      setMessage(`Fila reorganizada com sucesso! ${Number(data.updated || 0).toLocaleString("pt-BR")} matérias distribuídas no ritmo configurado.`);
+      await load();
+    } catch (err: any) {
+      setMessage(`Erro ao reorganizar fila: ${err.message}`);
+    } finally {
+      setLoading(false);
     }
-    await load();
-    setMessage(`Fila reorganizada com sucesso! ${queuedPosts.length} matérias distribuídas no ritmo configurado.`);
   }
 
   async function publishNow(p: Post) {
@@ -1555,8 +1561,9 @@ export default function AdminApp() {
     router.refresh();
   }
 
-  const published = posts.filter((p) => p.status === "published").length;
-  const scheduled = posts.filter((p) => p.status === "scheduled").length;
+  const published = postStats.published || posts.filter((p) => p.status === "published").length;
+  const scheduled = postStats.scheduled || posts.filter((p) => p.status === "scheduled").length;
+  const totalPosts = postStats.total || posts.length;
 
   return (
     <div className="adminShell">
@@ -1578,12 +1585,13 @@ export default function AdminApp() {
             <a href="#" onClick={(e) => { e.preventDefault(); openRadar(); }}>📡 Radar Notícias</a>
             <a href="#" onClick={(e) => { e.preventDefault(); setView("queue"); setMessage(""); }} style={{ display: "flex", alignItems: "center" }}>
               🕒 Fila de Postagem Automática
-              {queuedPosts.length > 0 && <span className="sidebarBadge">{queuedPosts.length}</span>}
+              {scheduled > 0 && <span className="sidebarBadge">{scheduled.toLocaleString("pt-BR")}</span>}
             </a>
             <a href="#" onClick={(e) => { e.preventDefault(); setView("categories"); setCategoryMessage(""); }}>🗂️ Abas / editorias</a>
             <a href="#" onClick={(e) => { e.preventDefault(); setView("socials"); setSocialMessage(""); }}>📱 Redes Sociais</a>
             <a href="#" onClick={(e) => { e.preventDefault(); setView("feedCreator"); setMessage(""); }}>🎨 Criador de Post Feed</a>
             <a href="#" onClick={(e) => { e.preventDefault(); setView("instagramDownloader"); setMessage(""); }}>⬇️ Baixar Vídeo Instagram</a>
+            <a href="#" onClick={(e) => { e.preventDefault(); setView("analytics"); setMessage(""); }}>📊 Audiência & Patrocínio</a>
             <a
               href="#"
               onClick={(e) => {
@@ -1602,9 +1610,9 @@ export default function AdminApp() {
 
           <main>
             <div className="stats">
-              <div className="stat"><b>{posts.length}</b><span>Total</span></div>
-              <div className="stat"><b>{published}</b><span>Publicadas</span></div>
-              <div className="stat"><b>{scheduled}</b><span>Agendadas</span></div>
+              <div className="stat"><b>{totalPosts.toLocaleString("pt-BR")}</b><span>Total</span></div>
+              <div className="stat"><b>{published.toLocaleString("pt-BR")}</b><span>Publicadas</span></div>
+              <div className="stat"><b>{scheduled.toLocaleString("pt-BR")}</b><span>Agendadas</span></div>
               <div className="stat"><b>{admins.length}</b><span>Equipe / Logins</span></div>
             </div>
 
@@ -1981,7 +1989,7 @@ export default function AdminApp() {
                     {/* Indicador do Ritmo da Fila Ativo */}
                     <div style={{ display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap" }}>
                       <span style={{ fontSize: 12, fontWeight: 700, color: "#475569" }}>
-                        ⏱️ Ritmo da Fila: <b style={{ color: "#0284c7" }}>{queueScheduleMode === "1_per_category" ? "🌟 1 por Aba do Jornal" : queueScheduleMode === "2_per_10m" ? "2 a cada 10m" : queueScheduleMode === "3_per_10m" ? "3 a cada 10m" : "1 a cada 10m"}</b>
+                        ⏱️ Ritmo da Fila: <b style={{ color: "#0284c7" }}>{queueScheduleMode === "3_per_category" ? "🚀 3 por Aba do Jornal" : queueScheduleMode === "1_per_category" ? "🌟 1 por Aba do Jornal" : queueScheduleMode === "2_per_10m" ? "2 a cada 10m" : queueScheduleMode === "3_per_10m" ? "3 a cada 10m" : "1 a cada 10m"}</b>
                       </span>
                       <button
                         type="button"
@@ -2201,10 +2209,7 @@ export default function AdminApp() {
                       <button
                         type="button"
                         className={`radarPaceBtn ${queueScheduleMode === "1_per_10m" ? "active" : ""}`}
-                        onClick={() => {
-                          setQueueScheduleMode("1_per_10m");
-                          localStorage.setItem("viralizou_radar_schedule_mode", "1_per_10m");
-                        }}
+                        onClick={() => applyQueueScheduleMode("1_per_10m")}
                         title="Programa 1 matéria a cada 10 minutos (+10m, +20m, +30m...)"
                       >
                         1 a cada 10m
@@ -2212,10 +2217,7 @@ export default function AdminApp() {
                       <button
                         type="button"
                         className={`radarPaceBtn ${queueScheduleMode === "2_per_10m" ? "active" : ""}`}
-                        onClick={() => {
-                          setQueueScheduleMode("2_per_10m");
-                          localStorage.setItem("viralizou_radar_schedule_mode", "2_per_10m");
-                        }}
+                        onClick={() => applyQueueScheduleMode("2_per_10m")}
                         title="Programa 2 matérias juntas a cada 10 minutos"
                       >
                         2 a cada 10m
@@ -2223,10 +2225,7 @@ export default function AdminApp() {
                       <button
                         type="button"
                         className={`radarPaceBtn ${queueScheduleMode === "3_per_10m" ? "active" : ""}`}
-                        onClick={() => {
-                          setQueueScheduleMode("3_per_10m");
-                          localStorage.setItem("viralizou_radar_schedule_mode", "3_per_10m");
-                        }}
+                        onClick={() => applyQueueScheduleMode("3_per_10m")}
                         title="Programa 3 matérias juntas a cada 10 minutos"
                       >
                         3 a cada 10m
@@ -2234,13 +2233,18 @@ export default function AdminApp() {
                       <button
                         type="button"
                         className={`radarPaceBtn special ${queueScheduleMode === "1_per_category" ? "active" : ""}`}
-                        onClick={() => {
-                          setQueueScheduleMode("1_per_category");
-                          localStorage.setItem("viralizou_radar_schedule_mode", "1_per_category");
-                        }}
+                        onClick={() => applyQueueScheduleMode("1_per_category")}
                         title="🌟 Inteligente: 1 matéria por Aba/Editoria do jornal a cada 10 minutos (Segurança, Goiânia, Trânsito, etc.)"
                       >
                         🌟 1 por Aba do Jornal
+                      </button>
+                      <button
+                        type="button"
+                        className={`radarPaceBtn special ${queueScheduleMode === "3_per_category" ? "active" : ""}`}
+                        onClick={() => applyQueueScheduleMode("3_per_category")}
+                        title="🚀 Publica até 3 matérias de cada Aba/Editoria a cada 10 minutos"
+                      >
+                        🚀 3 por Aba a cada 10m
                       </button>
                     </div>
                   </div>
@@ -2251,6 +2255,9 @@ export default function AdminApp() {
                     <span>
                       {queueScheduleMode === "1_per_category" && (
                         <><b>Modo Inteligente Ativo:</b> O sistema alterna as matérias enviando 1 de cada Aba/Editoria (Goiânia, Segurança, Política, Esportes...) a cada 10 minutos, mantendo a capa do portal equilibrada e diversificada.</>
+                      )}
+                      {queueScheduleMode === "3_per_category" && (
+                        <><b>Modo 3 por Aba Ativo:</b> A cada 10 minutos o sistema libera até 3 matérias de cada Aba/Editoria disponível. Ex.: até 3 de Goiânia + 3 de Política + 3 de Futebol no mesmo slot.</>
                       )}
                       {queueScheduleMode === "1_per_10m" && (
                         <><b>Modo 1 por Slot:</b> O portal publica rigorosamente 1 matéria a cada 10 minutos de forma contínua.</>
@@ -2294,7 +2301,7 @@ export default function AdminApp() {
                         "Nenhuma matéria na fila de espera."
                       ) : (
                         <span>
-                          📦 <b>{queuedPosts.length}</b> notícia(s) na fila • Próxima sai:{" "}
+                          📦 <b>{scheduled.toLocaleString("pt-BR")}</b> notícia(s) na fila • Próxima sai:{" "}
                           <b>
                             {queuedPosts[0]?.published_at
                               ? new Date(queuedPosts[0].published_at).toLocaleTimeString("pt-BR", { hour: "2-digit", minute: "2-digit" })
@@ -2438,6 +2445,10 @@ export default function AdminApp() {
                   })}
                 </div>
               </section>
+            )}
+
+            {view === "analytics" && (
+              <AudienceAnalytics onBack={() => setView("list")} />
             )}
 
             {/* Criador de arte para o feed — somente no painel administrativo */}
