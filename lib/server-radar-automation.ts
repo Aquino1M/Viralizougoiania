@@ -1,4 +1,4 @@
-import { createPost, getCategories, getPosts, publishDuePosts, reclassifyExternalPosts, updatePost } from "@/lib/storage";
+import { createPost, getCategories, getPosts, getScheduledPostsAll, patchPostsPublishedAt, publishDuePosts, reclassifyExternalPosts, updatePost } from "@/lib/storage";
 import { buildEditorialExcerpt, formatViralizouArticle, needsEditorialRepair } from "@/lib/rewrite";
 import { slugify } from "@/lib/slug";
 import type { ImportedNews, Post, PostStatus } from "@/lib/types";
@@ -185,7 +185,7 @@ async function repairSavedEditorialFormatting(posts:Post[],errors:string[]){
   return results.filter(Boolean).length;
 }
 
-type ServerQueueMode="1_per_10m"|"2_per_10m"|"3_per_10m"|"1_per_category"|"3_per_category";
+type ServerQueueMode="1_per_10m"|"2_per_10m"|"3_per_10m"|"50_per_10m"|"1_per_category"|"3_per_category";
 
 function planSchedule(items:ImportedNews[],posts:Post[],intervalMinutes:number,queueMode:ServerQueueMode){
   const future=posts.filter(p=>p.status==="scheduled"&&p.published_at&&new Date(p.published_at).getTime()>Date.now()).sort((a,b)=>+new Date(a.published_at||0)-+new Date(b.published_at||0));
@@ -212,12 +212,29 @@ function planSchedule(items:ImportedNews[],posts:Post[],intervalMinutes:number,q
     return planned;
   }
 
-  const perSlot=queueMode==="3_per_10m"?3:queueMode==="2_per_10m"?2:1;
+  const perSlot=queueMode==="50_per_10m"?50:queueMode==="3_per_10m"?3:queueMode==="2_per_10m"?2:1;
   items.forEach((item,index)=>{
     const step=Math.floor(index/perSlot)+1;
     planned.push({item,publishedAt:new Date(baseTime+step*intervalMinutes*60000).toISOString()});
   });
   return planned;
+}
+
+async function reflowBacklogFor50Per10m(intervalMinutes:number){
+  const scheduled=await getScheduledPostsAll();
+  if(!scheduled.length)return 0;
+  const baseTime=Date.now();
+  const byTime=new Map<string,string[]>();
+  scheduled.forEach((post,index)=>{
+    const step=Math.floor(index/50)+1;
+    const publishedAt=new Date(baseTime+step*intervalMinutes*60000).toISOString();
+    if(!byTime.has(publishedAt))byTime.set(publishedAt,[]);
+    byTime.get(publishedAt)!.push(post.id);
+  });
+  for(const [publishedAt,ids] of byTime){
+    await patchPostsPublishedAt(ids,publishedAt);
+  }
+  return scheduled.length;
 }
 
 export type AutomationRunResult={ok:boolean;skipped?:boolean;reason?:string;found:number;newItems:number;added:number;published:number;reclassified:number;football:{updated:boolean;round:number;fixtures:number;updatedAt:string|null};sourceCounts:Record<string,number>;errors:string[];startedAt:string;finishedAt:string;};
@@ -233,6 +250,14 @@ export async function runServerRadarAutomation(options:{force?:boolean}={}):Prom
   try{
     const recat=await reclassifyExternalPosts();reclassified=recat.changed;
     const released=await publishDuePosts();published=released.length;
+    if(state.queue_mode==="50_per_10m"&&Number(state.queue_reflow_version||0)<1){
+      try{
+        await reflowBacklogFor50Per10m(intervalMinutes);
+        await saveAutomationState({queue_mode:"50_per_10m",queue_reflow_version:1});
+      }catch(e){
+        errors.push("Reorganização 50/10m: "+(e instanceof Error?e.message:"falha ao reorganizar"));
+      }
+    }
     const [posts,categories,sourceResults,footballResult]=await Promise.all([
       getPosts({includeDrafts:true}),
       getCategories({includeInactive:false}),
