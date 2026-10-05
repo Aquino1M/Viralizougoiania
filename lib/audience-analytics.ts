@@ -1,9 +1,10 @@
 type AnalyticsOverview = {
-  today: { visitors: number; pageviews: number };
-  month: { visitors: number; pageviews: number };
-  average30: { visitors: number; pageviews: number };
-  daily: Array<{ date: string; visitors: number; pageviews: number }>;
+  today: { visitors: number; pageviews: number; articleViews: number };
+  month: { visitors: number; pageviews: number; articleViews: number };
+  average30: { visitors: number; pageviews: number; articleViews: number };
+  daily: Array<{ date: string; visitors: number; pageviews: number; articleViews: number }>;
   topPages: Array<{ path: string; visitors: number; pageviews: number }>;
+  topArticles: Array<{ path: string; visitors: number; pageviews: number }>;
   trackingSince: string | null;
 };
 
@@ -136,9 +137,10 @@ export async function getAnalyticsOverview(): Promise<AnalyticsOverview> {
   const since = new Date(now.getTime() - 35 * 24 * 60 * 60 * 1000);
   const rows = await fetchAudienceRowsSince(since.toISOString());
 
-  const dailyMap = new Map<string, { visitors: Set<string>; pageviews: number }>();
+  const dailyMap = new Map<string, { visitors: Set<string>; pageviews: number; articleViews: number }>();
   const monthVisitors = new Set<string>();
   let monthPageviews = 0;
+  let monthArticleViews = 0;
   const top = new Map<string, { visitors: Set<string>; pageviews: number }>();
   let trackingSince: string | null = null;
 
@@ -151,14 +153,20 @@ export async function getAnalyticsOverview(): Promise<AnalyticsOverview> {
       trackingSince = row.data?.first_at || trackingSince;
     }
 
-    if (!dailyMap.has(day)) dailyMap.set(day, { visitors: new Set(), pageviews: 0 });
+    const articleViewsForRow = Object.entries(row.data?.paths || {})
+      .filter(([path]) => path.startsWith("/noticia/"))
+      .reduce((sum, [, count]) => sum + Number(count || 0), 0);
+
+    if (!dailyMap.has(day)) dailyMap.set(day, { visitors: new Set(), pageviews: 0, articleViews: 0 });
     const d = dailyMap.get(day)!;
     d.visitors.add(visitor);
     d.pageviews += Number(row.data?.pageviews || 0);
+    d.articleViews += articleViewsForRow;
 
     if (day.startsWith(monthKey)) {
       monthVisitors.add(visitor);
       monthPageviews += Number(row.data?.pageviews || 0);
+      monthArticleViews += articleViewsForRow;
     }
 
     for (const [path, count] of Object.entries(row.data?.paths || {})) {
@@ -169,34 +177,55 @@ export async function getAnalyticsOverview(): Promise<AnalyticsOverview> {
     }
   }
 
-  const daily: Array<{ date: string; visitors: number; pageviews: number }> = [];
+  const daily: Array<{ date: string; visitors: number; pageviews: number; articleViews: number }> = [];
   for (let i = 29; i >= 0; i--) {
     const date = new Date(now.getTime() - i * 24 * 60 * 60 * 1000);
     const key = localDateKey(date);
     const stats = dailyMap.get(key);
-    daily.push({ date: key, visitors: stats?.visitors.size || 0, pageviews: stats?.pageviews || 0 });
+    daily.push({
+      date: key,
+      visitors: stats?.visitors.size || 0,
+      pageviews: stats?.pageviews || 0,
+      articleViews: stats?.articleViews || 0,
+    });
   }
 
   const todayStats = dailyMap.get(today);
   const sum = daily.reduce(
-    (acc, row) => ({ visitors: acc.visitors + row.visitors, pageviews: acc.pageviews + row.pageviews }),
-    { visitors: 0, pageviews: 0 },
+    (acc, row) => ({
+      visitors: acc.visitors + row.visitors,
+      pageviews: acc.pageviews + row.pageviews,
+      articleViews: acc.articleViews + row.articleViews,
+    }),
+    { visitors: 0, pageviews: 0, articleViews: 0 },
   );
 
-  const topPages = [...top.entries()]
+  const rankedPages = [...top.entries()]
     .map(([path, value]) => ({ path, visitors: value.visitors.size, pageviews: value.pageviews }))
-    .sort((a, b) => b.pageviews - a.pageviews || b.visitors - a.visitors)
-    .slice(0, 10);
+    .sort((a, b) => b.pageviews - a.pageviews || b.visitors - a.visitors);
+
+  const topPages = rankedPages.slice(0, 10);
+  const topArticles = rankedPages.filter((row) => row.path.startsWith("/noticia/")).slice(0, 10);
 
   return {
-    today: { visitors: todayStats?.visitors.size || 0, pageviews: todayStats?.pageviews || 0 },
-    month: { visitors: monthVisitors.size, pageviews: monthPageviews },
+    today: {
+      visitors: todayStats?.visitors.size || 0,
+      pageviews: todayStats?.pageviews || 0,
+      articleViews: todayStats?.articleViews || 0,
+    },
+    month: {
+      visitors: monthVisitors.size,
+      pageviews: monthPageviews,
+      articleViews: monthArticleViews,
+    },
     average30: {
       visitors: Number((sum.visitors / 30).toFixed(1)),
       pageviews: Number((sum.pageviews / 30).toFixed(1)),
+      articleViews: Number((sum.articleViews / 30).toFixed(1)),
     },
     daily,
     topPages,
+    topArticles,
     trackingSince,
   };
 }
