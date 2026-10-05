@@ -177,22 +177,23 @@ export default function AdminApp() {
   const [importMessage, setImportMessage] = useState("");
   const [radarRegion, setRadarRegion] = useState<RadarRegion>("goias");
   const [activeSourceUrl, setActiveSourceUrl] = useState<string>("ALL");
-  const [queueInterval, setQueueInterval] = useState<number>(10);
+  const [queueInterval, setQueueInterval] = useState<number>(1);
   const [selectedUrls, setSelectedUrls] = useState<string[]>([]);
   const [batchQueueing, setBatchQueueing] = useState(false);
   const [batchProgress, setBatchProgress] = useState("");
   const [postStats, setPostStats] = useState({ total: 0, published: 0, scheduled: 0, draft: 0 });
 
   // Ritmo de postagem na fila, incluindo modos inteligentes por Aba/Editoria.
-  type QueueScheduleMode = "1_per_10m" | "2_per_10m" | "3_per_10m" | "50_per_10m" | "1_per_category" | "3_per_category";
+  type QueueScheduleMode = "1_per_10m" | "2_per_10m" | "3_per_10m" | "50_per_10m" | "50_per_1m" | "1_per_category" | "3_per_category";
   const [queueScheduleMode, setQueueScheduleMode] = useState<QueueScheduleMode>(() => {
     if (typeof window !== "undefined") {
       const saved = localStorage.getItem("viralizou_radar_schedule_mode");
-      if (saved === "1_per_10m" || saved === "2_per_10m" || saved === "3_per_10m" || saved === "50_per_10m" || saved === "1_per_category" || saved === "3_per_category") {
+      if (saved === "50_per_10m") return "50_per_1m";
+      if (saved === "1_per_10m" || saved === "2_per_10m" || saved === "3_per_10m" || saved === "50_per_1m" || saved === "1_per_category" || saved === "3_per_category") {
         return saved as QueueScheduleMode;
       }
     }
-    return "50_per_10m"; // Padrão atual: esvaziar a fila rapidamente para não deixar notícia esfriar.
+    return "50_per_1m"; // 50 matérias por minuto para não deixar notícia esfriar.
   });
 
   // Piloto Automático 24/7: estado real salvo no servidor/Supabase
@@ -231,9 +232,9 @@ export default function AdminApp() {
     [posts],
   );
 
-  // Calcula o próximo horário livre na fila (mínimo de 10 minutos)
+  // Calcula o próximo horário livre na fila (mínimo de 1 minuto)
   function getNextQueueTime(intervalMin = queueInterval): string {
-    const effectiveInterval = Math.max(10, intervalMin);
+    const effectiveInterval = Math.max(1, intervalMin);
     const future = queuedPosts.filter((p) => p.published_at && new Date(p.published_at).getTime() > Date.now());
     let baseTime = Date.now();
     if (future.length > 0) {
@@ -707,9 +708,11 @@ export default function AdminApp() {
       setAutomationConfigured(Boolean(data.configured));
       setAutoPilot(Boolean(state.enabled));
       const serverMode = state.queue_mode as QueueScheduleMode | undefined;
-      if (serverMode && ["1_per_10m","2_per_10m","3_per_10m","50_per_10m","1_per_category","3_per_category"].includes(serverMode)) {
-        setQueueScheduleMode(serverMode);
-        try { localStorage.setItem("viralizou_radar_schedule_mode", serverMode); } catch {}
+      if (serverMode && ["1_per_10m","2_per_10m","3_per_10m","50_per_10m","50_per_1m","1_per_category","3_per_category"].includes(serverMode)) {
+        const normalizedMode = serverMode === "50_per_10m" ? "50_per_1m" : serverMode;
+        setQueueScheduleMode(normalizedMode);
+        if (normalizedMode === "50_per_1m") setQueueInterval(1);
+        try { localStorage.setItem("viralizou_radar_schedule_mode", normalizedMode); } catch {}
       }
       setAutomationLastRun(state.last_success_at || state.last_run_at || "");
       if (state.next_run_at) {
@@ -726,13 +729,16 @@ export default function AdminApp() {
   }, []);
 
   async function applyQueueScheduleMode(nextMode: QueueScheduleMode) {
-    setQueueScheduleMode(nextMode);
-    try { localStorage.setItem("viralizou_radar_schedule_mode", nextMode); } catch {}
+    const normalizedMode = nextMode === "50_per_10m" ? "50_per_1m" : nextMode;
+    const nextInterval = normalizedMode === "50_per_1m" ? 1 : queueInterval;
+    setQueueScheduleMode(normalizedMode);
+    setQueueInterval(nextInterval);
+    try { localStorage.setItem("viralizou_radar_schedule_mode", normalizedMode); } catch {}
     try {
       await fetch("/api/automation/status", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ queue_mode: nextMode, interval_minutes: queueInterval }),
+        body: JSON.stringify({ queue_mode: normalizedMode, interval_minutes: nextInterval }),
       });
     } catch {}
   }
@@ -778,7 +784,7 @@ export default function AdminApp() {
       const res = await fetch("/api/automation/status", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ enabled: nextEnabled, interval_minutes: 10 }),
+        body: JSON.stringify({ enabled: nextEnabled, interval_minutes: queueScheduleMode === "50_per_1m" ? 1 : queueInterval }),
       });
       const data = await res.json().catch(() => ({}));
       if (!res.ok) throw new Error(data.error || "Não foi possível alterar o Piloto.");
@@ -850,7 +856,7 @@ export default function AdminApp() {
       }
     } else {
       // Modos numéricos: 1, 2, 3 ou 50 postagens por slot.
-      const perSlot = queueScheduleMode === "50_per_10m" ? 50 : queueScheduleMode === "3_per_10m" ? 3 : queueScheduleMode === "2_per_10m" ? 2 : 1;
+      const perSlot = (queueScheduleMode === "50_per_1m" || queueScheduleMode === "50_per_10m") ? 50 : queueScheduleMode === "3_per_10m" ? 3 : queueScheduleMode === "2_per_10m" ? 2 : 1;
       plannedSchedule = uniqueItems.map((item, idx) => {
         const slotStep = Math.floor(idx / perSlot) + 1;
         return {
@@ -971,8 +977,8 @@ export default function AdminApp() {
     setBatchProgress("");
 
     const modeDescription =
-      queueScheduleMode === "50_per_10m"
-        ? "🔥 50 matérias a cada 10 min"
+      (queueScheduleMode === "50_per_1m" || queueScheduleMode === "50_per_10m")
+        ? "🔥 50 matérias por minuto"
         : queueScheduleMode === "3_per_category"
         ? "🚀 3 matérias por Aba/Editoria a cada 10 min"
         : queueScheduleMode === "1_per_category"
@@ -1011,7 +1017,7 @@ export default function AdminApp() {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          interval_minutes: Math.max(10, intervalMin),
+          interval_minutes: queueScheduleMode === "50_per_1m" ? 1 : Math.max(1, intervalMin),
           queue_mode: queueScheduleMode,
         }),
       });
@@ -1991,7 +1997,7 @@ export default function AdminApp() {
                     {/* Indicador do Ritmo da Fila Ativo */}
                     <div style={{ display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap" }}>
                       <span style={{ fontSize: 12, fontWeight: 700, color: "#475569" }}>
-                        ⏱️ Ritmo da Fila: <b style={{ color: "#0284c7" }}>{queueScheduleMode === "50_per_10m" ? "🔥 50 a cada 10m" : queueScheduleMode === "3_per_category" ? "🚀 3 por Aba do Jornal" : queueScheduleMode === "1_per_category" ? "🌟 1 por Aba do Jornal" : queueScheduleMode === "2_per_10m" ? "2 a cada 10m" : queueScheduleMode === "3_per_10m" ? "3 a cada 10m" : "1 a cada 10m"}</b>
+                        ⏱️ Ritmo da Fila: <b style={{ color: "#0284c7" }}>{(queueScheduleMode === "50_per_1m" || queueScheduleMode === "50_per_10m") ? "🔥 50 por minuto" : queueScheduleMode === "3_per_category" ? "🚀 3 por Aba do Jornal" : queueScheduleMode === "1_per_category" ? "🌟 1 por Aba do Jornal" : queueScheduleMode === "2_per_10m" ? "2 a cada 10m" : queueScheduleMode === "3_per_10m" ? "3 a cada 10m" : "1 a cada 10m"}</b>
                       </span>
                       <button
                         type="button"
@@ -2234,11 +2240,11 @@ export default function AdminApp() {
                       </button>
                       <button
                         type="button"
-                        className={`radarPaceBtn special ${queueScheduleMode === "50_per_10m" ? "active" : ""}`}
-                        onClick={() => applyQueueScheduleMode("50_per_10m")}
-                        title="Publica 50 matérias juntas a cada 10 minutos para reduzir rapidamente a fila"
+                        className={`radarPaceBtn special ${queueScheduleMode === "50_per_1m" ? "active" : ""}`}
+                        onClick={() => applyQueueScheduleMode("50_per_1m")}
+                        title="Publica até 50 matérias por minuto para manter as notícias quentes"
                       >
-                        🔥 50 a cada 10m
+                        🔥 50 por minuto
                       </button>
                       <button
                         type="button"
@@ -2278,8 +2284,8 @@ export default function AdminApp() {
                       {queueScheduleMode === "3_per_10m" && (
                         <><b>Modo 3 por Slot:</b> O portal publica 3 matérias juntas a cada 10 minutos (ritmo acelerado).</>
                       )}
-                      {queueScheduleMode === "50_per_10m" && (
-                        <><b>Modo 50/10m Ativo:</b> O portal libera até 50 matérias por ciclo de 10 minutos, chegando a até 300 por hora para reduzir a fila e evitar notícias frias.</>
+                      {queueScheduleMode === "50_per_1m" && (
+                        <><b>Modo 50/min Ativo:</b> O portal libera até 50 matérias por minuto. O GitHub Actions continua em um único ciclo a cada 10 minutos para Radar, fila, tabela, jogos e audiência.</>
                       )}
                     </span>
                   </div>
@@ -2294,11 +2300,13 @@ export default function AdminApp() {
                     <select
                       value={queueInterval}
                       onChange={(e) => {
-                        const val = Math.max(10, Number(e.target.value));
+                        const val = Math.max(1, Number(e.target.value));
                         setQueueInterval(val);
                       }}
                     >
-                      <option value={10}>A cada 10 minutos (Mínimo recomendado)</option>
+                      <option value={1}>A cada 1 minuto</option>
+                      <option value={5}>A cada 5 minutos</option>
+                      <option value={10}>A cada 10 minutos</option>
                       <option value={15}>A cada 15 minutos</option>
                       <option value={20}>A cada 20 minutos</option>
                       <option value={30}>A cada 30 minutos</option>
@@ -2317,7 +2325,7 @@ export default function AdminApp() {
                           📦 <b>{scheduled.toLocaleString("pt-BR")}</b> notícia(s) na fila • Próxima sai:{" "}
                           <b>
                             {queuedPosts[0]?.published_at
-                              ? new Date(queuedPosts[0].published_at).toLocaleTimeString("pt-BR", { hour: "2-digit", minute: "2-digit" })
+                              ? new Date(queuedPosts[0].published_at).toLocaleString("pt-BR", { day: "2-digit", month: "2-digit", hour: "2-digit", minute: "2-digit" })
                               : "—"}
                           </b>
                         </span>
