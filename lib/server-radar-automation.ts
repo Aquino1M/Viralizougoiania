@@ -1,4 +1,4 @@
-import { createPost, getCategories, getPosts, getScheduledPostsAll, patchPostsPublishedAt, publishDuePosts, reclassifyExternalPosts, updatePost } from "@/lib/storage";
+import { createPost, getCategories, getPosts, publishAllScheduledNow, publishDuePosts, reclassifyExternalPosts, updatePost } from "@/lib/storage";
 import { buildEditorialExcerpt, formatViralizouArticle, needsEditorialRepair } from "@/lib/rewrite";
 import { slugify } from "@/lib/slug";
 import type { ImportedNews, Post, PostStatus } from "@/lib/types";
@@ -6,6 +6,7 @@ import { getAutomationState, saveAutomationState, saveRadarSnapshot, type RadarS
 import { classifyEditorial } from "@/lib/category-classifier";
 import { syncBrasileiraoData } from "@/lib/football-sync";
 import { hasBrokenEncoding, readResponseTextSmart, repairMojibake } from "@/lib/text-encoding";
+import { refreshAudienceSnapshot } from "@/lib/audience-analytics";
 
 type RadarGroup = "goias" | "brasil" | "futebol" | "fofocas";
 type RadarSource = { name:string; feedUrl:string; hosts:string[]; group:RadarGroup; category?: "Futebol" | "Fofocas" };
@@ -185,7 +186,7 @@ async function repairSavedEditorialFormatting(posts:Post[],errors:string[]){
   return results.filter(Boolean).length;
 }
 
-type ServerQueueMode="1_per_10m"|"2_per_10m"|"3_per_10m"|"50_per_10m"|"1_per_category"|"3_per_category";
+type ServerQueueMode="1_per_10m"|"2_per_10m"|"3_per_10m"|"50_per_10m"|"50_per_1m"|"1_per_category"|"3_per_category";
 
 function planSchedule(items:ImportedNews[],posts:Post[],intervalMinutes:number,queueMode:ServerQueueMode){
   const future=posts.filter(p=>p.status==="scheduled"&&p.published_at&&new Date(p.published_at).getTime()>Date.now()).sort((a,b)=>+new Date(a.published_at||0)-+new Date(b.published_at||0));
@@ -212,7 +213,7 @@ function planSchedule(items:ImportedNews[],posts:Post[],intervalMinutes:number,q
     return planned;
   }
 
-  const perSlot=queueMode==="50_per_10m"?50:queueMode==="3_per_10m"?3:queueMode==="2_per_10m"?2:1;
+  const perSlot=(queueMode==="50_per_1m"||queueMode==="50_per_10m")?50:queueMode==="3_per_10m"?3:queueMode==="2_per_10m"?2:1;
   items.forEach((item,index)=>{
     const step=Math.floor(index/perSlot)+1;
     planned.push({item,publishedAt:new Date(baseTime+step*intervalMinutes*60000).toISOString()});
@@ -220,43 +221,43 @@ function planSchedule(items:ImportedNews[],posts:Post[],intervalMinutes:number,q
   return planned;
 }
 
-async function reflowBacklogFor50Per10m(intervalMinutes:number){
-  const scheduled=await getScheduledPostsAll();
-  if(!scheduled.length)return 0;
-  const baseTime=Date.now();
-  const byTime=new Map<string,string[]>();
-  scheduled.forEach((post,index)=>{
-    const step=Math.floor(index/50)+1;
-    const publishedAt=new Date(baseTime+step*intervalMinutes*60000).toISOString();
-    if(!byTime.has(publishedAt))byTime.set(publishedAt,[]);
-    byTime.get(publishedAt)!.push(post.id);
-  });
-  for(const [publishedAt,ids] of byTime){
-    await patchPostsPublishedAt(ids,publishedAt);
-  }
-  return scheduled.length;
-}
-
-export type AutomationRunResult={ok:boolean;skipped?:boolean;reason?:string;found:number;newItems:number;added:number;published:number;reclassified:number;football:{updated:boolean;round:number;fixtures:number;updatedAt:string|null};sourceCounts:Record<string,number>;errors:string[];startedAt:string;finishedAt:string;};
+export type AutomationRunResult={ok:boolean;skipped?:boolean;reason?:string;found:number;newItems:number;added:number;published:number;resetPublished?:number;reclassified:number;audience?:{updatedAt:string;pageviewsToday:number;articleViewsToday:number}|null;football:{updated:boolean;round:number;fixtures:number;updatedAt:string|null};sourceCounts:Record<string,number>;errors:string[];startedAt:string;finishedAt:string;};
 
 export async function runServerRadarAutomation(options:{force?:boolean}={}):Promise<AutomationRunResult>{
   const startedAt=new Date().toISOString();const state=await getAutomationState();
   const emptyFootball={updated:false,round:0,fixtures:0,updatedAt:null as string|null};
   if(!options.force&&!state.enabled)return{ok:true,skipped:true,reason:"paused",found:0,newItems:0,added:0,published:0,reclassified:0,football:emptyFootball,sourceCounts:{},errors:[],startedAt,finishedAt:new Date().toISOString()};
   if(!options.force&&state.running_until&&new Date(state.running_until).getTime()>Date.now())return{ok:true,skipped:true,reason:"already-running",found:0,newItems:0,added:0,published:0,reclassified:0,football:emptyFootball,sourceCounts:{},errors:[],startedAt,finishedAt:new Date().toISOString()};
-  const intervalMinutes=Math.max(10,Number(state.interval_minutes||10));
+  const queueMode:ServerQueueMode=(state.queue_mode==="50_per_10m"?"50_per_1m":state.queue_mode) as ServerQueueMode;
+  const intervalMinutes=queueMode==="50_per_1m"?1:Math.max(1,Number(state.interval_minutes||1));
   await saveAutomationState({running_until:new Date(Date.now()+8*60000).toISOString(),last_run_at:startedAt,last_error:""});
-  const errors:string[]=[];let found=0,newItems=0,added=0,published=0,reclassified=0;const sourceCounts:Record<string,number>={goias:0,brasil:0,futebol:0,fofocas:0};let football=emptyFootball;
+  const errors:string[]=[];let found=0,newItems=0,added=0,published=0,resetPublished=0,reclassified=0;const sourceCounts:Record<string,number>={goias:0,brasil:0,futebol:0,fofocas:0};let football=emptyFootball;let audience:null|{updatedAt:string;pageviewsToday:number;articleViewsToday:number}=null;
   try{
     const recat=await reclassifyExternalPosts();reclassified=recat.changed;
-    const released=await publishDuePosts();published=released.length;
-    if(state.queue_mode==="50_per_10m"&&Number(state.queue_reflow_version||0)<1){
+
+    // Publica toda a fila antiga uma única vez para começar do zero.
+    if(Number(state.queue_reset_version||0)<1){
       try{
-        await reflowBacklogFor50Per10m(intervalMinutes);
-        await saveAutomationState({queue_mode:"50_per_10m",queue_reflow_version:1});
+        resetPublished=await publishAllScheduledNow();
+        published+=resetPublished;
+        await saveAutomationState({
+          queue_mode:"50_per_1m",
+          interval_minutes:1,
+          queue_reflow_version:1,
+          queue_reset_version:1,
+        });
       }catch(e){
-        errors.push("Reorganização 50/10m: "+(e instanceof Error?e.message:"falha ao reorganizar"));
+        errors.push("Reset da fila: "+(e instanceof Error?e.message:"falha ao publicar fila antiga"));
       }
+    }
+
+    const released=await publishDuePosts();published+=released.length;
+
+    // Mesma execução do GitHub Actions atualiza também o resumo de audiência.
+    try{
+      audience=await refreshAudienceSnapshot();
+    }catch(e){
+      errors.push("Audiência: "+(e instanceof Error?e.message:"falha ao atualizar"));
     }
     const [posts,categories,sourceResults,footballResult]=await Promise.all([
       getPosts({includeDrafts:true}),
@@ -311,7 +312,7 @@ export async function runServerRadarAutomation(options:{force?:boolean}={}):Prom
 
     const categoryNames=new Set(categories.map(c=>c.name.toLowerCase()));const builtIn=new Set(["fofocas","fofoca","futebol"]);
     all.forEach(item=>{const cat=(item.category||"").toLowerCase();if(!cat||(!categoryNames.has(cat)&&!builtIn.has(cat)))item.category="Goiânia";});
-    const unseen=dedupeIncoming(all,posts);newItems=unseen.length;const planned=planSchedule(unseen,posts,intervalMinutes,state.queue_mode as ServerQueueMode);
+    const unseen=dedupeIncoming(all,posts);newItems=unseen.length;const planned=planSchedule(unseen,posts,intervalMinutes,queueMode);
     const created=await parallelMap(planned,6,async plannedItem=>{
       const item=plannedItem.item;const sourceText=item.source_content||item.excerpt||item.title;
       const content=formatViralizouArticle({title:item.title,excerpt:item.excerpt,sourceText,sourceName:item.source_name,category:item.category});
@@ -322,10 +323,10 @@ export async function runServerRadarAutomation(options:{force?:boolean}={}):Prom
     added=created.filter(Boolean).length;
     const finishedAt=new Date().toISOString();
     await saveAutomationState({running_until:null,last_success_at:finishedAt,next_run_at:new Date(Date.now()+intervalMinutes*60000).toISOString(),last_found:found,last_added:added,last_published:published,last_hydrated:formattedRepairs,last_reclassified:reclassified,last_football_sync:football.updatedAt,last_round:football.round,last_fixtures:football.fixtures,last_source_counts:sourceCounts,last_error:errors.join(" | ").slice(0,1500)});
-    return{ok:true,found,newItems,added,published,reclassified,football,sourceCounts,errors,startedAt,finishedAt};
+    return{ok:true,found,newItems,added,published,resetPublished,reclassified,audience,football,sourceCounts,errors,startedAt,finishedAt};
   }catch(e){
     const message=e instanceof Error?e.message:"Erro inesperado";errors.push(message);const finishedAt=new Date().toISOString();
     try{await saveAutomationState({running_until:null,next_run_at:new Date(Date.now()+intervalMinutes*60000).toISOString(),last_error:errors.join(" | ").slice(0,1500)});}catch{}
-    return{ok:false,found,newItems,added,published,reclassified,football,sourceCounts,errors,startedAt,finishedAt};
+    return{ok:false,found,newItems,added,published,resetPublished,reclassified,audience,football,sourceCounts,errors,startedAt,finishedAt};
   }
 }
