@@ -184,15 +184,15 @@ export default function AdminApp() {
   const [postStats, setPostStats] = useState({ total: 0, published: 0, scheduled: 0, draft: 0 });
 
   // Ritmo de postagem na fila, incluindo modos inteligentes por Aba/Editoria.
-  type QueueScheduleMode = "1_per_10m" | "2_per_10m" | "3_per_10m" | "1_per_category" | "3_per_category";
+  type QueueScheduleMode = "1_per_10m" | "2_per_10m" | "3_per_10m" | "50_per_10m" | "1_per_category" | "3_per_category";
   const [queueScheduleMode, setQueueScheduleMode] = useState<QueueScheduleMode>(() => {
     if (typeof window !== "undefined") {
       const saved = localStorage.getItem("viralizou_radar_schedule_mode");
-      if (saved === "1_per_10m" || saved === "2_per_10m" || saved === "3_per_10m" || saved === "1_per_category" || saved === "3_per_category") {
+      if (saved === "1_per_10m" || saved === "2_per_10m" || saved === "3_per_10m" || saved === "50_per_10m" || saved === "1_per_category" || saved === "3_per_category") {
         return saved as QueueScheduleMode;
       }
     }
-    return "1_per_category"; // Padrão inteligente: 1 por aba do jornal a cada 10 min!
+    return "50_per_10m"; // Padrão atual: esvaziar a fila rapidamente para não deixar notícia esfriar.
   });
 
   // Piloto Automático 24/7: estado real salvo no servidor/Supabase
@@ -707,7 +707,7 @@ export default function AdminApp() {
       setAutomationConfigured(Boolean(data.configured));
       setAutoPilot(Boolean(state.enabled));
       const serverMode = state.queue_mode as QueueScheduleMode | undefined;
-      if (serverMode && ["1_per_10m","2_per_10m","3_per_10m","1_per_category","3_per_category"].includes(serverMode)) {
+      if (serverMode && ["1_per_10m","2_per_10m","3_per_10m","50_per_10m","1_per_category","3_per_category"].includes(serverMode)) {
         setQueueScheduleMode(serverMode);
         try { localStorage.setItem("viralizou_radar_schedule_mode", serverMode); } catch {}
       }
@@ -849,8 +849,8 @@ export default function AdminApp() {
         if (hasMore) currentStep++;
       }
     } else {
-      // Modos numéricos: 1, 2 ou 3 postagens por slot de 10 min
-      const perSlot = queueScheduleMode === "3_per_10m" ? 3 : queueScheduleMode === "2_per_10m" ? 2 : 1;
+      // Modos numéricos: 1, 2, 3 ou 50 postagens por slot.
+      const perSlot = queueScheduleMode === "50_per_10m" ? 50 : queueScheduleMode === "3_per_10m" ? 3 : queueScheduleMode === "2_per_10m" ? 2 : 1;
       plannedSchedule = uniqueItems.map((item, idx) => {
         const slotStep = Math.floor(idx / perSlot) + 1;
         return {
@@ -971,7 +971,9 @@ export default function AdminApp() {
     setBatchProgress("");
 
     const modeDescription =
-      queueScheduleMode === "3_per_category"
+      queueScheduleMode === "50_per_10m"
+        ? "🔥 50 matérias a cada 10 min"
+        : queueScheduleMode === "3_per_category"
         ? "🚀 3 matérias por Aba/Editoria a cada 10 min"
         : queueScheduleMode === "1_per_category"
         ? "🌟 1 matéria por Aba/Editoria a cada 10 min"
@@ -1989,7 +1991,7 @@ export default function AdminApp() {
                     {/* Indicador do Ritmo da Fila Ativo */}
                     <div style={{ display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap" }}>
                       <span style={{ fontSize: 12, fontWeight: 700, color: "#475569" }}>
-                        ⏱️ Ritmo da Fila: <b style={{ color: "#0284c7" }}>{queueScheduleMode === "3_per_category" ? "🚀 3 por Aba do Jornal" : queueScheduleMode === "1_per_category" ? "🌟 1 por Aba do Jornal" : queueScheduleMode === "2_per_10m" ? "2 a cada 10m" : queueScheduleMode === "3_per_10m" ? "3 a cada 10m" : "1 a cada 10m"}</b>
+                        ⏱️ Ritmo da Fila: <b style={{ color: "#0284c7" }}>{queueScheduleMode === "50_per_10m" ? "🔥 50 a cada 10m" : queueScheduleMode === "3_per_category" ? "🚀 3 por Aba do Jornal" : queueScheduleMode === "1_per_category" ? "🌟 1 por Aba do Jornal" : queueScheduleMode === "2_per_10m" ? "2 a cada 10m" : queueScheduleMode === "3_per_10m" ? "3 a cada 10m" : "1 a cada 10m"}</b>
                       </span>
                       <button
                         type="button"
@@ -2232,6 +2234,14 @@ export default function AdminApp() {
                       </button>
                       <button
                         type="button"
+                        className={`radarPaceBtn special ${queueScheduleMode === "50_per_10m" ? "active" : ""}`}
+                        onClick={() => applyQueueScheduleMode("50_per_10m")}
+                        title="Publica 50 matérias juntas a cada 10 minutos para reduzir rapidamente a fila"
+                      >
+                        🔥 50 a cada 10m
+                      </button>
+                      <button
+                        type="button"
                         className={`radarPaceBtn special ${queueScheduleMode === "1_per_category" ? "active" : ""}`}
                         onClick={() => applyQueueScheduleMode("1_per_category")}
                         title="🌟 Inteligente: 1 matéria por Aba/Editoria do jornal a cada 10 minutos (Segurança, Goiânia, Trânsito, etc.)"
@@ -2267,6 +2277,9 @@ export default function AdminApp() {
                       )}
                       {queueScheduleMode === "3_per_10m" && (
                         <><b>Modo 3 por Slot:</b> O portal publica 3 matérias juntas a cada 10 minutos (ritmo acelerado).</>
+                      )}
+                      {queueScheduleMode === "50_per_10m" && (
+                        <><b>Modo 50/10m Ativo:</b> O portal libera até 50 matérias por ciclo de 10 minutos, chegando a até 300 por hora para reduzir a fila e evitar notícias frias.</>
                       )}
                     </span>
                   </div>
