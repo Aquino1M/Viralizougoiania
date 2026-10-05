@@ -206,7 +206,7 @@ export async function getAnalyticsOverview(): Promise<AnalyticsOverview> {
     const stats = dailyMap.get(key);
     daily.push({
       date: key,
-      visitors: stats?.visitors.size || 0,
+      visitors: stats?.pageviews || 0,
       pageviews: stats?.pageviews || 0,
       articleViews: stats?.articleViews || 0,
     });
@@ -231,17 +231,18 @@ export async function getAnalyticsOverview(): Promise<AnalyticsOverview> {
 
   return {
     today: {
-      visitors: todayStats?.visitors.size || 0,
+      // Regra editorial do painel: cada abertura conta como 1 visitante/visita.
+      visitors: todayStats?.pageviews || 0,
       pageviews: todayStats?.pageviews || 0,
       articleViews: todayStats?.articleViews || 0,
     },
     month: {
-      visitors: monthVisitors.size,
+      visitors: monthPageviews,
       pageviews: monthPageviews,
       articleViews: monthArticleViews,
     },
     average30: {
-      visitors: Number((sum.visitors / 30).toFixed(1)),
+      visitors: Number((sum.pageviews / 30).toFixed(1)),
       pageviews: Number((sum.pageviews / 30).toFixed(1)),
       articleViews: Number((sum.articleViews / 30).toFixed(1)),
     },
