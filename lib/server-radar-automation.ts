@@ -1,4 +1,4 @@
-import { createPost, getCategories, getPosts, publishAllScheduledNow, publishDuePosts, reclassifyExternalPosts, updatePost } from "@/lib/storage";
+import { createPost, getCategories, getPostIdentityIndex, getPosts, publishAllScheduledNow, publishDuePosts, reclassifyExternalPosts, updatePost } from "@/lib/storage";
 import { buildEditorialExcerpt, formatViralizouArticle, needsEditorialRepair } from "@/lib/rewrite";
 import { slugify } from "@/lib/slug";
 import type { ImportedNews, Post, PostStatus } from "@/lib/types";
@@ -88,7 +88,7 @@ async function fetchSource(source:RadarSource):Promise<ImportedNews[]>{
   return items;
 }
 
-function dedupeIncoming(items:ImportedNews[],posts:Post[]){
+function dedupeIncoming(items:ImportedNews[],posts:Array<Pick<Post,"slug"|"title"|"source_url">>){
   const postUrls=new Set(posts.map(p=>p.source_url?canonicalUrl(p.source_url):"").filter(Boolean));
   const postSlugs=new Set(posts.map(p=>p.slug));const result:ImportedNews[]=[];const urls=new Set<string>(),slugs=new Set<string>();
   const sorted=items.slice().sort((a,b)=>+new Date(b.published_at||0)-+new Date(a.published_at||0));
@@ -259,8 +259,9 @@ export async function runServerRadarAutomation(options:{force?:boolean}={}):Prom
     }catch(e){
       errors.push("Audiência: "+(e instanceof Error?e.message:"falha ao atualizar"));
     }
-    const [posts,categories,sourceResults,footballResult]=await Promise.all([
+    const [posts,postIdentityIndex,categories,sourceResults,footballResult]=await Promise.all([
       getPosts({includeDrafts:true}),
+      getPostIdentityIndex(),
       getCategories({includeInactive:false}),
       Promise.allSettled(SOURCES.map(fetchSource)),
       syncBrasileiraoData().then(data=>({ok:true as const,data})).catch(error=>({ok:false as const,error}))
@@ -312,7 +313,7 @@ export async function runServerRadarAutomation(options:{force?:boolean}={}):Prom
 
     const categoryNames=new Set(categories.map(c=>c.name.toLowerCase()));const builtIn=new Set(["fofocas","fofoca","futebol"]);
     all.forEach(item=>{const cat=(item.category||"").toLowerCase();if(!cat||(!categoryNames.has(cat)&&!builtIn.has(cat)))item.category="Goiânia";});
-    const unseen=dedupeIncoming(all,posts);newItems=unseen.length;const planned=planSchedule(unseen,posts,intervalMinutes,queueMode);
+    const unseen=dedupeIncoming(all,postIdentityIndex);newItems=unseen.length;const planned=planSchedule(unseen,posts,intervalMinutes,queueMode);
     const created=await parallelMap(planned,6,async plannedItem=>{
       const item=plannedItem.item;const sourceText=item.source_content||item.excerpt||item.title;
       const content=formatViralizouArticle({title:item.title,excerpt:item.excerpt,sourceText,sourceName:item.source_name,category:item.category});
@@ -322,7 +323,7 @@ export async function runServerRadarAutomation(options:{force?:boolean}={}):Prom
     });
     added=created.filter(Boolean).length;
     const finishedAt=new Date().toISOString();
-    await saveAutomationState({running_until:null,last_success_at:finishedAt,next_run_at:new Date(Date.now()+intervalMinutes*60000).toISOString(),last_found:found,last_added:added,last_published:published,last_hydrated:formattedRepairs,last_reclassified:reclassified,last_football_sync:football.updatedAt,last_round:football.round,last_fixtures:football.fixtures,last_source_counts:sourceCounts,last_error:errors.join(" | ").slice(0,1500)});
+    await saveAutomationState({running_until:null,last_success_at:finishedAt,next_run_at:new Date(Date.now()+10*60000).toISOString(),last_found:found,last_added:added,last_published:published,last_hydrated:formattedRepairs,last_reclassified:reclassified,last_football_sync:football.updatedAt,last_round:football.round,last_fixtures:football.fixtures,last_source_counts:sourceCounts,last_error:errors.join(" | ").slice(0,1500)});
     return{ok:true,found,newItems,added,published,resetPublished,reclassified,audience,football,sourceCounts,errors,startedAt,finishedAt};
   }catch(e){
     const message=e instanceof Error?e.message:"Erro inesperado";errors.push(message);const finishedAt=new Date().toISOString();
