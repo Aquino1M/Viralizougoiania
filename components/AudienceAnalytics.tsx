@@ -3,11 +3,12 @@
 import { useEffect, useMemo, useState } from "react";
 
 type Overview = {
-  today: { visitors: number; pageviews: number };
-  month: { visitors: number; pageviews: number };
-  average30: { visitors: number; pageviews: number };
-  daily: Array<{ date: string; visitors: number; pageviews: number }>;
+  today: { visitors: number; pageviews: number; articleViews: number };
+  month: { visitors: number; pageviews: number; articleViews: number };
+  average30: { visitors: number; pageviews: number; articleViews: number };
+  daily: Array<{ date: string; visitors: number; pageviews: number; articleViews: number }>;
   topPages: Array<{ path: string; visitors: number; pageviews: number }>;
+  topArticles: Array<{ path: string; visitors: number; pageviews: number }>;
   trackingSince: string | null;
 };
 
@@ -33,10 +34,20 @@ export default function AudienceAnalytics({ onBack }: { onBack: () => void }) {
 
   useEffect(() => { load(); }, []);
 
-  const maxVisitors = useMemo(
-    () => Math.max(1, ...(data?.daily || []).map((d) => Number(d.visitors || 0))),
+  const maxViews = useMemo(
+    () => Math.max(1, ...(data?.daily || []).map((d) => Number(d.pageviews || 0))),
     [data],
   );
+
+  function articleLabel(path: string) {
+    const slug = path.replace(/^\/noticia\//, "").replace(/\/$/, "");
+    if (!slug) return path;
+    return slug
+      .split("-")
+      .filter(Boolean)
+      .map((part) => part.charAt(0).toUpperCase() + part.slice(1))
+      .join(" ");
+  }
 
   return (
     <section className="panel">
@@ -44,7 +55,7 @@ export default function AudienceAnalytics({ onBack }: { onBack: () => void }) {
         <div>
           <h1>📊 Audiência & Patrocínio</h1>
           <div style={{ color: "#68736e", fontSize: 13 }}>
-            Visitantes únicos e visualizações do portal, com resumo diário e mensal para mídia kit e propostas comerciais.
+            Cada abertura de página conta como uma visualização. Abrir uma matéria conta imediatamente como uma visualização da notícia.
           </div>
         </div>
         <div style={{ display: "flex", gap: 8 }}>
@@ -60,41 +71,42 @@ export default function AudienceAnalytics({ onBack }: { onBack: () => void }) {
         <>
           <div className="audienceSummaryGrid">
             <div className="audienceMetric">
-              <b>{Number(data.today.visitors || 0).toLocaleString("pt-BR")}</b>
-              <span>Visitantes únicos hoje</span>
-              <small>{Number(data.today.pageviews || 0).toLocaleString("pt-BR")} visualizações hoje</small>
+              <b>{Number(data.today.pageviews || 0).toLocaleString("pt-BR")}</b>
+              <span>Visualizações hoje</span>
+              <small>Cada abertura de página conta 1 vez</small>
             </div>
             <div className="audienceMetric">
-              <b>{Number(data.month.visitors || 0).toLocaleString("pt-BR")}</b>
-              <span>Visitantes únicos no mês</span>
-              <small>{Number(data.month.pageviews || 0).toLocaleString("pt-BR")} visualizações no mês</small>
+              <b>{Number(data.month.pageviews || 0).toLocaleString("pt-BR")}</b>
+              <span>Visualizações no mês</span>
+              <small>Total de páginas abertas no portal</small>
             </div>
             <div className="audienceMetric">
-              <b>{Number(data.average30.visitors || 0).toLocaleString("pt-BR", { maximumFractionDigits: 1 })}</b>
-              <span>Média diária de visitantes</span>
-              <small>Últimos 30 dias</small>
+              <b>{Number(data.today.articleViews || 0).toLocaleString("pt-BR")}</b>
+              <span>Matérias abertas hoje</span>
+              <small>Cada abertura de /noticia/... conta</small>
             </div>
             <div className="audienceMetric">
-              <b>{Number(data.average30.pageviews || 0).toLocaleString("pt-BR", { maximumFractionDigits: 1 })}</b>
-              <span>Média diária de visualizações</span>
-              <small>Últimos 30 dias</small>
+              <b>{Number(data.month.articleViews || 0).toLocaleString("pt-BR")}</b>
+              <span>Matérias abertas no mês</span>
+              <small>Visualizações acumuladas das notícias</small>
             </div>
           </div>
 
           <div className="audienceSponsorBox">
             <b>Resumo para patrocinadores:</b>{" "}
-            neste mês o Viralizougoiania registrou <b>{Number(data.month.visitors || 0).toLocaleString("pt-BR")} visitantes únicos</b> e{" "}
-            <b>{Number(data.month.pageviews || 0).toLocaleString("pt-BR")} visualizações</b>.
+            neste mês o Viralizougoiania registrou <b>{Number(data.month.pageviews || 0).toLocaleString("pt-BR")} visualizações no portal</b>, sendo{" "}
+            <b>{Number(data.month.articleViews || 0).toLocaleString("pt-BR")} aberturas de matérias</b>. A média diária está em{" "}
+            <b>{Number(data.average30.pageviews || 0).toLocaleString("pt-BR", { maximumFractionDigits: 1 })} visualizações</b>.
           </div>
 
           <div className="field full">
-            <label>📈 Visitantes únicos por dia — últimos 30 dias</label>
+            <label>📈 Visualizações por dia — últimos 30 dias</label>
             <div className="audienceChart">
               {(data.daily || []).map((day) => {
-                const height = Math.max(2, Math.round((Number(day.visitors || 0) / maxVisitors) * 145));
+                const height = Math.max(2, Math.round((Number(day.pageviews || 0) / maxViews) * 145));
                 const date = new Date(day.date + "T12:00:00");
                 return (
-                  <div className="audienceBarWrap" key={day.date} title={`${date.toLocaleDateString("pt-BR")}: ${day.visitors} visitantes / ${day.pageviews} visualizações`}>
+                  <div className="audienceBarWrap" key={day.date} title={`${date.toLocaleDateString("pt-BR")}: ${day.pageviews} visualizações / ${day.articleViews} matérias abertas`}>
                     <div className="audienceBar" style={{ height }} />
                     <small>{date.toLocaleDateString("pt-BR", { day: "2-digit", month: "2-digit" })}</small>
                   </div>
@@ -104,25 +116,25 @@ export default function AudienceAnalytics({ onBack }: { onBack: () => void }) {
           </div>
 
           <div className="field full" style={{ marginTop: 18 }}>
-            <label>🔥 Páginas mais acessadas — últimos 30 dias</label>
-            {(data.topPages || []).length ? (
+            <label>🔥 Matérias mais vistas — últimos 30 dias</label>
+            {(data.topArticles || []).length ? (
               <table className="audienceTopPages">
-                <thead><tr><th>Página</th><th>Visitantes</th><th>Visualizações</th></tr></thead>
+                <thead><tr><th>Matéria</th><th>Visualizações</th></tr></thead>
                 <tbody>
-                  {data.topPages.map((row) => (
+                  {data.topArticles.map((row) => (
                     <tr key={row.path}>
-                      <td><code>{row.path}</code></td>
-                      <td>{Number(row.visitors || 0).toLocaleString("pt-BR")}</td>
+                      <td title={row.path}>{articleLabel(row.path)}</td>
                       <td>{Number(row.pageviews || 0).toLocaleString("pt-BR")}</td>
                     </tr>
                   ))}
                 </tbody>
               </table>
-            ) : <div className="empty">Os dados começam a aparecer conforme os visitantes acessarem o portal.</div>}
+            ) : <div className="empty">As matérias mais vistas aparecem aqui conforme forem abertas pelos leitores.</div>}
           </div>
 
           <div style={{ marginTop: 14, fontSize: 11, color: "#64748b" }}>
-            Visitante único = navegador identificado por cookie anônimo de primeira parte. Não são armazenados nome, e-mail nem endereço IP.
+            A métrica principal é visualização: cada vez que uma página ou matéria é aberta, soma 1. O sistema não usa endereço IP para identificar pessoas.
+            O cookie anônimo continua apenas como métrica secundária de alcance e não interfere na contagem de visualizações.
             {data.trackingSince ? <> Coleta própria iniciada em {new Date(data.trackingSince).toLocaleString("pt-BR")}.</> : null}
           </div>
         </>
