@@ -28,7 +28,7 @@ jobs:
           echo "::add-mask::$TOKEN"
           echo "token=$TOKEN" >> "$GITHUB_OUTPUT"
 
-      - name: Executar Radar + fila + publicacoes + futebol + audiencia
+      - name: Executar ciclo unico completo - ate 300 posts + radar + futebol + audiencia
         shell: bash
         env:
           OIDC_TOKEN: ${{ steps.oidc.outputs.token }}
