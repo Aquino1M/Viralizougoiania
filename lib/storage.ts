@@ -194,6 +194,46 @@ async function writeLocal(posts: Post[]) {
   } catch {}
 }
 
+export async function publishAllScheduledNow(): Promise<number> {
+  const now = new Date().toISOString();
+  let total = 0;
+
+  if (hasSupabaseConfig()) {
+    try {
+      total = await sbExactCount("posts?select=id&status=eq.scheduled");
+      await sb("posts?status=eq.scheduled", {
+        method: "PATCH",
+        headers: { Prefer: "return=minimal" },
+        body: JSON.stringify({
+          status: "published",
+          published_at: now,
+          updated_at: now,
+        }),
+      });
+      return total;
+    } catch (err: any) {
+      console.warn("Erro ao publicar toda a fila no Supabase:", err.message);
+    }
+  }
+
+  try {
+    const posts = await readLocal();
+    let changed = 0;
+    for (const post of posts) {
+      if (post.status === "scheduled") {
+        post.status = "published";
+        post.published_at = now;
+        post.updated_at = now;
+        changed++;
+      }
+    }
+    if (changed) await writeLocal(posts);
+    return changed;
+  } catch {
+    return total;
+  }
+}
+
 export async function publishDuePosts(): Promise<Post[]> {
   const now = new Date().toISOString();
   let updatedPosts: Post[] = [];
@@ -251,7 +291,10 @@ export async function getPosts(opts: { includeDrafts?: boolean; category?: strin
   if (hasSupabaseConfig()) {
     try {
       const filters = ["select=*", "order=published_at.desc.nullslast,created_at.desc"];
-      if (!includeDrafts) filters.push("status=eq.published");
+      if (!includeDrafts) {
+        const nowIso = new Date().toISOString();
+        filters.push(`or=(status.eq.published,and(status.eq.scheduled,published_at.lte.${encodeURIComponent(nowIso)}))`);
+      }
       if (category) filters.push(`category=eq.${encodeURIComponent(category)}`);
       if (limit) filters.push(`limit=${limit}`);
       const posts: Post[] = await sb(`posts?${filters.join("&")}`);
@@ -294,10 +337,15 @@ export async function getPostBySlug(slug: string, includeDrafts = false) {
   }
   if (hasSupabaseConfig()) {
     try {
-      const status = includeDrafts ? "" : "&status=eq.published";
-      const rows = await sb(`posts?select=*&slug=eq.${encodeURIComponent(slug)}${status}&limit=1`);
+      const nowIso = new Date().toISOString();
+      const visibility = includeDrafts
+        ? ""
+        : `&or=(status.eq.published,and(status.eq.scheduled,published_at.lte.${encodeURIComponent(nowIso)}))`;
+      const rows = await sb(`posts?select=*&slug=eq.${encodeURIComponent(slug)}${visibility}&limit=1`);
       if (rows?.[0]) {
-        const normalized = normalizePostCategory(rows[0] as Post);
+        const row = rows[0] as Post;
+        const due = row.status === "scheduled" && row.published_at && new Date(row.published_at).getTime() <= Date.now();
+        const normalized = normalizePostCategory(due ? { ...row, status: "published" as PostStatus } : row);
         return includeDrafts ? normalized : normalizePublicEditorial(normalized);
       }
     } catch (err: any) {
