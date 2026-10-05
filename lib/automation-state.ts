@@ -1,8 +1,9 @@
 export type AutomationState = {
   enabled: boolean;
   interval_minutes: number;
-  queue_mode: "1_per_10m" | "2_per_10m" | "3_per_10m" | "50_per_10m" | "1_per_category" | "3_per_category";
+  queue_mode: "1_per_10m" | "2_per_10m" | "3_per_10m" | "50_per_10m" | "50_per_1m" | "1_per_category" | "3_per_category";
   queue_reflow_version: number;
+  queue_reset_version: number;
   last_run_at: string | null;
   last_success_at: string | null;
   next_run_at: string | null;
@@ -22,9 +23,10 @@ export type AutomationState = {
 
 const DEFAULT_STATE: AutomationState = {
   enabled: true,
-  interval_minutes: 10,
-  queue_mode: "50_per_10m",
-  queue_reflow_version: 0,
+  interval_minutes: 1,
+  queue_mode: "50_per_1m",
+  queue_reflow_version: 1,
+  queue_reset_version: 0,
   last_run_at: null,
   last_success_at: null,
   next_run_at: null,
@@ -79,10 +81,12 @@ export async function getAutomationState(): Promise<AutomationState> {
       ...stored,
       updated_at: rows[0].updated_at || null,
     };
-    if (stored.queue_reflow_version === undefined) {
-      state.queue_mode = "50_per_10m";
-      state.queue_reflow_version = 0;
+    if (stored.queue_mode === "50_per_10m" || stored.queue_mode === undefined) {
+      state.queue_mode = "50_per_1m";
+      state.interval_minutes = 1;
     }
+    if (stored.queue_reflow_version === undefined) state.queue_reflow_version = 1;
+    if (stored.queue_reset_version === undefined) state.queue_reset_version = 0;
     return state;
   } catch (e) {
     return {
