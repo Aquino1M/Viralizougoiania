@@ -5,15 +5,17 @@ import { saveAutomationState } from "@/lib/automation-state";
 
 export const dynamic = "force-dynamic";
 
-type QueueMode = "1_per_10m" | "2_per_10m" | "3_per_10m" | "50_per_10m" | "1_per_category" | "3_per_category";
-const MODES = new Set<QueueMode>(["1_per_10m","2_per_10m","3_per_10m","50_per_10m","1_per_category","3_per_category"]);
+type QueueMode = "1_per_10m" | "2_per_10m" | "3_per_10m" | "50_per_10m" | "50_per_1m" | "1_per_category" | "3_per_category";
+const MODES = new Set<QueueMode>(["1_per_10m","2_per_10m","3_per_10m","50_per_10m","50_per_1m","1_per_category","3_per_category"]);
 
 export async function POST(request: Request) {
   if (!(await isAdmin())) return NextResponse.json({ error: "Não autorizado" }, { status: 401 });
   try {
     const body = await request.json();
-    const interval = Math.max(10, Number(body.interval_minutes) || 10);
-    const mode: QueueMode = MODES.has(body.queue_mode) ? body.queue_mode : "1_per_category";
+    let interval = Math.max(1, Number(body.interval_minutes) || 1);
+    let mode: QueueMode = MODES.has(body.queue_mode) ? body.queue_mode : "50_per_1m";
+    if (mode === "50_per_10m") mode = "50_per_1m";
+    if (mode === "50_per_1m") interval = 1;
     const posts = await getScheduledPostsAll();
     const baseTime = Date.now();
     const planned: Array<{ id: string; publishedAt: string }> = [];
@@ -41,7 +43,7 @@ export async function POST(request: Request) {
         if (hasMore) step++;
       }
     } else {
-      const perSlot = mode === "50_per_10m" ? 50 : mode === "3_per_10m" ? 3 : mode === "2_per_10m" ? 2 : 1;
+      const perSlot = mode === "50_per_1m" ? 50 : mode === "3_per_10m" ? 3 : mode === "2_per_10m" ? 2 : 1;
       posts.forEach((post, index) => {
         planned.push({ id: post.id, publishedAt: new Date(baseTime + (Math.floor(index / perSlot) + 1) * interval * 60000).toISOString() });
       });
