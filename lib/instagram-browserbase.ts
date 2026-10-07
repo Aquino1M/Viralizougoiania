@@ -240,8 +240,8 @@ export async function inspectInstagramSession(sessionId: string) {
     }))()`);
     const url = String(data?.url || "");
     const text = String(data?.text || "");
-    const loggedIn = /instagram\\.com/i.test(url)
-      && !/\\/(accounts\\/(login|signup)|challenge|checkpoint)\\b/i.test(url)
+    const loggedIn = url.toLowerCase().includes("instagram.com")
+      && !/(\\/accounts\\/(login|signup)|\\/challenge|\\/checkpoint)/i.test(url)
       && !/(Log in|Entrar|Cadastre-se|Sign up)/i.test(text.slice(0, 1200));
     return { status: info.status || "UNKNOWN", loggedIn, url, title: String(data?.title || "") };
   } finally {
