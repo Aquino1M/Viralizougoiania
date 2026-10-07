@@ -1,105 +1,64 @@
 "use client";
 
-import { FormEvent, useEffect, useState } from "react";
+import { FormEvent, useState } from "react";
 
 type Props = { onBack: () => void };
-
-type ResolveResult = {
-  title: string;
-  thumbnailUrl?: string;
-  author?: string;
-  downloadUrl: string;
-};
-
-type HelperStatus = "unknown" | "ready" | "starting" | "opened" | "error";
+type ResolveResult = { title: string; thumbnailUrl?: string; author?: string; downloadUrl: string };
 
 export default function InstagramVideoDownloader({ onBack }: Props) {
   const [url, setUrl] = useState("");
   const [loading, setLoading] = useState(false);
+  const [connecting, setConnecting] = useState(false);
+  const [checking, setChecking] = useState(false);
   const [message, setMessage] = useState("");
   const [result, setResult] = useState<ResolveResult | null>(null);
-  const [helperStatus, setHelperStatus] = useState<HelperStatus>("unknown");
+  const [sessionId, setSessionId] = useState("");
+  const [liveViewUrl, setLiveViewUrl] = useState("");
+  const [connected, setConnected] = useState(false);
 
-  useEffect(() => {
-    function onHelperReady() {
-      setHelperStatus("ready");
-    }
-
-    function onHelperStatus(event: Event) {
-      const detail = (event as CustomEvent<{ status?: HelperStatus; message?: string }>).detail || {};
-      if (detail.status) setHelperStatus(detail.status);
-      if (detail.message) setMessage(detail.message);
-    }
-
-    window.addEventListener("viralizou-instagram-helper-ready", onHelperReady);
-    window.addEventListener("viralizou-instagram-helper-status", onHelperStatus);
-
-    // Pede ao auxiliar instalado que informe se está presente nesta aba.
-    window.dispatchEvent(new CustomEvent("viralizou-instagram-helper-ping"));
-
-    return () => {
-      window.removeEventListener("viralizou-instagram-helper-ready", onHelperReady);
-      window.removeEventListener("viralizou-instagram-helper-status", onHelperStatus);
-    };
-  }, []);
-
-  function askLocalBrowserDownload() {
-    const value = url.trim();
-    if (!value) {
-      setMessage("Cole o link do Reel primeiro.");
-      return;
-    }
-
+  async function connectInstagram() {
+    setConnecting(true); setMessage("");
     try {
-      const parsed = new URL(value);
-      if (!/instagram\.com$/i.test(parsed.hostname.replace(/^www\./i, "")) || !/^\/(?:reel|reels|p|tv)\//i.test(parsed.pathname)) {
-        setMessage("Cole um link direto de Reel/publicação do Instagram.");
-        return;
-      }
-    } catch {
-      setMessage("Cole um link válido do Instagram.");
-      return;
-    }
+      const r = await fetch("/api/admin/instagram/connect", { method: "POST" });
+      const d = await r.json().catch(() => ({}));
+      if (!r.ok) throw new Error(d.error || "Não foi possível iniciar a conexão.");
+      setSessionId(d.sessionId || ""); setLiveViewUrl(d.liveViewUrl || ""); setConnected(false);
+      setMessage("🔐 Faça login no Instagram no navegador remoto e depois clique em “Verificar conexão”.");
+      if (d.liveViewUrl) window.open(d.liveViewUrl, "_blank", "noopener,noreferrer");
+    } catch (e) { setMessage(e instanceof Error ? e.message : "Falha ao conectar o Instagram."); }
+    finally { setConnecting(false); }
+  }
 
-    setHelperStatus("starting");
-    setMessage(
-      "⏳ Abrindo o Reel no Instagram usando a sessão já logada neste PC. Não enviamos sua senha nem cookies para o servidor."
-    );
-
-    window.dispatchEvent(
-      new CustomEvent("viralizou-instagram-download", {
-        detail: { url: value },
-      }),
-    );
+  async function checkConnection() {
+    if (!sessionId) return setMessage("Primeiro clique em “Conectar Instagram”.");
+    setChecking(true);
+    try {
+      const r = await fetch("/api/admin/instagram/connect-status", {
+        method: "POST", headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ sessionId }),
+      });
+      const d = await r.json().catch(() => ({}));
+      if (!r.ok) throw new Error(d.error || "Não foi possível verificar.");
+      setConnected(Boolean(d.loggedIn));
+      setMessage(d.loggedIn ? "✅ Instagram conectado. A extensão não é mais necessária." : "⚠️ Ainda não detectei o login. Termine o login e verifique novamente.");
+    } catch (e) { setMessage(e instanceof Error ? e.message : "Falha ao verificar o login."); }
+    finally { setChecking(false); }
   }
 
   async function resolveVideo(e?: FormEvent) {
-    e?.preventDefault();
-    setResult(null);
-    setMessage("");
-
-    if (!url.trim()) {
-      setMessage("Cole o link de um Reel ou vídeo do Instagram.");
-      return;
-    }
-
+    e?.preventDefault(); setResult(null); setMessage("");
+    if (!url.trim()) return setMessage("Cole o link de um Reel ou vídeo do Instagram.");
     setLoading(true);
     try {
-      const response = await fetch("/api/admin/instagram/resolve", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
+      const r = await fetch("/api/admin/instagram/resolve", {
+        method: "POST", headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ url: url.trim() }),
       });
-      const data = await response.json().catch(() => ({}));
-      if (!response.ok) throw new Error(data.error || "Não foi possível localizar o vídeo.");
-
-      setResult(data);
-      setMessage("✅ Vídeo público localizado. Use o botão abaixo para baixar.");
-    } catch (err) {
-      setMessage(err instanceof Error ? err.message : "Não foi possível localizar o vídeo.");
-    } finally {
-      setLoading(false);
-    }
+      const d = await r.json().catch(() => ({}));
+      if (!r.ok) throw new Error(d.error || "Não foi possível localizar o vídeo.");
+      setResult(d); setMessage("✅ Reel localizado. Clique em “Baixar vídeo MP4”.");
+    } catch (e) { setMessage(e instanceof Error ? e.message : "Não foi possível localizar o vídeo."); }
+    finally { setLoading(false); }
   }
 
   return (
@@ -108,7 +67,7 @@ export default function InstagramVideoDownloader({ onBack }: Props) {
         <div>
           <h1>⬇️ Baixar Vídeo do Instagram</h1>
           <div style={{ color: "#68736e", fontSize: 13 }}>
-            O modo recomendado usa o Instagram já logado no seu navegador. A sessão fica no seu PC; ela não é enviada ao Viralizougoiania.
+            Arquitetura 100% sem extensão: navegador remoto + sessão persistente do Instagram.
           </div>
         </div>
         <button type="button" className="btn secondary" onClick={onBack}>Voltar</button>
@@ -118,82 +77,40 @@ export default function InstagramVideoDownloader({ onBack }: Props) {
 
       <div className="adminIgLoggedMode">
         <div>
-          <b>🔐 Download pelo navegador logado</b>
-          <small>
-            Para Reels que o Instagram bloqueia no servidor. É necessário instalar uma pequena extensão auxiliar uma única vez.
-          </small>
+          <b>🔐 Instagram conectado sem extensão</b>
+          <small>Na primeira vez, o painel abre um navegador remoto. Faça login nele normalmente; a sessão fica salva no contexto seguro do servidor para os próximos downloads.</small>
         </div>
         <div className="adminIgHelperRow">
-          <span className={helperStatus === "ready" ? "adminIgHelperDot ok" : "adminIgHelperDot"} />
-          <span>
-            {helperStatus === "ready"
-              ? "Auxiliar conectado"
-              : helperStatus === "starting"
-                ? "Abrindo Instagram..."
-                : helperStatus === "opened"
-                  ? "Capturando o vídeo..."
-                  : "Auxiliar não detectado"}
-          </span>
-          {helperStatus === "unknown" && (
-            <a
-              className="btn secondary"
-              href="https://github.com/Aquino1M/Viralizougoiania/tree/main/tools/instagram-downloader-extension"
-              target="_blank"
-              rel="noreferrer"
-            >
-              📦 Instalar auxiliar
-            </a>
-          )}
+          <span className={connected ? "adminIgHelperDot ok" : "adminIgHelperDot"} />
+          <span>{connected ? "Instagram conectado" : "Instagram não conectado"}</span>
+          <button type="button" className="btn secondary" disabled={connecting} onClick={connectInstagram}>{connecting ? "Iniciando..." : "🔐 Conectar Instagram"}</button>
+          {sessionId && <button type="button" className="btn secondary" disabled={checking} onClick={checkConnection}>{checking ? "Verificando..." : "✓ Verificar conexão"}</button>}
+          {liveViewUrl && <a className="btn secondary" href={liveViewUrl} target="_blank" rel="noreferrer">🌐 Abrir navegador</a>}
         </div>
       </div>
 
-      <div className="field">
-        <label>📎 Link público do Instagram</label>
-        <div className="adminFeedUrlRow">
-          <input
-            type="url"
-            required
-            placeholder="https://www.instagram.com/reel/..."
-            value={url}
-            onChange={(e) => setUrl(e.target.value)}
-          />
+      <form onSubmit={resolveVideo}>
+        <div className="field">
+          <label>🔗 Link do Reel</label>
+          <input type="url" required placeholder="https://www.instagram.com/reel/..." value={url} onChange={(e) => setUrl(e.target.value)} />
         </div>
-      </div>
-
-      <div className="adminIgActions">
-        <button
-          type="button"
-          className="btn"
-          disabled={helperStatus === "starting" || helperStatus === "opened"}
-          onClick={askLocalBrowserDownload}
-        >
-          {helperStatus === "starting" ? "Abrindo Instagram..." : "⬇️ Baixar usando Instagram logado"}
-        </button>
-        <button type="button" className="btn secondary" disabled={loading} onClick={() => resolveVideo()}>
-          {loading ? "Procurando no servidor..." : "🌐 Tentar modo público"}
-        </button>
-      </div>
+        <div className="adminIgActions">
+          <button type="submit" className="btn" disabled={loading}>{loading ? "Procurando..." : "🔎 Localizar vídeo"}</button>
+        </div>
+      </form>
 
       <div className="adminIgHelp">
-        O modo logado abre o Reel no próprio Instagram e captura o arquivo que o navegador já recebeu. Não pede sua senha, não copia cookies e não tenta acessar conta privada por fora do seu navegador.
+        O site não consegue enxergar os cookies do Chrome instalado no seu PC. Por isso, sem extensão, o login é feito uma única vez no navegador remoto do painel. Depois disso o servidor reutiliza a sessão persistente.
       </div>
 
-      {result && (
-        <div className="adminIgResult">
-          {result.thumbnailUrl ? (
-            <img src={result.thumbnailUrl} alt="" referrerPolicy="no-referrer" />
-          ) : (
-            <div className="adminIgNoThumb">🎬</div>
-          )}
-          <div>
-            <small>{result.author || "Instagram"}</small>
-            <h3>{result.title || "Vídeo do Instagram"}</h3>
-            <a className="btn" href={result.downloadUrl}>
-              ⬇️ Baixar vídeo MP4
-            </a>
-          </div>
+      {result && <div className="adminIgResult">
+        {result.thumbnailUrl ? <img src={result.thumbnailUrl} alt="" referrerPolicy="no-referrer" /> : <div className="adminIgNoThumb">🎬</div>}
+        <div>
+          <small>{result.author || "Instagram"}</small>
+          <h3>{result.title || "Vídeo do Instagram"}</h3>
+          <a className="btn" href={result.downloadUrl}>⬇️ Baixar vídeo MP4</a>
         </div>
-      )}
+      </div>}
     </section>
   );
 }
