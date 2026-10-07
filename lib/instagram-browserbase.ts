@@ -246,7 +246,8 @@ export async function inspectInstagramSession(sessionId: string) {
       && !url.includes("/challenge")
       && !url.includes("/checkpoint")
       && !/(Log in|Entrar|Cadastre-se|Sign up)/i.test(text.slice(0, 1200));
-    return { status: info.status || "UNKNOWN", loggedIn, url, title: String(data?.title || "") };
+    if (loggedIn) await releaseInstagramSession(sessionId);
+    return { status: loggedIn ? "RELEASE_REQUESTED" : (info.status || "UNKNOWN"), loggedIn, url, title: String(data?.title || "") };
   } finally {
     cdp.close();
   }
