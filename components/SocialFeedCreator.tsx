@@ -1,6 +1,6 @@
 "use client";
 
-import { ChangeEvent, useEffect, useRef, useState } from "react";
+import { ChangeEvent, PointerEvent as ReactPointerEvent, useEffect, useRef, useState } from "react";
 import type { Post } from "@/lib/types";
 
 type Props = {
@@ -13,6 +13,8 @@ type FeedPost = Pick<Post, "slug" | "title" | "image_url" | "category" | "city" 
 const W = 1080;
 const H = 1350;
 const REEL_H = 1920;
+const DEFAULT_LOGO_POSITION = { x: 0.5, y: 0.615 };
+type LogoPosition = { x: number; y: number };
 
 function slugFromInput(value: string) {
   const raw = value.trim();
@@ -48,6 +50,13 @@ function drawCover(ctx: CanvasRenderingContext2D, img: HTMLImageElement | HTMLVi
   ctx.drawImage(img, sx, sy, sw, sh, x, y, w, h);
 }
 
+function getLogoSize(logo: HTMLImageElement, format: "feed" | "reel") {
+  const maxWidth = format === "reel" ? 600 : 430;
+  const maxHeight = format === "reel" ? 145 : 105;
+  const scale = Math.min(maxWidth / logo.naturalWidth, maxHeight / logo.naturalHeight, 1);
+  return { width: logo.naturalWidth * scale, height: logo.naturalHeight * scale };
+}
+
 function wrapText(ctx: CanvasRenderingContext2D, text: string, maxWidth: number) {
   const words = text.replace(/\s+/g, " ").trim().split(" ");
   const lines: string[] = [];
@@ -76,7 +85,7 @@ function fitHeadline(ctx: CanvasRenderingContext2D, text: string, maxWidth: numb
   return { size: 48, lines: lines.slice(0, maxLines) };
 }
 
-function drawReelFrame(ctx: CanvasRenderingContext2D, video: HTMLVideoElement | null, logo: HTMLImageElement | null, headline: string, handle: string) {
+function drawReelFrame(ctx: CanvasRenderingContext2D, video: HTMLVideoElement | null, logo: HTMLImageElement | null, headline: string, handle: string, logoPosition: LogoPosition) {
   ctx.fillStyle = "#050505";
   ctx.fillRect(0, 0, W, REEL_H);
   if (video && video.readyState >= 2) drawCover(ctx, video, 0, 0, W, REEL_H);
@@ -89,10 +98,8 @@ function drawReelFrame(ctx: CanvasRenderingContext2D, video: HTMLVideoElement | 
   ctx.fillRect(0, 600, W, REEL_H - 600);
 
   if (logo && logo.complete && logo.naturalWidth) {
-    const scale = Math.min(600 / logo.naturalWidth, 145 / logo.naturalHeight, 1);
-    const width = logo.naturalWidth * scale;
-    const height = logo.naturalHeight * scale;
-    ctx.drawImage(logo, (W - width) / 2, 1190 - height / 2, width, height);
+    const { width, height } = getLogoSize(logo, "reel");
+    ctx.drawImage(logo, logoPosition.x * W - width / 2, logoPosition.y * REEL_H - height / 2, width, height);
   } else {
     ctx.textAlign = "center";
     ctx.fillStyle = "#ffffff";
@@ -123,6 +130,9 @@ export default function SocialFeedCreator({ posts, onBack }: Props) {
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
   const videoPreviewRef = useRef<HTMLVideoElement | null>(null);
   const logoImageRef = useRef<HTMLImageElement | null>(null);
+  const articleImageRef = useRef<{ src: string; image: HTMLImageElement } | null>(null);
+  const logoPositionRef = useRef<LogoPosition>(DEFAULT_LOGO_POSITION);
+  const logoDragRef = useRef<{ pointerId: number; offsetX: number; offsetY: number } | null>(null);
   const audioContextRef = useRef<AudioContext | null>(null);
   const audioSourceRef = useRef<MediaElementAudioSourceNode | null>(null);
   const [format, setFormat] = useState<"feed" | "reel">("feed");
@@ -138,6 +148,8 @@ export default function SocialFeedCreator({ posts, onBack }: Props) {
   const [loadingArticle, setLoadingArticle] = useState(false);
   const [handle, setHandle] = useState("@viralizougoiania");
   const [logoData, setLogoData] = useState("");
+  const [logoPosition, setLogoPosition] = useState<LogoPosition>(DEFAULT_LOGO_POSITION);
+  const [draggingLogo, setDraggingLogo] = useState(false);
   const [imagePosition, setImagePosition] = useState(0);
   const [message, setMessage] = useState("");
   const [rendering, setRendering] = useState(false);
@@ -150,8 +162,14 @@ export default function SocialFeedCreator({ posts, onBack }: Props) {
     try {
       const savedLogo = localStorage.getItem("viralizou_feed_logo") || "";
       const savedHandle = localStorage.getItem("viralizou_feed_handle") || "";
+      const savedPosition = JSON.parse(localStorage.getItem("viralizou_feed_logo_position") || "null");
       if (savedLogo) setLogoData(savedLogo);
       if (savedHandle) setHandle(savedHandle);
+      if (savedPosition && Number.isFinite(savedPosition.x) && Number.isFinite(savedPosition.y)) {
+        const position = { x: Math.min(1, Math.max(0, savedPosition.x)), y: Math.min(1, Math.max(0, savedPosition.y)) };
+        logoPositionRef.current = position;
+        setLogoPosition(position);
+      }
     } catch {}
   }, []);
 
@@ -168,12 +186,14 @@ export default function SocialFeedCreator({ posts, onBack }: Props) {
 
       if (format === "reel") {
         if (logoData) {
-          try { logoImageRef.current = await loadImage(logoData); }
+          try {
+            if (!logoImageRef.current || logoImageRef.current.src !== logoData) logoImageRef.current = await loadImage(logoData);
+          }
           catch { logoImageRef.current = null; }
         } else {
           logoImageRef.current = null;
         }
-        drawReelFrame(ctx, videoPreviewRef.current, logoImageRef.current, title || selectedPost?.title || "", handle);
+        drawReelFrame(ctx, videoPreviewRef.current, logoImageRef.current, title || selectedPost?.title || "", handle, logoPositionRef.current);
         setMessage("");
         return;
       }
@@ -182,7 +202,9 @@ export default function SocialFeedCreator({ posts, onBack }: Props) {
       ctx.fillRect(0, 0, W, H);
 
       if (selectedPost?.image_url) {
-        const img = await loadImage(`/api/admin/feed-image?slug=${encodeURIComponent(selectedPost.slug)}&v=${encodeURIComponent(selectedPost.updated_at || selectedPost.created_at || "")}`);
+        const src = `/api/admin/feed-image?slug=${encodeURIComponent(selectedPost.slug)}&v=${encodeURIComponent(selectedPost.updated_at || selectedPost.created_at || "")}`;
+        const img = articleImageRef.current?.src === src ? articleImageRef.current.image : await loadImage(src);
+        articleImageRef.current = { src, image: img };
         drawCover(ctx, img, 0, 0, W, 930, imagePosition);
       } else {
         const gradient = ctx.createLinearGradient(0, 0, W, 930);
@@ -206,14 +228,10 @@ export default function SocialFeedCreator({ posts, onBack }: Props) {
       // Logo do jornal: personalizada ou marca textual padrão.
       if (logoData) {
         try {
-          const logo = await loadImage(logoData);
-          logoImageRef.current = logo;
-          const maxW = 430;
-          const maxH = 105;
-          const scale = Math.min(maxW / logo.naturalWidth, maxH / logo.naturalHeight, 1);
-          const lw = logo.naturalWidth * scale;
-          const lh = logo.naturalHeight * scale;
-          ctx.drawImage(logo, (W - lw) / 2, 820 - lh / 2, lw, lh);
+          if (!logoImageRef.current || logoImageRef.current.src !== logoData) logoImageRef.current = await loadImage(logoData);
+          const logo = logoImageRef.current;
+          const { width, height } = getLogoSize(logo, "feed");
+          ctx.drawImage(logo, logoPosition.x * W - width / 2, logoPosition.y * H - height / 2, width, height);
         } catch {
           logoImageRef.current = null;
           setLogoData("");
@@ -266,7 +284,7 @@ export default function SocialFeedCreator({ posts, onBack }: Props) {
   useEffect(() => {
     renderCard();
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [selectedPost?.slug, selectedPost?.updated_at, title, logoData, handle, imagePosition, format]);
+  }, [selectedPost?.slug, selectedPost?.updated_at, title, logoData, handle, imagePosition, format, logoPosition.x, logoPosition.y]);
 
   useEffect(() => {
     const video = videoPreviewRef.current;
@@ -277,7 +295,7 @@ export default function SocialFeedCreator({ posts, onBack }: Props) {
       if (time - lastDraw >= 1000 / 30) {
         const canvas = canvasRef.current;
         const ctx = canvas?.getContext("2d");
-        if (ctx && video.readyState >= 2) drawReelFrame(ctx, video, logoImageRef.current, title || selectedPost?.title || "", handle);
+        if (ctx && video.readyState >= 2) drawReelFrame(ctx, video, logoImageRef.current, title || selectedPost?.title || "", handle, logoPositionRef.current);
         lastDraw = time;
       }
       frameId = requestAnimationFrame(draw);
@@ -397,6 +415,56 @@ export default function SocialFeedCreator({ posts, onBack }: Props) {
     document.body.appendChild(a);
     a.click();
     a.remove();
+  }
+
+  function centerLogo() {
+    const position = { x: 0.5, y: 0.5 };
+    logoPositionRef.current = position;
+    setLogoPosition(position);
+    try { localStorage.setItem("viralizou_feed_logo_position", JSON.stringify(position)); } catch {}
+  }
+
+  function onPreviewPointerDown(event: ReactPointerEvent<HTMLCanvasElement>) {
+    const logo = logoImageRef.current;
+    if (!logoData || !logo?.naturalWidth) return;
+
+    const rect = event.currentTarget.getBoundingClientRect();
+    const x = ((event.clientX - rect.left) / rect.width) * W;
+    const canvasHeight = format === "reel" ? REEL_H : H;
+    const y = ((event.clientY - rect.top) / rect.height) * canvasHeight;
+    const { width, height } = getLogoSize(logo, format);
+    const centerX = logoPositionRef.current.x * W;
+    const centerY = logoPositionRef.current.y * canvasHeight;
+    if (x < centerX - width / 2 || x > centerX + width / 2 || y < centerY - height / 2 || y > centerY + height / 2) return;
+
+    event.preventDefault();
+    event.currentTarget.setPointerCapture(event.pointerId);
+    logoDragRef.current = { pointerId: event.pointerId, offsetX: x / W - logoPositionRef.current.x, offsetY: y / canvasHeight - logoPositionRef.current.y };
+    setDraggingLogo(true);
+  }
+
+  function onPreviewPointerMove(event: ReactPointerEvent<HTMLCanvasElement>) {
+    const drag = logoDragRef.current;
+    if (!drag || drag.pointerId !== event.pointerId) return;
+
+    const logo = logoImageRef.current;
+    const rect = event.currentTarget.getBoundingClientRect();
+    const canvasHeight = format === "reel" ? REEL_H : H;
+    const { width, height } = logo ? getLogoSize(logo, format) : { width: 0, height: 0 };
+    const position = {
+      x: Math.min(1 - width / (2 * W), Math.max(width / (2 * W), (event.clientX - rect.left) / rect.width - drag.offsetX)),
+      y: Math.min(1 - height / (2 * canvasHeight), Math.max(height / (2 * canvasHeight), (event.clientY - rect.top) / rect.height - drag.offsetY)),
+    };
+    logoPositionRef.current = position;
+    setLogoPosition(position);
+  }
+
+  function onPreviewPointerUp(event: ReactPointerEvent<HTMLCanvasElement>) {
+    if (logoDragRef.current?.pointerId !== event.pointerId) return;
+    logoDragRef.current = null;
+    setDraggingLogo(false);
+    try { localStorage.setItem("viralizou_feed_logo_position", JSON.stringify(logoPositionRef.current)); } catch {}
+    if (event.currentTarget.hasPointerCapture(event.pointerId)) event.currentTarget.releasePointerCapture(event.pointerId);
   }
 
   async function createReel() {
@@ -577,10 +645,16 @@ export default function SocialFeedCreator({ posts, onBack }: Props) {
             <input type="file" accept="image/png,image/jpeg,image/webp,image/svg+xml" onChange={onLogoChange} />
             <small>A logo fica salva somente neste navegador do painel. PNG com fundo transparente funciona melhor.</small>
             {logoData && (
-              <div className="adminFeedLogoSaved">
-                <img src={logoData} alt="Logo escolhida" />
-                <button type="button" className="btn secondary" onClick={removeLogo}>Remover logo</button>
-              </div>
+              <>
+                <div className="adminFeedLogoSaved">
+                  <img src={logoData} alt="Logo escolhida" />
+                  <button type="button" className="btn secondary" onClick={removeLogo}>Remover logo</button>
+                </div>
+                <div className="adminFeedActions">
+                  <button type="button" className="btn secondary" onClick={centerLogo}>🎯 Centralizar logo</button>
+                  <small>Arraste a logo na prévia. A posição fica salva neste navegador.</small>
+                </div>
+              </>
             )}
           </div>
 
@@ -621,7 +695,16 @@ export default function SocialFeedCreator({ posts, onBack }: Props) {
 
         <div className="adminFeedPreview">
           <div className="adminFeedCanvasFrame" data-format={format}>
-            <canvas ref={canvasRef} width={W} height={H} />
+            <canvas
+              ref={canvasRef}
+              width={W}
+              height={H}
+              onPointerDown={onPreviewPointerDown}
+              onPointerMove={onPreviewPointerMove}
+              onPointerUp={onPreviewPointerUp}
+              onPointerCancel={onPreviewPointerUp}
+              style={{ cursor: logoData ? (draggingLogo ? "grabbing" : "grab") : "default", touchAction: "none" }}
+            />
           </div>
           <small>{format === "feed" ? "Formato 4:5 · 1080×1350" : "Formato vertical 9:16 · 1080×1920"}</small>
           {videoExport && (
