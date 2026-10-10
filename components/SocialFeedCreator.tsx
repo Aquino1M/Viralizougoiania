@@ -51,10 +51,10 @@ function drawCover(ctx: CanvasRenderingContext2D, img: HTMLImageElement | HTMLVi
   ctx.drawImage(img, sx, sy, sw, sh, x, y, w, h);
 }
 
-function getLogoSize(logo: HTMLImageElement, format: "feed" | "reel") {
+function getLogoSize(logo: HTMLImageElement, format: "feed" | "reel", multiplier = 1) {
   const maxWidth = format === "reel" ? 600 : 430;
   const maxHeight = format === "reel" ? 145 : 105;
-  const scale = Math.min(maxWidth / logo.naturalWidth, maxHeight / logo.naturalHeight, 1);
+  const scale = Math.min(maxWidth / logo.naturalWidth, maxHeight / logo.naturalHeight, 1) * multiplier;
   return { width: logo.naturalWidth * scale, height: logo.naturalHeight * scale };
 }
 
@@ -121,6 +121,8 @@ function drawReelFrame(
   logoPosition: LogoPosition,
   textStyle: ReelTextStyle,
   showStrongSceneWarning: boolean,
+  logoScale: number,
+  handleFontSize: number,
 ) {
   ctx.fillStyle = "#050505";
   ctx.fillRect(0, 0, W, REEL_H);
@@ -144,7 +146,7 @@ function drawReelFrame(
   }
 
   if (logo && logo.complete && logo.naturalWidth) {
-    const { width, height } = getLogoSize(logo, "reel");
+    const { width, height } = getLogoSize(logo, "reel", logoScale / 100);
     ctx.drawImage(logo, logoPosition.x * W - width / 2, logoPosition.y * REEL_H - height / 2, width, height);
   } else {
     ctx.textAlign = "center";
@@ -175,7 +177,7 @@ function drawReelFrame(
   ctx.textAlign = "center";
   ctx.textBaseline = "alphabetic";
   ctx.fillStyle = "rgba(255,255,255,.94)";
-  ctx.font = "600 33px Arial, sans-serif";
+  ctx.font = `600 ${handleFontSize}px Arial, sans-serif`;
   ctx.fillText(handle.trim() || "@viralizougoiania", W / 2, 1810);
 }
 
@@ -202,6 +204,8 @@ export default function SocialFeedCreator({ posts, onBack }: Props) {
   const [handle, setHandle] = useState("@viralizougoiania");
   const [logoData, setLogoData] = useState("");
   const [logoPosition, setLogoPosition] = useState<LogoPosition>(DEFAULT_LOGO_POSITION);
+  const [logoScale, setLogoScale] = useState(100);
+  const [handleFontSize, setHandleFontSize] = useState(33);
   const [draggingLogo, setDraggingLogo] = useState(false);
   const [reelTextStyle, setReelTextStyle] = useState<ReelTextStyle>("standard");
   const [showStrongSceneWarning, setShowStrongSceneWarning] = useState(false);
@@ -220,10 +224,14 @@ export default function SocialFeedCreator({ posts, onBack }: Props) {
       const savedPosition = JSON.parse(localStorage.getItem("viralizou_feed_logo_position") || "null");
       const savedTextStyle = localStorage.getItem("viralizou_reel_text_style");
       const savedWarning = localStorage.getItem("viralizou_reel_strong_scene_warning");
+      const savedLogoScale = Number(localStorage.getItem("viralizou_reel_logo_scale"));
+      const savedHandleFontSize = Number(localStorage.getItem("viralizou_reel_handle_size"));
       if (savedLogo) setLogoData(savedLogo);
       if (savedHandle) setHandle(savedHandle);
       if (savedTextStyle === "highlight" || savedTextStyle === "standard") setReelTextStyle(savedTextStyle);
       if (savedWarning === "true") setShowStrongSceneWarning(true);
+      if (Number.isFinite(savedLogoScale) && savedLogoScale >= 50 && savedLogoScale <= 150) setLogoScale(savedLogoScale);
+      if (Number.isFinite(savedHandleFontSize) && savedHandleFontSize >= 18 && savedHandleFontSize <= 72) setHandleFontSize(savedHandleFontSize);
       if (savedPosition && Number.isFinite(savedPosition.x) && Number.isFinite(savedPosition.y)) {
         const position = { x: Math.min(1, Math.max(0, savedPosition.x)), y: Math.min(1, Math.max(0, savedPosition.y)) };
         logoPositionRef.current = position;
@@ -252,7 +260,7 @@ export default function SocialFeedCreator({ posts, onBack }: Props) {
         } else {
           logoImageRef.current = null;
         }
-        drawReelFrame(ctx, videoPreviewRef.current, logoImageRef.current, title || selectedPost?.title || "", handle, logoPositionRef.current, reelTextStyle, showStrongSceneWarning);
+        drawReelFrame(ctx, videoPreviewRef.current, logoImageRef.current, title || selectedPost?.title || "", handle, logoPositionRef.current, reelTextStyle, showStrongSceneWarning, logoScale, handleFontSize);
         setMessage("");
         return;
       }
@@ -343,7 +351,7 @@ export default function SocialFeedCreator({ posts, onBack }: Props) {
   useEffect(() => {
     renderCard();
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [selectedPost?.slug, selectedPost?.updated_at, title, logoData, handle, imagePosition, format, logoPosition.x, logoPosition.y, reelTextStyle, showStrongSceneWarning]);
+  }, [selectedPost?.slug, selectedPost?.updated_at, title, logoData, handle, imagePosition, format, logoPosition.x, logoPosition.y, reelTextStyle, showStrongSceneWarning, logoScale, handleFontSize]);
 
   useEffect(() => {
     const video = videoPreviewRef.current;
@@ -354,7 +362,7 @@ export default function SocialFeedCreator({ posts, onBack }: Props) {
       if (time - lastDraw >= 1000 / 30) {
         const canvas = canvasRef.current;
         const ctx = canvas?.getContext("2d");
-        if (ctx && video.readyState >= 2) drawReelFrame(ctx, video, logoImageRef.current, title || selectedPost?.title || "", handle, logoPositionRef.current, reelTextStyle, showStrongSceneWarning);
+        if (ctx && video.readyState >= 2) drawReelFrame(ctx, video, logoImageRef.current, title || selectedPost?.title || "", handle, logoPositionRef.current, reelTextStyle, showStrongSceneWarning, logoScale, handleFontSize);
         lastDraw = time;
       }
       frameId = requestAnimationFrame(draw);
@@ -364,7 +372,7 @@ export default function SocialFeedCreator({ posts, onBack }: Props) {
     video.play().catch(() => {});
     frameId = requestAnimationFrame(draw);
     return () => cancelAnimationFrame(frameId);
-  }, [format, videoUrl, title, handle, logoData, selectedPost?.title, reelTextStyle, showStrongSceneWarning]);
+  }, [format, videoUrl, title, handle, logoData, selectedPost?.title, reelTextStyle, showStrongSceneWarning, logoScale, handleFontSize]);
 
   async function loadArticle() {
     const slug = slugFromInput(articleUrl);
@@ -462,6 +470,26 @@ export default function SocialFeedCreator({ posts, onBack }: Props) {
     try { localStorage.setItem("viralizou_feed_handle", value); } catch {}
   }
 
+  function saveReelLogoScale(value: number) {
+    setLogoScale(value);
+    try { localStorage.setItem("viralizou_reel_logo_scale", String(value)); } catch {}
+    const logo = logoImageRef.current;
+    if (!logo?.naturalWidth) return;
+    const { width, height } = getLogoSize(logo, "reel", value / 100);
+    const position = {
+      x: Math.min(1 - width / (2 * W), Math.max(width / (2 * W), logoPositionRef.current.x)),
+      y: Math.min(1 - height / (2 * REEL_H), Math.max(height / (2 * REEL_H), logoPositionRef.current.y)),
+    };
+    logoPositionRef.current = position;
+    setLogoPosition(position);
+    try { localStorage.setItem("viralizou_feed_logo_position", JSON.stringify(position)); } catch {}
+  }
+
+  function saveReelHandleSize(value: number) {
+    setHandleFontSize(value);
+    try { localStorage.setItem("viralizou_reel_handle_size", String(value)); } catch {}
+  }
+
   function chooseReelTextStyle(style: ReelTextStyle) {
     setReelTextStyle(style);
     try { localStorage.setItem("viralizou_reel_text_style", style); } catch {}
@@ -501,7 +529,7 @@ export default function SocialFeedCreator({ posts, onBack }: Props) {
     const x = ((event.clientX - rect.left) / rect.width) * W;
     const canvasHeight = format === "reel" ? REEL_H : H;
     const y = ((event.clientY - rect.top) / rect.height) * canvasHeight;
-    const { width, height } = getLogoSize(logo, format);
+    const { width, height } = getLogoSize(logo, format, format === "reel" ? logoScale / 100 : 1);
     const centerX = logoPositionRef.current.x * W;
     const centerY = logoPositionRef.current.y * canvasHeight;
     if (x < centerX - width / 2 || x > centerX + width / 2 || y < centerY - height / 2 || y > centerY + height / 2) return;
@@ -519,7 +547,7 @@ export default function SocialFeedCreator({ posts, onBack }: Props) {
     const logo = logoImageRef.current;
     const rect = event.currentTarget.getBoundingClientRect();
     const canvasHeight = format === "reel" ? REEL_H : H;
-    const { width, height } = logo ? getLogoSize(logo, format) : { width: 0, height: 0 };
+    const { width, height } = logo ? getLogoSize(logo, format, format === "reel" ? logoScale / 100 : 1) : { width: 0, height: 0 };
     const position = {
       x: Math.min(1 - width / (2 * W), Math.max(width / (2 * W), (event.clientX - rect.left) / rect.width - drag.offsetX)),
       y: Math.min(1 - height / (2 * canvasHeight), Math.max(height / (2 * canvasHeight), (event.clientY - rect.top) / rect.height - drag.offsetY)),
@@ -744,16 +772,29 @@ export default function SocialFeedCreator({ posts, onBack }: Props) {
             )}
           </div>
 
-          <div className="field">
-            <label>↕️ Ajuste vertical da foto</label>
-            <input
-              type="range"
-              min="-100"
-              max="100"
-              value={imagePosition}
-              onChange={(e) => setImagePosition(Number(e.target.value))}
-            />
-          </div>
+          {format === "feed" ? (
+            <div className="field">
+              <label>↕️ Ajuste vertical da foto</label>
+              <input
+                type="range"
+                min="-100"
+                max="100"
+                value={imagePosition}
+                onChange={(e) => setImagePosition(Number(e.target.value))}
+              />
+            </div>
+          ) : (
+            <>
+              <div className="field">
+                <label>🔎 Tamanho da logo · {logoScale}%</label>
+                <input type="range" min="50" max="150" step="5" value={logoScale} disabled={!logoData} onChange={(e) => saveReelLogoScale(Number(e.target.value))} />
+              </div>
+              <div className="field">
+                <label>🔠 Tamanho do texto do @ · {handleFontSize}px</label>
+                <input type="range" min="18" max="72" value={handleFontSize} onChange={(e) => saveReelHandleSize(Number(e.target.value))} />
+              </div>
+            </>
+          )}
 
           {selectedPost && (
             <div className="adminFeedSelected">
