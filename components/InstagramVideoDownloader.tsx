@@ -13,6 +13,16 @@ type ResolveResult = {
 
 type HelperStatus = "unknown" | "ready" | "starting" | "opened" | "error";
 
+function getInstagramPostUrl(value: string) {
+  try {
+    const url = new URL(value.trim());
+    if (url.protocol === "https:" && /(^|\.)instagram\.com$/i.test(url.hostname) && /^\/(?:reel|reels|p|tv)\//i.test(url.pathname)) {
+      return url.toString();
+    }
+  } catch {}
+  return "";
+}
+
 export default function InstagramVideoDownloader({ onBack }: Props) {
   const [url, setUrl] = useState("");
   const [loading, setLoading] = useState(false);
@@ -44,20 +54,9 @@ export default function InstagramVideoDownloader({ onBack }: Props) {
   }, []);
 
   function askLocalBrowserDownload() {
-    const value = url.trim();
+    const value = getInstagramPostUrl(url);
     if (!value) {
-      setMessage("Cole o link do Reel primeiro.");
-      return;
-    }
-
-    try {
-      const parsed = new URL(value);
-      if (parsed.protocol !== "https:" || !/(^|\.)instagram\.com$/i.test(parsed.hostname) || !/^\/(?:reel|reels|p|tv)\//i.test(parsed.pathname)) {
-        setMessage("Cole um link direto de Reel/publicação do Instagram.");
-        return;
-      }
-    } catch {
-      setMessage("Cole um link válido do Instagram.");
+      setMessage("Cole um link direto e válido de Reel/publicação do Instagram.");
       return;
     }
 
@@ -71,6 +70,19 @@ export default function InstagramVideoDownloader({ onBack }: Props) {
         detail: { url: value },
       }),
     );
+  }
+
+  function openWithSaveInsta() {
+    const value = getInstagramPostUrl(url);
+    if (!value) {
+      setMessage("Cole um link direto e válido de Reel/publicação do Instagram.");
+      return;
+    }
+
+    const saveInstaUrl = new URL("https://saveclip.app/pt8");
+    saveInstaUrl.searchParams.set("q", value);
+    window.open(saveInstaUrl.toString(), "_blank", "noopener,noreferrer");
+    setMessage("Abrimos o SaveInsta com o Reel. O download é concluído na outra aba; enviamos somente o link público, sem senha ou cookies.");
   }
 
   async function resolveVideo(e?: FormEvent) {
@@ -165,10 +177,13 @@ export default function InstagramVideoDownloader({ onBack }: Props) {
         <button type="button" className="btn secondary" disabled={loading} onClick={() => resolveVideo()}>
           {loading ? "Procurando no servidor..." : "🌐 Tentar modo público"}
         </button>
+        <button type="button" className="btn secondary" onClick={openWithSaveInsta}>
+          ↗️ Abrir no SaveInsta
+        </button>
       </div>
 
       <div className="adminIgHelp">
-        Extraia o ZIP, abra <b>chrome://extensions</b> ou <b>edge://extensions</b>, ative o modo do desenvolvedor e clique em <b>Carregar sem compactação</b>, selecionando a pasta extraída. Depois, entre no Instagram nesse navegador. A extensão não envia sua senha nem cookies ao servidor.
+        Para instalar o auxiliar: extraia o ZIP, abra <b>chrome://extensions</b> ou <b>edge://extensions</b>, ative o modo do desenvolvedor e clique em <b>Carregar sem compactação</b>, selecionando a pasta extraída. Depois, entre no Instagram nesse navegador. A extensão não envia sua senha nem cookies ao servidor. O botão SaveInsta abre o serviço em outra aba e encaminha somente o link público.
       </div>
 
       {result && (
