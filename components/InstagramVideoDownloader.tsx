@@ -120,7 +120,7 @@ export default function InstagramVideoDownloader({ onBack }: Props) {
         <div>
           <b>🔐 Download pelo navegador logado</b>
           <small>
-            Para Reels que o Instagram bloqueia no servidor. É necessário instalar uma pequena extensão auxiliar uma única vez.
+            Para Reels que o Instagram bloqueia no servidor. Baixe e instale a extensão auxiliar uma única vez no Chrome ou Edge.
           </small>
         </div>
         <div className="adminIgHelperRow">
@@ -134,16 +134,9 @@ export default function InstagramVideoDownloader({ onBack }: Props) {
                   ? "Capturando o vídeo..."
                   : "Auxiliar não detectado"}
           </span>
-          {helperStatus === "unknown" && (
-            <a
-              className="btn secondary"
-              href="https://github.com/Aquino1M/Viralizougoiania/tree/main/tools/instagram-downloader-extension"
-              target="_blank"
-              rel="noreferrer"
-            >
-              📦 Instalar auxiliar
-            </a>
-          )}
+          <a className="btn secondary" href="/downloads/viralizougoiania-instagram-extension.zip" download>
+            ⬇️ Baixar extensão
+          </a>
         </div>
       </div>
 
@@ -175,7 +168,7 @@ export default function InstagramVideoDownloader({ onBack }: Props) {
       </div>
 
       <div className="adminIgHelp">
-        O modo logado abre o Reel no próprio Instagram e captura o arquivo que o navegador já recebeu. Não pede sua senha, não copia cookies e não tenta acessar conta privada por fora do seu navegador.
+        Extraia o ZIP, abra <b>chrome://extensions</b> ou <b>edge://extensions</b>, ative o modo do desenvolvedor e clique em <b>Carregar sem compactação</b>, selecionando a pasta extraída. Depois, entre no Instagram nesse navegador. A extensão não envia sua senha nem cookies ao servidor.
       </div>
 
       {result && (
