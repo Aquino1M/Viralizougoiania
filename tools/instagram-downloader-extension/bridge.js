@@ -92,9 +92,15 @@
 
   if (
     location.hostname === "viralizougoiania.vercel.app" ||
-    location.hostname === "viralizougoiania-grupo-aquino.vercel.app"
+    location.hostname === "viralizougoiania-grupo-aquino.vercel.app" ||
+    location.hostname === "localhost" ||
+    location.hostname === "127.0.0.1"
   ) {
     window.dispatchEvent(new CustomEvent(READY_EVENT));
+
+    chrome.runtime.onMessage.addListener((message) => {
+      if (message?.type === "INSTAGRAM_HELPER_STATUS") emit(message.status, message.message);
+    });
 
     window.addEventListener(SITE_EVENT, (event) => {
       const detail = event.detail || {};

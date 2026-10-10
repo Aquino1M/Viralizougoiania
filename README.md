@@ -160,19 +160,8 @@ O `vercel.json` não usa cron de 10 minutos, mantendo compatibilidade com projet
 A automação usa somente um disparo do GitHub Actions a cada 10 minutos. Esse único request ao endpoint `/api/automation/radar-cycle` atualiza o Radar de Goiás, Brasil, Futebol e Fofocas, corrige editorias antigas, abastece a fila, publica matérias vencidas e sincroniza tabela/jogos do Brasileirão. O navegador não faz mais polling de publicação a cada 20 segundos e a Vercel não possui cron separado para futebol.
 
 
-## Downloader do Instagram — sem extensão
+## Downloader do Instagram — sessão local
 
-O painel administrativo agora usa um navegador remoto persistente para o Instagram. A extensão antiga foi removida.
+Reels públicos podem ser localizados pelo servidor sem login. Para vídeos que precisam da conta pessoal do funcionário, instale a extensão local em `tools/instagram-downloader-extension` seguindo o README dessa pasta, entre no Instagram no mesmo Chrome/Edge e use **Baixar usando Instagram logado** no painel.
 
-Na primeira utilização:
-
-1. Crie um projeto no Browserbase.
-2. Configure na Vercel as variáveis `BROWSERBASE_API_KEY` e `BROWSERBASE_PROJECT_ID`.
-3. Abra **Funcionários → Baixar Vídeo Instagram**.
-4. Clique em **Conectar Instagram**.
-5. Faça login no Instagram no navegador remoto que será aberto.
-6. Clique em **Verificar conexão**. O contexto persistente é salvo e os próximos downloads reutilizam essa sessão.
-
-O painel não consegue ler os cookies do Chrome instalado no computador do funcionário. Por isso, a arquitetura sem extensão usa uma sessão de navegador remoto com contexto persistente. O Browserbase mantém cookies e estado de login no contexto para reutilização entre sessões.
-
-O modo público anterior continua como fallback quando o Browserbase não está configurado, mas Reels que exigem autenticação podem continuar indisponíveis nesse modo.
+A sessão e o download ficam no navegador da pessoa; o Viralizougoiania não recebe a senha nem os cookies. O recurso funciona nos domínios Vercel listados no manifesto e em `localhost`; para outro domínio, adicione-o aos `matches` e `host_permissions` da extensão.

@@ -1,0 +1,41 @@
+{
+  "manifest_version": 3,
+  "name": "Viralizougoiania — Download Instagram Logado",
+  "version": "1.0.0",
+  "description": "Baixa Reels pelo próprio navegador logado, sem enviar cookies para o servidor.",
+  "permissions": [
+    "downloads",
+    "storage"
+  ],
+  "host_permissions": [
+    "https://*.instagram.com/*",
+    "https://*.cdninstagram.com/*",
+    "https://*.fbcdn.net/*",
+    "https://*.fbsbx.com/*",
+    "https://viralizougoiania.vercel.app/*",
+    "https://viralizougoiania-grupo-aquino.vercel.app/*",
+    "http://localhost/*",
+    "http://127.0.0.1/*"
+  ],
+  "background": {
+    "service_worker": "background.js"
+  },
+  "content_scripts": [
+    {
+      "matches": [
+        "https://*.instagram.com/*",
+        "https://viralizougoiania.vercel.app/*",
+        "https://viralizougoiania-grupo-aquino.vercel.app/*",
+        "http://localhost/*",
+        "http://127.0.0.1/*"
+      ],
+      "js": [
+        "bridge.js"
+      ],
+      "run_at": "document_start"
+    }
+  ],
+  "action": {
+    "default_title": "Viralizougoiania — Instagram"
+  }
+}

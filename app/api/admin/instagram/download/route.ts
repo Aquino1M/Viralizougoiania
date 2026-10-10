@@ -1,7 +1,6 @@
 import { NextResponse } from "next/server";
 import { isAdmin } from "@/lib/session";
 import { resolvePublicInstagramVideo } from "@/lib/instagram-public";
-import { resolveInstagramWithBrowser } from "@/lib/instagram-browserbase";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -13,9 +12,7 @@ export async function GET(request: Request) {
   if (!postUrl) return NextResponse.json({ error: "Link obrigatório." }, { status: 400 });
 
   try {
-    const result = process.env.BROWSERBASE_API_KEY && process.env.BROWSERBASE_PROJECT_ID
-      ? await resolveInstagramWithBrowser(postUrl)
-      : await resolvePublicInstagramVideo(postUrl);
+    const result = await resolvePublicInstagramVideo(postUrl);
 
     const response = await fetch(result.mediaUrl, {
       redirect: "follow", cache: "no-store",

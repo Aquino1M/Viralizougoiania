@@ -54,7 +54,7 @@ async function run() {
     progress.style.width = "100%";
     status.textContent = "✅ Download iniciado. Você pode fechar esta aba.";
 
-    await chrome.storage.session.remove(key);
+    chrome.runtime.sendMessage({ type: "REEL_DOWNLOAD_DONE", token });
   } catch (error) {
     // Fallback: tenta o download nativo com a URL assinada capturada pelo navegador.
     try {
@@ -65,9 +65,11 @@ async function run() {
       });
       progress.style.width = "100%";
       status.textContent = "✅ Download enviado para o gerenciador de downloads.";
-      await chrome.storage.session.remove(key);
+      chrome.runtime.sendMessage({ type: "REEL_DOWNLOAD_DONE", token });
     } catch (fallbackError) {
-      status.textContent = "Não foi possível baixar automaticamente. " + (error?.message || "");
+      const message = "Não foi possível baixar automaticamente. " + (fallbackError?.message || error?.message || "");
+      status.textContent = message;
+      chrome.runtime.sendMessage({ type: "REEL_DOWNLOAD_FAILED", token, error: message });
     }
   }
 }

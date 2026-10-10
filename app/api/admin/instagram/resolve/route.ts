@@ -1,7 +1,6 @@
 import { NextResponse } from "next/server";
 import { isAdmin } from "@/lib/session";
 import { resolvePublicInstagramVideo } from "@/lib/instagram-public";
-import { resolveInstagramWithBrowser } from "@/lib/instagram-browserbase";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -13,9 +12,7 @@ export async function POST(request: Request) {
     const body = await request.json();
     const originalUrl = String(body?.url || "").trim();
     if (!originalUrl) return NextResponse.json({ error: "Link obrigatório." }, { status: 400 });
-    const result = process.env.BROWSERBASE_API_KEY && process.env.BROWSERBASE_PROJECT_ID
-      ? await resolveInstagramWithBrowser(originalUrl)
-      : await resolvePublicInstagramVideo(originalUrl);
+    const result = await resolvePublicInstagramVideo(originalUrl);
     return NextResponse.json({
       title: result.title,
       author: result.author,

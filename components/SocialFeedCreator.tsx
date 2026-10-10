@@ -12,6 +12,7 @@ type FeedPost = Pick<Post, "slug" | "title" | "image_url" | "category" | "city" 
 
 const W = 1080;
 const H = 1350;
+const REEL_H = 1920;
 
 function slugFromInput(value: string) {
   const raw = value.trim();
@@ -34,12 +35,15 @@ function loadImage(src: string) {
   });
 }
 
-function drawCover(ctx: CanvasRenderingContext2D, img: HTMLImageElement, x: number, y: number, w: number, h: number, vertical = 0) {
-  const scale = Math.max(w / img.naturalWidth, h / img.naturalHeight);
+function drawCover(ctx: CanvasRenderingContext2D, img: HTMLImageElement | HTMLVideoElement, x: number, y: number, w: number, h: number, vertical = 0) {
+  const sourceWidth = img instanceof HTMLVideoElement ? img.videoWidth : img.naturalWidth;
+  const sourceHeight = img instanceof HTMLVideoElement ? img.videoHeight : img.naturalHeight;
+  if (!sourceWidth || !sourceHeight) return;
+  const scale = Math.max(w / sourceWidth, h / sourceHeight);
   const sw = w / scale;
   const sh = h / scale;
-  const sx = Math.max(0, (img.naturalWidth - sw) / 2);
-  const room = Math.max(0, img.naturalHeight - sh);
+  const sx = Math.max(0, (sourceWidth - sw) / 2);
+  const room = Math.max(0, sourceHeight - sh);
   const sy = Math.min(room, Math.max(0, room / 2 + (vertical / 100) * (room / 2)));
   ctx.drawImage(img, sx, sy, sw, sh, x, y, w, h);
 }
@@ -72,8 +76,62 @@ function fitHeadline(ctx: CanvasRenderingContext2D, text: string, maxWidth: numb
   return { size: 48, lines: lines.slice(0, maxLines) };
 }
 
+function drawReelFrame(ctx: CanvasRenderingContext2D, video: HTMLVideoElement | null, logo: HTMLImageElement | null, headline: string, handle: string) {
+  ctx.fillStyle = "#050505";
+  ctx.fillRect(0, 0, W, REEL_H);
+  if (video && video.readyState >= 2) drawCover(ctx, video, 0, 0, W, REEL_H);
+
+  const shade = ctx.createLinearGradient(0, 650, 0, REEL_H);
+  shade.addColorStop(0, "rgba(0,0,0,.05)");
+  shade.addColorStop(.42, "rgba(0,0,0,.68)");
+  shade.addColorStop(1, "rgba(0,0,0,.94)");
+  ctx.fillStyle = shade;
+  ctx.fillRect(0, 600, W, REEL_H - 600);
+
+  if (logo && logo.complete && logo.naturalWidth) {
+    const scale = Math.min(600 / logo.naturalWidth, 145 / logo.naturalHeight, 1);
+    const width = logo.naturalWidth * scale;
+    const height = logo.naturalHeight * scale;
+    ctx.drawImage(logo, (W - width) / 2, 1190 - height / 2, width, height);
+  } else {
+    ctx.textAlign = "center";
+    ctx.fillStyle = "#ffffff";
+    ctx.font = "900 57px Arial, sans-serif";
+    ctx.fillText("VIRALIZOU", W / 2 - 22, 1200);
+    ctx.fillStyle = "#ff5a1f";
+    ctx.font = "900 35px Arial, sans-serif";
+    ctx.fillText("GOIÂNIA", W / 2 + 214, 1200);
+  }
+
+  ctx.textAlign = "center";
+  ctx.fillStyle = "#ffffff";
+  const fitted = fitHeadline(ctx, headline.trim() || "Novo Reel", 920, 4);
+  ctx.font = `800 ${fitted.size}px Georgia, "Times New Roman", serif`;
+  const lineHeight = fitted.size * 1.08;
+  let y = 1510 - ((fitted.lines.length - 1) * lineHeight) / 2;
+  for (const line of fitted.lines) {
+    ctx.fillText(line, W / 2, y);
+    y += lineHeight;
+  }
+
+  ctx.fillStyle = "rgba(255,255,255,.94)";
+  ctx.font = "600 33px Arial, sans-serif";
+  ctx.fillText(handle.trim() || "@viralizougoiania", W / 2, 1810);
+}
+
 export default function SocialFeedCreator({ posts, onBack }: Props) {
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
+  const videoPreviewRef = useRef<HTMLVideoElement | null>(null);
+  const logoImageRef = useRef<HTMLImageElement | null>(null);
+  const audioContextRef = useRef<AudioContext | null>(null);
+  const audioSourceRef = useRef<MediaElementAudioSourceNode | null>(null);
+  const [format, setFormat] = useState<"feed" | "reel">("feed");
+  const [videoUrl, setVideoUrl] = useState("");
+  const [videoFileName, setVideoFileName] = useState("");
+  const [videoReady, setVideoReady] = useState(false);
+  const [recording, setRecording] = useState(false);
+  const [recordingProgress, setRecordingProgress] = useState(0);
+  const [videoExport, setVideoExport] = useState<{ url: string; filename: string; type: string } | null>(null);
   const [articleUrl, setArticleUrl] = useState("");
   const [selectedPost, setSelectedPost] = useState<FeedPost | null>(null);
   const [title, setTitle] = useState("");
@@ -83,6 +141,10 @@ export default function SocialFeedCreator({ posts, onBack }: Props) {
   const [imagePosition, setImagePosition] = useState(0);
   const [message, setMessage] = useState("");
   const [rendering, setRendering] = useState(false);
+
+  useEffect(() => () => { if (videoUrl) URL.revokeObjectURL(videoUrl); }, [videoUrl]);
+  useEffect(() => () => { if (videoExport?.url) URL.revokeObjectURL(videoExport.url); }, [videoExport?.url]);
+  useEffect(() => () => { audioContextRef.current?.close().catch(() => {}); }, []);
 
   useEffect(() => {
     try {
@@ -102,7 +164,19 @@ export default function SocialFeedCreator({ posts, onBack }: Props) {
     setRendering(true);
     try {
       canvas.width = W;
-      canvas.height = H;
+      canvas.height = format === "reel" ? REEL_H : H;
+
+      if (format === "reel") {
+        if (logoData) {
+          try { logoImageRef.current = await loadImage(logoData); }
+          catch { logoImageRef.current = null; }
+        } else {
+          logoImageRef.current = null;
+        }
+        drawReelFrame(ctx, videoPreviewRef.current, logoImageRef.current, title || selectedPost?.title || "", handle);
+        setMessage("");
+        return;
+      }
 
       ctx.fillStyle = "#050505";
       ctx.fillRect(0, 0, W, H);
@@ -133,6 +207,7 @@ export default function SocialFeedCreator({ posts, onBack }: Props) {
       if (logoData) {
         try {
           const logo = await loadImage(logoData);
+          logoImageRef.current = logo;
           const maxW = 430;
           const maxH = 105;
           const scale = Math.min(maxW / logo.naturalWidth, maxH / logo.naturalHeight, 1);
@@ -140,6 +215,7 @@ export default function SocialFeedCreator({ posts, onBack }: Props) {
           const lh = logo.naturalHeight * scale;
           ctx.drawImage(logo, (W - lw) / 2, 820 - lh / 2, lw, lh);
         } catch {
+          logoImageRef.current = null;
           setLogoData("");
         }
       } else {
@@ -190,7 +266,28 @@ export default function SocialFeedCreator({ posts, onBack }: Props) {
   useEffect(() => {
     renderCard();
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [selectedPost?.slug, selectedPost?.updated_at, title, logoData, handle, imagePosition]);
+  }, [selectedPost?.slug, selectedPost?.updated_at, title, logoData, handle, imagePosition, format]);
+
+  useEffect(() => {
+    const video = videoPreviewRef.current;
+    if (format !== "reel" || !videoUrl || !video) return;
+    let frameId = 0;
+    let lastDraw = 0;
+    const draw = (time: number) => {
+      if (time - lastDraw >= 1000 / 30) {
+        const canvas = canvasRef.current;
+        const ctx = canvas?.getContext("2d");
+        if (ctx && video.readyState >= 2) drawReelFrame(ctx, video, logoImageRef.current, title || selectedPost?.title || "", handle);
+        lastDraw = time;
+      }
+      frameId = requestAnimationFrame(draw);
+    };
+    video.loop = true;
+    video.muted = true;
+    video.play().catch(() => {});
+    frameId = requestAnimationFrame(draw);
+    return () => cancelAnimationFrame(frameId);
+  }, [format, videoUrl, title, handle, logoData, selectedPost?.title]);
 
   async function loadArticle() {
     const slug = slugFromInput(articleUrl);
@@ -221,8 +318,6 @@ export default function SocialFeedCreator({ posts, onBack }: Props) {
       }
 
       if (!post) throw new Error("Notícia não encontrada.");
-      if (!post.image_url) throw new Error("Essa notícia não possui imagem de capa.");
-
       setSelectedPost(post);
       setTitle(post.title);
       setMessage("✅ Notícia carregada. A arte já foi montada abaixo.");
@@ -260,6 +355,26 @@ export default function SocialFeedCreator({ posts, onBack }: Props) {
     reader.readAsDataURL(file);
   }
 
+  function onVideoChange(event: ChangeEvent<HTMLInputElement>) {
+    const file = event.target.files?.[0];
+    if (!file) return;
+    if (!file.type.startsWith("video/")) {
+      setMessage("Escolha um arquivo de vídeo compatível.");
+      return;
+    }
+    if (file.size > 250_000_000) {
+      setMessage("O vídeo deve ter no máximo 250 MB.");
+      return;
+    }
+
+    setVideoReady(false);
+    setVideoFileName(file.name);
+    setVideoUrl(URL.createObjectURL(file));
+    setVideoExport(null);
+    setFormat("reel");
+    setMessage("Carregando o vídeo para a prévia...");
+  }
+
   function removeLogo() {
     setLogoData("");
     try { localStorage.removeItem("viralizou_feed_logo"); } catch {}
@@ -284,13 +399,123 @@ export default function SocialFeedCreator({ posts, onBack }: Props) {
     a.remove();
   }
 
+  async function createReel() {
+    const canvas = canvasRef.current;
+    const video = videoPreviewRef.current;
+    if (!videoUrl || !videoFileName || !videoReady || !canvas || !video) {
+      setMessage("Carregue um vídeo e aguarde a prévia ficar pronta.");
+      return;
+    }
+    if (!canvas.captureStream || typeof MediaRecorder === "undefined") {
+      setMessage("Seu navegador não oferece gravação da prévia. Use a versão atual do Chrome ou Edge.");
+      return;
+    }
+    if (!Number.isFinite(video.duration) || video.duration <= 0) {
+      setMessage("Não consegui identificar a duração desse vídeo.");
+      return;
+    }
+
+    const mimeType = [
+      'video/mp4; codecs="avc1.42E01E, mp4a.40.2"',
+      "video/mp4",
+      'video/webm; codecs="vp9, opus"',
+      'video/webm; codecs="vp8, opus"',
+      "video/webm",
+    ].find((type) => MediaRecorder.isTypeSupported(type));
+    if (!mimeType) {
+      setMessage("Este navegador não oferece um formato de gravação compatível.");
+      return;
+    }
+
+    setRecording(true);
+    setRecordingProgress(0);
+    setVideoExport(null);
+    setMessage("Gravando a prévia do Reel. Deixe esta aba aberta até terminar.");
+
+    let recorder: MediaRecorder | null = null;
+    let canvasStream: MediaStream | null = null;
+    let audioDestination: MediaStreamAudioDestinationNode | null = null;
+    let audioSource: MediaElementAudioSourceNode | null = null;
+    let progressTimer = 0;
+
+    try {
+      const duration = Math.min(video.duration, 180);
+      video.pause();
+      if (video.currentTime > 0) {
+        await new Promise<void>((resolve, reject) => {
+          const timeout = window.setTimeout(() => reject(new Error("Não consegui reiniciar o vídeo para gravar.")), 10_000);
+          video.addEventListener("seeked", () => { window.clearTimeout(timeout); resolve(); }, { once: true });
+          video.currentTime = 0;
+        });
+      }
+
+      const AudioContextClass = window.AudioContext || (window as Window & { webkitAudioContext?: typeof AudioContext }).webkitAudioContext;
+      if (AudioContextClass) {
+        audioContextRef.current ||= new AudioContextClass();
+        audioSourceRef.current ||= audioContextRef.current.createMediaElementSource(video);
+        audioSource = audioSourceRef.current;
+        audioDestination = audioContextRef.current.createMediaStreamDestination();
+        audioSource.connect(audioDestination);
+        await audioContextRef.current.resume();
+      }
+
+      canvasStream = canvas.captureStream(30);
+      const stream = new MediaStream([
+        ...canvasStream.getVideoTracks(),
+        ...(audioDestination?.stream.getAudioTracks() || []),
+      ]);
+
+      recorder = new MediaRecorder(stream, { mimeType, videoBitsPerSecond: 4_000_000, audioBitsPerSecond: 128_000 });
+      const activeRecorder = recorder;
+      const blob = await new Promise<Blob>((resolve, reject) => {
+        const chunks: Blob[] = [];
+        activeRecorder.ondataavailable = (event) => { if (event.data.size) chunks.push(event.data); };
+        activeRecorder.onerror = () => reject(new Error("A gravação do Reel foi interrompida."));
+        activeRecorder.onstop = () => {
+          const output = new Blob(chunks, { type: activeRecorder.mimeType || mimeType });
+          output.size ? resolve(output) : reject(new Error("O vídeo exportado ficou vazio."));
+        };
+        activeRecorder.start(1000);
+        video.muted = false;
+        video.play().catch(reject);
+
+        const startedAt = performance.now();
+        progressTimer = window.setInterval(() => {
+          const progress = Math.min(100, Math.floor(((performance.now() - startedAt) / (duration * 1000)) * 100));
+          setRecordingProgress(progress);
+          if (progress >= 100 && activeRecorder.state !== "inactive") activeRecorder.stop();
+        }, 250);
+      });
+
+      const extension = blob.type.includes("mp4") ? "mp4" : "webm";
+      const basename = (selectedPost?.slug || videoFileName.replace(/\.[^.]+$/, "") || "viralizou-reel")
+        .replace(/[^a-zA-Z0-9_-]/g, "-") || "viralizou-reel";
+      setVideoExport({ url: URL.createObjectURL(blob), filename: `${basename}-reel.${extension}`, type: blob.type });
+      setRecordingProgress(100);
+      setMessage(`✅ Reel pronto em ${extension.toUpperCase()}. Confira a prévia e baixe o arquivo.`);
+    } catch (error) {
+      setMessage(error instanceof Error ? error.message : "Não foi possível gravar o Reel.");
+    } finally {
+      window.clearInterval(progressTimer);
+      if (recorder?.state !== "inactive") recorder?.stop();
+      if (audioDestination) audioSource?.disconnect(audioDestination);
+      else audioSource?.disconnect();
+      audioDestination?.stream.getTracks().forEach((track) => track.stop());
+      canvasStream?.getTracks().forEach((track) => track.stop());
+      video.pause();
+      video.muted = true;
+      video.play().catch(() => {});
+      setRecording(false);
+    }
+  }
+
   return (
     <section className="panel adminFeedCreator">
       <div className="toolbar">
         <div>
           <h1>🎨 Criador de Post para o Feed</h1>
           <div style={{ color: "#68736e", fontSize: 13 }}>
-            Cole o link de uma notícia do portal e gere automaticamente a arte 1080×1350 com foto, título e a logo do jornal.
+            Monte artes para o Feed ou Reels verticais com sua notícia, marca e vídeo.
           </div>
         </div>
         <button type="button" className="btn secondary" onClick={onBack}>Voltar</button>
@@ -300,6 +525,14 @@ export default function SocialFeedCreator({ posts, onBack }: Props) {
 
       <div className="adminFeedGrid">
         <div className="adminFeedControls">
+          <div className="field">
+            <label>📐 Formato da publicação</label>
+            <div className="adminFeedActions">
+              <button type="button" className={format === "feed" ? "btn" : "btn secondary"} onClick={() => setFormat("feed")}>Feed 4:5 · PNG</button>
+              <button type="button" className={format === "reel" ? "btn" : "btn secondary"} onClick={() => setFormat("reel")}>Reel 9:16 · Vídeo</button>
+            </div>
+          </div>
+
           <div className="field">
             <label>🔗 Link da notícia do Viralizougoiania</label>
             <div className="adminFeedUrlRow">
@@ -315,6 +548,14 @@ export default function SocialFeedCreator({ posts, onBack }: Props) {
               </button>
             </div>
           </div>
+
+          {format === "reel" && (
+            <div className="field">
+              <label>🎬 Vídeo para o Reel</label>
+              <input type="file" accept="video/*" onChange={onVideoChange} />
+              <small>{videoFileName ? `${videoFileName}${videoReady ? " · pronto para prévia" : " · carregando"}` : "Escolha um vídeo de até 250 MB. A exportação usa até 3 minutos."}</small>
+            </div>
+          )}
 
           <div className="field">
             <label>📰 Título na arte</label>
@@ -362,22 +603,47 @@ export default function SocialFeedCreator({ posts, onBack }: Props) {
           )}
 
           <div className="adminFeedActions">
-            <button type="button" className="btn secondary" disabled={rendering} onClick={renderCard}>
+            {format === "feed" && <button type="button" className="btn secondary" disabled={rendering} onClick={renderCard}>
               {rendering ? "Gerando..." : "🔄 Atualizar prévia"}
-            </button>
-            <button type="button" className="btn" disabled={!selectedPost || rendering} onClick={downloadPng}>
-              ⬇️ Baixar PNG 1080×1350
-            </button>
+            </button>}
+            {format === "feed" ? (
+              <button type="button" className="btn" disabled={!selectedPost || rendering} onClick={downloadPng}>
+                ⬇️ Baixar PNG 1080×1350
+              </button>
+            ) : (
+              <button type="button" className="btn" disabled={!videoReady || recording || rendering} onClick={createReel}>
+                {recording ? `Gravando ${recordingProgress}%...` : "🎥 Gerar Reel"}
+              </button>
+            )}
           </div>
+          {recording && <progress className="adminFeedRecordingProgress" max={100} value={recordingProgress} />}
         </div>
 
         <div className="adminFeedPreview">
-          <div className="adminFeedCanvasFrame">
+          <div className="adminFeedCanvasFrame" data-format={format}>
             <canvas ref={canvasRef} width={W} height={H} />
           </div>
-          <small>Formato 4:5 recomendado para o feed do Instagram e Facebook.</small>
+          <small>{format === "feed" ? "Formato 4:5 · 1080×1350" : "Formato vertical 9:16 · 1080×1920"}</small>
+          {videoExport && (
+            <div className="adminFeedVideoResult">
+              <video src={videoExport.url} controls playsInline />
+              <small>Arquivo gerado: {videoExport.type.includes("mp4") ? "MP4" : "WebM"}</small>
+              <a className="btn" href={videoExport.url} download={videoExport.filename}>⬇️ Baixar Reel</a>
+            </div>
+          )}
         </div>
       </div>
+      <video
+        ref={videoPreviewRef}
+        src={videoUrl || undefined}
+        loop
+        muted
+        playsInline
+        preload="auto"
+        onLoadedData={() => { setVideoReady(true); renderCard(); }}
+        onError={() => { setVideoReady(false); setMessage("Não foi possível abrir esse arquivo de vídeo."); }}
+        style={{ position: "absolute", width: 1, height: 1, opacity: 0, pointerEvents: "none" }}
+      />
     </section>
   );
 }
