@@ -414,6 +414,8 @@ main{min-height:65vh}.heroSection{padding:30px 0 25px}.cityEyebrow{font-size:12p
 .adminFeedSelected b{font-size:13px;color:#14532d}
 .adminFeedSelected span{font-size:11px;color:#64748b}
 .adminFeedActions{display:flex;gap:9px;flex-wrap:wrap}
+.adminFeedWarningOption{display:flex;align-items:center;gap:8px;cursor:pointer}
+.adminFeedWarningOption input{width:auto;margin:0}
 .adminFeedCreator input[type="range"]{width:100%}
 
 .adminIgForm{margin-top:10px}

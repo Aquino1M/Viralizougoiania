@@ -62,7 +62,7 @@ export default function InstagramVideoDownloader({ onBack }: Props) {
 
     setHelperStatus("starting");
     setMessage(
-      "⏳ Abrindo o Reel no Instagram usando a sessão já logada neste PC. Não enviamos sua senha nem cookies para o servidor."
+      "⏳ Buscando o Reel em segundo plano com a sessão já conectada no Chrome/Edge. Não copiamos nem enviamos sua senha ou cookies."
     );
 
     window.dispatchEvent(
@@ -141,9 +141,9 @@ export default function InstagramVideoDownloader({ onBack }: Props) {
             {helperStatus === "ready"
               ? "Auxiliar conectado"
               : helperStatus === "starting"
-                ? "Abrindo Instagram..."
+                ? "Buscando em segundo plano..."
                 : helperStatus === "opened"
-                  ? "Capturando o vídeo..."
+                  ? "Capturando o vídeo em segundo plano..."
                   : "Auxiliar não detectado"}
           </span>
           <a className="btn secondary" href="/downloads/viralizougoiania-instagram-extension.zip" download>
@@ -172,7 +172,7 @@ export default function InstagramVideoDownloader({ onBack }: Props) {
           disabled={helperStatus === "starting" || helperStatus === "opened"}
           onClick={askLocalBrowserDownload}
         >
-          {helperStatus === "starting" ? "Abrindo Instagram..." : "⬇️ Baixar usando Instagram logado"}
+          {helperStatus === "starting" ? "Baixando em segundo plano..." : "⬇️ Baixar usando sessão do Instagram"}
         </button>
         <button type="button" className="btn secondary" disabled={loading} onClick={() => resolveVideo()}>
           {loading ? "Procurando no servidor..." : "🌐 Tentar modo público"}

@@ -112,7 +112,7 @@
         url: value,
       });
 
-      emit("starting", "Abrindo o Instagram no navegador logado...");
+      emit("starting", "Buscando em segundo plano com a sessão já conectada no navegador...");
     });
 
     window.addEventListener("viralizou-instagram-helper-ping", () => {

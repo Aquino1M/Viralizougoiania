@@ -55,6 +55,7 @@ async function run() {
     status.textContent = "✅ Download iniciado. Você pode fechar esta aba.";
 
     chrome.runtime.sendMessage({ type: "REEL_DOWNLOAD_DONE", token });
+    setTimeout(() => window.close(), 5000);
   } catch (error) {
     // Fallback: tenta o download nativo com a URL assinada capturada pelo navegador.
     try {
@@ -66,6 +67,7 @@ async function run() {
       progress.style.width = "100%";
       status.textContent = "✅ Download enviado para o gerenciador de downloads.";
       chrome.runtime.sendMessage({ type: "REEL_DOWNLOAD_DONE", token });
+      setTimeout(() => window.close(), 5000);
     } catch (fallbackError) {
       const message = "Não foi possível baixar automaticamente. " + (fallbackError?.message || error?.message || "");
       status.textContent = message;

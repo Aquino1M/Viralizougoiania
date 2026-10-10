@@ -56,15 +56,17 @@ async function startJob(url, sourceTabId) {
   };
   await saveJob(job);
 
-  const tab = await chrome.tabs.create({ url, active: true });
+  const tab = await chrome.tabs.create({ url, active: false });
   await updateJob(token, { instagramTabId: tab.id });
-  notifyTab(sourceTabId, "starting", "Instagram aberto. Aguarde o auxiliar capturar o vídeo...");
+  notifyTab(sourceTabId, "starting", "Buscando o Reel em segundo plano com a sessão já conectada...");
 }
 
-async function finishJob(token, status, message) {
+async function finishJob(token, status, message, finishedTabId) {
   const job = await getJob(token);
   if (!job) return;
   notifyTab(job.sourceTabId, status, message);
+  const tabsToClose = [...new Set([job.instagramTabId, ...(status === "error" ? [finishedTabId] : [])].filter((id) => Number.isInteger(id)))];
+  await Promise.all(tabsToClose.map((tabId) => chrome.tabs.remove(tabId).catch(() => {})));
   await chrome.storage.session.remove(JOB_PREFIX + token);
   const { active_viralizou_job } = await chrome.storage.session.get("active_viralizou_job");
   if (active_viralizou_job === token) await chrome.storage.session.remove("active_viralizou_job");
@@ -88,7 +90,8 @@ chrome.runtime.onMessage.addListener((message, sender) => {
       message.type === "REEL_DOWNLOAD_DONE" ? "ready" : "error",
       message.type === "REEL_DOWNLOAD_DONE"
         ? "✅ Download enviado ao navegador."
-        : String(message.error || "Não foi possível baixar o vídeo.")
+        : String(message.error || "Não foi possível baixar o vídeo."),
+      sender.tab?.id
     ).catch(() => {});
     return;
   }
@@ -122,7 +125,7 @@ chrome.runtime.onMessage.addListener((message, sender) => {
   if (message.type === "REEL_MEDIA_NOT_FOUND") {
     chrome.storage.session.get("active_viralizou_job").then(async ({ active_viralizou_job }) => {
       if (!active_viralizou_job) return;
-      await finishJob(active_viralizou_job, "error", "Não consegui localizar o vídeo. Abra o Reel no Instagram e tente novamente.");
+      await finishJob(active_viralizou_job, "error", "Não consegui localizar o vídeo usando a sessão atual do navegador.", sender.tab?.id);
     });
     return;
   }
@@ -136,7 +139,7 @@ chrome.tabs.onUpdated.addListener((tabId, info) => {
     const job = await getJob(active_viralizou_job);
     if (!job || job.instagramTabId !== tabId) return;
 
-    notifyTab(tabId, "opened", "Página carregada. Capturando o vídeo...");
+    notifyTab(job.sourceTabId, "opened", "Página carregada em segundo plano. Capturando o vídeo...");
     chrome.tabs.sendMessage(tabId, { type: "CAPTURE_REEL_MEDIA" }).catch(() => {});
   });
 });

@@ -15,6 +15,7 @@ const H = 1350;
 const REEL_H = 1920;
 const DEFAULT_LOGO_POSITION = { x: 0.5, y: 0.615 };
 type LogoPosition = { x: number; y: number };
+type ReelTextStyle = "standard" | "highlight";
 
 function slugFromInput(value: string) {
   const raw = value.trim();
@@ -85,7 +86,42 @@ function fitHeadline(ctx: CanvasRenderingContext2D, text: string, maxWidth: numb
   return { size: 48, lines: lines.slice(0, maxLines) };
 }
 
-function drawReelFrame(ctx: CanvasRenderingContext2D, video: HTMLVideoElement | null, logo: HTMLImageElement | null, headline: string, handle: string, logoPosition: LogoPosition) {
+function drawHighlightHeadline(ctx: CanvasRenderingContext2D, headline: string) {
+  const text = headline.trim().toLocaleUpperCase("pt-BR") || "NOVO REEL";
+  let fontSize = 76;
+  let lines: string[] = [];
+  while (fontSize >= 48) {
+    ctx.font = `900 ${fontSize}px Impact, "Arial Narrow", sans-serif`;
+    lines = wrapText(ctx, text, 960);
+    if (lines.length <= 3) break;
+    fontSize -= 2;
+  }
+  lines = lines.slice(0, 3);
+
+  ctx.textAlign = "left";
+  ctx.textBaseline = "alphabetic";
+  ctx.font = `900 ${fontSize}px Impact, "Arial Narrow", sans-serif`;
+  let baseline = 340;
+  for (const line of lines) {
+    const width = Math.min(ctx.measureText(line).width, 960);
+    ctx.fillStyle = "#ffffff";
+    ctx.fillRect(48, baseline - fontSize * 0.88, width + 24, fontSize + 16);
+    ctx.fillStyle = "#111111";
+    ctx.fillText(line, 60, baseline, 960);
+    baseline += fontSize * 1.18;
+  }
+}
+
+function drawReelFrame(
+  ctx: CanvasRenderingContext2D,
+  video: HTMLVideoElement | null,
+  logo: HTMLImageElement | null,
+  headline: string,
+  handle: string,
+  logoPosition: LogoPosition,
+  textStyle: ReelTextStyle,
+  showStrongSceneWarning: boolean,
+) {
   ctx.fillStyle = "#050505";
   ctx.fillRect(0, 0, W, REEL_H);
   if (video && video.readyState >= 2) drawCover(ctx, video, 0, 0, W, REEL_H);
@@ -96,6 +132,16 @@ function drawReelFrame(ctx: CanvasRenderingContext2D, video: HTMLVideoElement | 
   shade.addColorStop(1, "rgba(0,0,0,.94)");
   ctx.fillStyle = shade;
   ctx.fillRect(0, 600, W, REEL_H - 600);
+
+  if (showStrongSceneWarning) {
+    ctx.fillStyle = "#b91c1c";
+    ctx.fillRect(48, 56, W - 96, 78);
+    ctx.fillStyle = "#ffffff";
+    ctx.textAlign = "center";
+    ctx.textBaseline = "middle";
+    ctx.font = '800 36px Arial, sans-serif';
+    ctx.fillText("AVISO: CENAS FORTES", W / 2, 95);
+  }
 
   if (logo && logo.complete && logo.naturalWidth) {
     const { width, height } = getLogoSize(logo, "reel");
@@ -110,17 +156,24 @@ function drawReelFrame(ctx: CanvasRenderingContext2D, video: HTMLVideoElement | 
     ctx.fillText("GOIÂNIA", W / 2 + 214, 1200);
   }
 
-  ctx.textAlign = "center";
-  ctx.fillStyle = "#ffffff";
-  const fitted = fitHeadline(ctx, headline.trim() || "Novo Reel", 920, 4);
-  ctx.font = `800 ${fitted.size}px Georgia, "Times New Roman", serif`;
-  const lineHeight = fitted.size * 1.08;
-  let y = 1510 - ((fitted.lines.length - 1) * lineHeight) / 2;
-  for (const line of fitted.lines) {
-    ctx.fillText(line, W / 2, y);
-    y += lineHeight;
+  if (textStyle === "highlight") {
+    drawHighlightHeadline(ctx, headline);
+  } else {
+    ctx.textAlign = "center";
+    ctx.textBaseline = "alphabetic";
+    ctx.fillStyle = "#ffffff";
+    const fitted = fitHeadline(ctx, headline.trim() || "Novo Reel", 920, 4);
+    ctx.font = `800 ${fitted.size}px Georgia, "Times New Roman", serif`;
+    const lineHeight = fitted.size * 1.08;
+    let y = 1510 - ((fitted.lines.length - 1) * lineHeight) / 2;
+    for (const line of fitted.lines) {
+      ctx.fillText(line, W / 2, y);
+      y += lineHeight;
+    }
   }
 
+  ctx.textAlign = "center";
+  ctx.textBaseline = "alphabetic";
   ctx.fillStyle = "rgba(255,255,255,.94)";
   ctx.font = "600 33px Arial, sans-serif";
   ctx.fillText(handle.trim() || "@viralizougoiania", W / 2, 1810);
@@ -150,6 +203,8 @@ export default function SocialFeedCreator({ posts, onBack }: Props) {
   const [logoData, setLogoData] = useState("");
   const [logoPosition, setLogoPosition] = useState<LogoPosition>(DEFAULT_LOGO_POSITION);
   const [draggingLogo, setDraggingLogo] = useState(false);
+  const [reelTextStyle, setReelTextStyle] = useState<ReelTextStyle>("standard");
+  const [showStrongSceneWarning, setShowStrongSceneWarning] = useState(false);
   const [imagePosition, setImagePosition] = useState(0);
   const [message, setMessage] = useState("");
   const [rendering, setRendering] = useState(false);
@@ -163,8 +218,12 @@ export default function SocialFeedCreator({ posts, onBack }: Props) {
       const savedLogo = localStorage.getItem("viralizou_feed_logo") || "";
       const savedHandle = localStorage.getItem("viralizou_feed_handle") || "";
       const savedPosition = JSON.parse(localStorage.getItem("viralizou_feed_logo_position") || "null");
+      const savedTextStyle = localStorage.getItem("viralizou_reel_text_style");
+      const savedWarning = localStorage.getItem("viralizou_reel_strong_scene_warning");
       if (savedLogo) setLogoData(savedLogo);
       if (savedHandle) setHandle(savedHandle);
+      if (savedTextStyle === "highlight" || savedTextStyle === "standard") setReelTextStyle(savedTextStyle);
+      if (savedWarning === "true") setShowStrongSceneWarning(true);
       if (savedPosition && Number.isFinite(savedPosition.x) && Number.isFinite(savedPosition.y)) {
         const position = { x: Math.min(1, Math.max(0, savedPosition.x)), y: Math.min(1, Math.max(0, savedPosition.y)) };
         logoPositionRef.current = position;
@@ -193,7 +252,7 @@ export default function SocialFeedCreator({ posts, onBack }: Props) {
         } else {
           logoImageRef.current = null;
         }
-        drawReelFrame(ctx, videoPreviewRef.current, logoImageRef.current, title || selectedPost?.title || "", handle, logoPositionRef.current);
+        drawReelFrame(ctx, videoPreviewRef.current, logoImageRef.current, title || selectedPost?.title || "", handle, logoPositionRef.current, reelTextStyle, showStrongSceneWarning);
         setMessage("");
         return;
       }
@@ -284,7 +343,7 @@ export default function SocialFeedCreator({ posts, onBack }: Props) {
   useEffect(() => {
     renderCard();
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [selectedPost?.slug, selectedPost?.updated_at, title, logoData, handle, imagePosition, format, logoPosition.x, logoPosition.y]);
+  }, [selectedPost?.slug, selectedPost?.updated_at, title, logoData, handle, imagePosition, format, logoPosition.x, logoPosition.y, reelTextStyle, showStrongSceneWarning]);
 
   useEffect(() => {
     const video = videoPreviewRef.current;
@@ -295,7 +354,7 @@ export default function SocialFeedCreator({ posts, onBack }: Props) {
       if (time - lastDraw >= 1000 / 30) {
         const canvas = canvasRef.current;
         const ctx = canvas?.getContext("2d");
-        if (ctx && video.readyState >= 2) drawReelFrame(ctx, video, logoImageRef.current, title || selectedPost?.title || "", handle, logoPositionRef.current);
+        if (ctx && video.readyState >= 2) drawReelFrame(ctx, video, logoImageRef.current, title || selectedPost?.title || "", handle, logoPositionRef.current, reelTextStyle, showStrongSceneWarning);
         lastDraw = time;
       }
       frameId = requestAnimationFrame(draw);
@@ -305,7 +364,7 @@ export default function SocialFeedCreator({ posts, onBack }: Props) {
     video.play().catch(() => {});
     frameId = requestAnimationFrame(draw);
     return () => cancelAnimationFrame(frameId);
-  }, [format, videoUrl, title, handle, logoData, selectedPost?.title]);
+  }, [format, videoUrl, title, handle, logoData, selectedPost?.title, reelTextStyle, showStrongSceneWarning]);
 
   async function loadArticle() {
     const slug = slugFromInput(articleUrl);
@@ -401,6 +460,16 @@ export default function SocialFeedCreator({ posts, onBack }: Props) {
   function saveHandle(value: string) {
     setHandle(value);
     try { localStorage.setItem("viralizou_feed_handle", value); } catch {}
+  }
+
+  function chooseReelTextStyle(style: ReelTextStyle) {
+    setReelTextStyle(style);
+    try { localStorage.setItem("viralizou_reel_text_style", style); } catch {}
+  }
+
+  function toggleStrongSceneWarning(enabled: boolean) {
+    setShowStrongSceneWarning(enabled);
+    try { localStorage.setItem("viralizou_reel_strong_scene_warning", String(enabled)); } catch {}
   }
 
   function downloadPng() {
@@ -502,6 +571,7 @@ export default function SocialFeedCreator({ posts, onBack }: Props) {
 
     let recorder: MediaRecorder | null = null;
     let canvasStream: MediaStream | null = null;
+    let sourceVideoStream: MediaStream | null = null;
     let audioDestination: MediaStreamAudioDestinationNode | null = null;
     let audioSource: MediaElementAudioSourceNode | null = null;
     let progressTimer = 0;
@@ -517,20 +587,27 @@ export default function SocialFeedCreator({ posts, onBack }: Props) {
         });
       }
 
+      video.muted = false;
+      const videoCapture = video as HTMLVideoElement & { captureStream?: () => MediaStream; mozCaptureStream?: () => MediaStream };
+      const captureSource = videoCapture.captureStream || videoCapture.mozCaptureStream;
+      if (captureSource) sourceVideoStream = captureSource.call(video);
+
       const AudioContextClass = window.AudioContext || (window as Window & { webkitAudioContext?: typeof AudioContext }).webkitAudioContext;
-      if (AudioContextClass) {
+      let audioTracks = sourceVideoStream?.getAudioTracks() || [];
+      if (!audioTracks.length && AudioContextClass) {
         audioContextRef.current ||= new AudioContextClass();
         audioSourceRef.current ||= audioContextRef.current.createMediaElementSource(video);
         audioSource = audioSourceRef.current;
         audioDestination = audioContextRef.current.createMediaStreamDestination();
         audioSource.connect(audioDestination);
         await audioContextRef.current.resume();
+        audioTracks = audioDestination.stream.getAudioTracks();
       }
 
       canvasStream = canvas.captureStream(30);
       const stream = new MediaStream([
         ...canvasStream.getVideoTracks(),
-        ...(audioDestination?.stream.getAudioTracks() || []),
+        ...audioTracks,
       ]);
 
       recorder = new MediaRecorder(stream, { mimeType, videoBitsPerSecond: 4_000_000, audioBitsPerSecond: 128_000 });
@@ -544,7 +621,6 @@ export default function SocialFeedCreator({ posts, onBack }: Props) {
           output.size ? resolve(output) : reject(new Error("O vídeo exportado ficou vazio."));
         };
         activeRecorder.start(1000);
-        video.muted = false;
         video.play().catch(reject);
 
         const startedAt = performance.now();
@@ -570,6 +646,7 @@ export default function SocialFeedCreator({ posts, onBack }: Props) {
       else audioSource?.disconnect();
       audioDestination?.stream.getTracks().forEach((track) => track.stop());
       canvasStream?.getTracks().forEach((track) => track.stop());
+      sourceVideoStream?.getTracks().forEach((track) => track.stop());
       video.pause();
       video.muted = true;
       video.play().catch(() => {});
@@ -621,7 +698,16 @@ export default function SocialFeedCreator({ posts, onBack }: Props) {
             <div className="field">
               <label>🎬 Vídeo para o Reel</label>
               <input type="file" accept="video/*" onChange={onVideoChange} />
-              <small>{videoFileName ? `${videoFileName}${videoReady ? " · pronto para prévia" : " · carregando"}` : "Escolha um vídeo de até 250 MB. A exportação usa até 3 minutos."}</small>
+              <small>{videoFileName ? `${videoFileName}${videoReady ? " · pronto para prévia" : " · carregando"}` : "Escolha um vídeo de até 250 MB. A exportação usa até 3 minutos. O áudio original será mantido quando houver faixa de áudio."}</small>
+              <label>✨ Estilo do título</label>
+              <div className="adminFeedActions" role="group" aria-label="Estilo do título do Reel">
+                <button type="button" className={reelTextStyle === "standard" ? "btn" : "btn secondary"} aria-pressed={reelTextStyle === "standard"} onClick={() => chooseReelTextStyle("standard")}>Padrão</button>
+                <button type="button" className={reelTextStyle === "highlight" ? "btn" : "btn secondary"} aria-pressed={reelTextStyle === "highlight"} onClick={() => chooseReelTextStyle("highlight")}>Faixas brancas</button>
+              </div>
+              <label className="adminFeedWarningOption">
+                <input type="checkbox" checked={showStrongSceneWarning} onChange={(event) => toggleStrongSceneWarning(event.target.checked)} />
+                Exibir aviso “Cenas fortes” no Reel
+              </label>
             </div>
           )}
 
