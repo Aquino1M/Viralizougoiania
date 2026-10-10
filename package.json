@@ -6,7 +6,8 @@
     "dev": "next dev",
     "build": "next build",
     "start": "next start",
-    "lint": "tsc --noEmit"
+    "lint": "tsc --noEmit",
+    "reclassify": "node tools/reclassify.js"
   },
   "dependencies": {
     "next": "^16.4.0",

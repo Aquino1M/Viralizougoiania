@@ -15,6 +15,7 @@ const H = 1350;
 const REEL_H = 1920;
 const DEFAULT_LOGO_POSITION = { x: 0.5, y: 0.615 };
 const DEFAULT_TITLE_POSITION = { x: 0.5, y: 0.7 };
+const DEFAULT_FEED_TITLE_POSITION = { x: 0.5, y: 0.79 };
 
 type LogoPosition = { x: number; y: number };
 type ReelTitleLayout = { lines: string[]; fontSize: number; lineHeight: number; width: number; height: number };
@@ -80,15 +81,20 @@ function wrapText(ctx: CanvasRenderingContext2D, text: string, maxWidth: number)
   return lines;
 }
 
-function fitHeadline(ctx: CanvasRenderingContext2D, text: string, maxWidth: number, maxLines = 5) {
-  for (let size = 78; size >= 48; size -= 2) {
-    ctx.font = `800 ${size}px Georgia, "Times New Roman", serif`;
+function fitHeadline(ctx: CanvasRenderingContext2D, text: string, maxWidth: number, manualSize = 0, fontFamily: ReelFontFamily = "georgia") {
+  // O tamanho escolhido é uma preferência, não pode fazer a manchete ser cortada.
+  // Se não couber, reduz até caber mantendo todas as palavras e linhas.
+  const preferredSize = manualSize > 0 ? manualSize : 68;
+  for (let size = preferredSize; size >= 18; size -= 2) {
+    ctx.font = getReelFont(fontFamily, size);
     const lines = wrapText(ctx, text, maxWidth);
-    if (lines.length <= maxLines) return { size, lines };
+    const lineHeight = size * (fontFamily === "bebas" ? 1.08 : fontFamily === "anton" ? 1.12 : 1.1);
+    if (lines.length * lineHeight <= 330) return { size, lines };
   }
-  ctx.font = '800 48px Georgia, "Times New Roman", serif';
-  const lines = wrapText(ctx, text, maxWidth);
-  return { size: 48, lines: lines.slice(0, maxLines) };
+
+  // Último recurso para manchetes excepcionalmente longas: preserva o texto inteiro.
+  ctx.font = getReelFont(fontFamily, 18);
+  return { size: 18, lines: wrapText(ctx, text, maxWidth) };
 }
 
 function getReelFont(font: ReelFontFamily, size: number): string {
@@ -119,8 +125,6 @@ function getReelTitleLayout(
   const maxWidth = 940;
   let maxLines = 3;
   let startSize = fontFamily === "bebas" ? 92 : fontFamily === "anton" ? 82 : 74;
-  const minSize = 44;
-
   if (textStyle === "standard" && fontFamily === "georgia") {
     maxLines = 4;
     startSize = 72;
@@ -129,17 +133,19 @@ function getReelTitleLayout(
   let chosenSize = startSize;
   let chosenLines: string[] = [];
 
-  for (let s = startSize; s >= minSize; s -= 2) {
+  for (let s = startSize; s >= 18; s -= 2) {
     ctx.font = getReelFont(fontFamily, s);
     const lines = wrapText(ctx, text, maxWidth);
-    if (lines.length <= maxLines) {
+    const lineHeight = s * (fontFamily === "bebas" ? 1.08 : fontFamily === "anton" ? 1.12 : 1.18);
+    if (lines.length <= maxLines && lines.length * lineHeight <= 560) {
       chosenSize = s;
       chosenLines = lines;
       break;
     }
-    if (s - 2 < minSize) {
-      chosenSize = minSize;
-      chosenLines = lines.slice(0, maxLines);
+    if (s === 18) {
+      // Nunca usar slice(maxLines): isso removia o final de títulos compridos.
+      chosenSize = 18;
+      chosenLines = lines;
     }
   }
 
@@ -355,6 +361,7 @@ export default function SocialFeedCreator({ posts, onBack }: Props) {
   const articleImageRef = useRef<{ src: string; image: HTMLImageElement } | null>(null);
   const logoPositionRef = useRef<LogoPosition>(DEFAULT_LOGO_POSITION);
   const titlePositionRef = useRef<LogoPosition>(DEFAULT_TITLE_POSITION);
+  const feedTitlePositionRef = useRef<LogoPosition>(DEFAULT_FEED_TITLE_POSITION);
   const logoDragRef = useRef<{ pointerId: number; offsetX: number; offsetY: number } | null>(null);
   const titleDragRef = useRef<{ pointerId: number; offsetX: number; offsetY: number } | null>(null);
   const audioContextRef = useRef<AudioContext | null>(null);
@@ -384,6 +391,10 @@ export default function SocialFeedCreator({ posts, onBack }: Props) {
   const [reelTextAnimation, setReelTextAnimation] = useState<ReelTextAnimation>("typewriter");
   const [showStrongSceneWarning, setShowStrongSceneWarning] = useState(false);
   const [imagePosition, setImagePosition] = useState(0);
+  const [feedTitleFontSize, setFeedTitleFontSize] = useState<number>(0); // 0 = automático
+  const [feedFontFamily, setFeedFontFamily] = useState<ReelFontFamily>("georgia");
+  const [feedTitlePosition, setFeedTitlePosition] = useState<LogoPosition>(DEFAULT_FEED_TITLE_POSITION);
+  const [feedTitleOffsetY, setFeedTitleOffsetY] = useState<number>(0);
   const [message, setMessage] = useState("");
   const [rendering, setRendering] = useState(false);
 
@@ -404,6 +415,10 @@ export default function SocialFeedCreator({ posts, onBack }: Props) {
       const savedWarning = localStorage.getItem("viralizou_reel_strong_scene_warning");
       const savedLogoScale = Number(localStorage.getItem("viralizou_reel_logo_scale"));
       const savedHandleFontSize = Number(localStorage.getItem("viralizou_reel_handle_size"));
+      const savedFeedTitleSize = Number(localStorage.getItem("viralizou_feed_title_size") || "0");
+      const savedFeedTitleOffsetY = Number(localStorage.getItem("viralizou_feed_title_offset_y") || "0");
+      const savedFeedFontFamily = localStorage.getItem("viralizou_feed_font_family") as ReelFontFamily | null;
+      const savedFeedTitlePosition = JSON.parse(localStorage.getItem("viralizou_feed_title_position") || "null");
 
       if (savedLogo) setLogoData(savedLogo);
       if (savedHandle) setHandle(savedHandle);
@@ -413,6 +428,14 @@ export default function SocialFeedCreator({ posts, onBack }: Props) {
       if (savedWarning === "true") setShowStrongSceneWarning(true);
       if (Number.isFinite(savedLogoScale) && savedLogoScale >= 50 && savedLogoScale <= 150) setLogoScale(savedLogoScale);
       if (Number.isFinite(savedHandleFontSize) && savedHandleFontSize >= 18 && savedHandleFontSize <= 72) setHandleFontSize(savedHandleFontSize);
+      if (Number.isFinite(savedFeedTitleSize)) setFeedTitleFontSize(savedFeedTitleSize);
+      if (Number.isFinite(savedFeedTitleOffsetY)) setFeedTitleOffsetY(savedFeedTitleOffsetY);
+      if (savedFeedFontFamily && ["anton", "bebas", "montserrat", "poppins", "impact", "georgia"].includes(savedFeedFontFamily)) setFeedFontFamily(savedFeedFontFamily);
+      if (savedFeedTitlePosition && Number.isFinite(savedFeedTitlePosition.x) && Number.isFinite(savedFeedTitlePosition.y)) {
+        const position = { x: Math.min(1, Math.max(0, savedFeedTitlePosition.x)), y: Math.min(1, Math.max(0, savedFeedTitlePosition.y)) };
+        feedTitlePositionRef.current = position;
+        setFeedTitlePosition(position);
+      }
       if (savedPosition && Number.isFinite(savedPosition.x) && Number.isFinite(savedPosition.y)) {
         const position = { x: Math.min(1, Math.max(0, savedPosition.x)), y: Math.min(1, Math.max(0, savedPosition.y)) };
         logoPositionRef.current = position;
@@ -505,14 +528,33 @@ export default function SocialFeedCreator({ posts, onBack }: Props) {
         ctx.fillText("Selecione uma notícia do portal", W / 2, 465);
       }
 
-      const overlay = ctx.createLinearGradient(0, 690, 0, 1100);
+      const headline = (title || selectedPost?.title || "Título da notícia").trim();
+      ctx.textAlign = "center";
+      ctx.textBaseline = "alphabetic";
+      ctx.fillStyle = "#ffffff";
+      const fitted = fitHeadline(ctx, headline, 920, feedTitleFontSize, feedFontFamily);
+      ctx.font = getReelFont(feedFontFamily, fitted.size);
+
+      const lineHeight = fitted.size * 1.1;
+      const totalHeight = fitted.lines.length * lineHeight;
+
+      // Base Y centralizada no terço inferior, respeitando margens de segurança
+      let startY = feedTitlePosition.y * H - (totalHeight / 2) + feedTitleOffsetY;
+
+      // Garante que a última linha nunca ultrapasse 1235 (o handle @ fica em 1300)
+      const maxStartY = 1235 - ((fitted.lines.length - 1) * lineHeight);
+      startY = Math.min(maxStartY, Math.max(870, startY));
+
+      // Overlay escuro proporcional à altura do texto para contraste perfeito
+      const overlayTop = Math.max(480, startY - 150);
+      const overlay = ctx.createLinearGradient(0, overlayTop, 0, 1140);
       overlay.addColorStop(0, "rgba(0,0,0,0)");
-      overlay.addColorStop(0.48, "rgba(0,0,0,.74)");
+      overlay.addColorStop(0.32, "rgba(0,0,0,.82)");
       overlay.addColorStop(1, "#050505");
       ctx.fillStyle = overlay;
-      ctx.fillRect(0, 650, W, 520);
+      ctx.fillRect(0, overlayTop, W, H - overlayTop);
 
-      // Logo do jornal
+      // Logo do jornal sobre o overlay
       if (logoData) {
         try {
           if (!logoImageRef.current || logoImageRef.current.src !== logoData) logoImageRef.current = await loadImage(logoData);
@@ -533,28 +575,14 @@ export default function SocialFeedCreator({ posts, onBack }: Props) {
         ctx.fillText("GOIÂNIA", W / 2 + 214, 838);
       }
 
-      const headline = (title || selectedPost?.title || "Título da notícia").trim();
       ctx.textAlign = "center";
-      ctx.textBaseline = "alphabetic";
       ctx.fillStyle = "#ffffff";
-      const fitted = fitHeadline(ctx, headline, 920, 5);
-      ctx.font = `800 ${fitted.size}px Georgia, "Times New Roman", serif`;
+      ctx.font = getReelFont(feedFontFamily, fitted.size);
 
-      const lineHeight = fitted.size * 1.07;
-      const totalHeight = fitted.lines.length * lineHeight;
-      let y = Math.min(1015, Math.max(925, 1060 - totalHeight / 2));
-
+      let lineY = startY;
       for (const line of fitted.lines) {
-        ctx.fillText(line, W / 2, y);
-        y += lineHeight;
-      }
-
-      if (fitted.lines.length) {
-        const originalLines = wrapText(ctx, headline, 920);
-        if (originalLines.length > 5) {
-          const lastY = y - lineHeight;
-          ctx.fillText("…", W / 2 + ctx.measureText(fitted.lines[4]).width / 2 + 18, lastY);
-        }
+        ctx.fillText(line, feedTitlePosition.x * W, lineY);
+        lineY += lineHeight;
       }
 
       ctx.fillStyle = "rgba(255,255,255,.94)";
@@ -572,7 +600,7 @@ export default function SocialFeedCreator({ posts, onBack }: Props) {
   useEffect(() => {
     renderCard();
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [selectedPost?.slug, selectedPost?.updated_at, title, logoData, handle, imagePosition, format, logoPosition.x, logoPosition.y, titlePosition.x, titlePosition.y, reelTextStyle, reelFontFamily, reelTextAnimation, showStrongSceneWarning, logoScale, handleFontSize]);
+  }, [selectedPost?.slug, selectedPost?.updated_at, title, logoData, handle, imagePosition, feedTitleFontSize, feedFontFamily, feedTitlePosition.x, feedTitlePosition.y, feedTitleOffsetY, format, logoPosition.x, logoPosition.y, titlePosition.x, titlePosition.y, reelTextStyle, reelFontFamily, reelTextAnimation, showStrongSceneWarning, logoScale, handleFontSize]);
 
   // Loop de pré-visualização interativa do Reel
   useEffect(() => {
@@ -723,6 +751,16 @@ export default function SocialFeedCreator({ posts, onBack }: Props) {
     try { localStorage.setItem("viralizou_feed_handle", value); } catch {}
   }
 
+  function saveFeedTitleSize(value: number) {
+    setFeedTitleFontSize(value);
+    try { localStorage.setItem("viralizou_feed_title_size", String(value)); } catch {}
+  }
+
+  function saveFeedTitleOffsetY(value: number) {
+    setFeedTitleOffsetY(value);
+    try { localStorage.setItem("viralizou_feed_title_offset_y", String(value)); } catch {}
+  }
+
   function saveReelLogoScale(value: number) {
     setLogoScale(value);
     try { localStorage.setItem("viralizou_reel_logo_scale", String(value)); } catch {}
@@ -804,6 +842,28 @@ export default function SocialFeedCreator({ posts, onBack }: Props) {
       }
     }
 
+    if (format === "feed") {
+      const ctx = event.currentTarget.getContext("2d");
+      if (ctx) {
+        const fitted = fitHeadline(ctx, (title || selectedPost?.title || "Título da notícia").trim(), 920, feedTitleFontSize, feedFontFamily);
+        ctx.font = getReelFont(feedFontFamily, fitted.size);
+        const width = Math.max(...fitted.lines.map((line) => ctx.measureText(line).width), 0);
+        const height = fitted.lines.length * fitted.size * 1.1;
+        const rect = event.currentTarget.getBoundingClientRect();
+        const x = ((event.clientX - rect.left) / rect.width) * W;
+        const y = ((event.clientY - rect.top) / rect.height) * H;
+        const centerX = feedTitlePositionRef.current.x * W;
+        const centerY = feedTitlePositionRef.current.y * H;
+        if (x >= centerX - width / 2 - 24 && x <= centerX + width / 2 + 24 && y >= centerY - height / 2 - 24 && y <= centerY + height / 2 + 24) {
+          event.preventDefault();
+          event.currentTarget.setPointerCapture(event.pointerId);
+          titleDragRef.current = { pointerId: event.pointerId, offsetX: x / W - feedTitlePositionRef.current.x, offsetY: y / H - feedTitlePositionRef.current.y };
+          setDraggingLogo(true);
+          return;
+        }
+      }
+    }
+
     const logo = logoImageRef.current;
     if (!logoData || !logo?.naturalWidth) return;
 
@@ -827,13 +887,26 @@ export default function SocialFeedCreator({ posts, onBack }: Props) {
     if (titleDrag?.pointerId === event.pointerId) {
       const ctx = event.currentTarget.getContext("2d");
       const rect = event.currentTarget.getBoundingClientRect();
-      const layout = ctx ? getReelTitleLayout(ctx, title || selectedPost?.title || "", reelFontFamily, reelTextStyle) : { width: 0, height: 0 };
-      const position = {
-        x: Math.min(1 - layout.width / (2 * W), Math.max(layout.width / (2 * W), (event.clientX - rect.left) / rect.width - titleDrag.offsetX)),
-        y: Math.min(1 - layout.height / (2 * REEL_H), Math.max(layout.height / (2 * REEL_H), (event.clientY - rect.top) / rect.height - titleDrag.offsetY)),
-      };
-      titlePositionRef.current = position;
-      setTitlePosition(position);
+      if (format === "reel") {
+        const layout = ctx ? getReelTitleLayout(ctx, title || selectedPost?.title || "", reelFontFamily, reelTextStyle) : { width: 0, height: 0 };
+        const position = {
+          x: Math.min(1 - layout.width / (2 * W), Math.max(layout.width / (2 * W), (event.clientX - rect.left) / rect.width - titleDrag.offsetX)),
+          y: Math.min(1 - layout.height / (2 * REEL_H), Math.max(layout.height / (2 * REEL_H), (event.clientY - rect.top) / rect.height - titleDrag.offsetY)),
+        };
+        titlePositionRef.current = position;
+        setTitlePosition(position);
+      } else if (ctx) {
+        const fitted = fitHeadline(ctx, (title || selectedPost?.title || "Título da notícia").trim(), 920, feedTitleFontSize, feedFontFamily);
+        ctx.font = getReelFont(feedFontFamily, fitted.size);
+        const width = Math.max(...fitted.lines.map((line) => ctx.measureText(line).width), 0);
+        const height = fitted.lines.length * fitted.size * 1.1;
+        const position = {
+          x: Math.min(1 - width / (2 * W), Math.max(width / (2 * W), (event.clientX - rect.left) / rect.width - titleDrag.offsetX)),
+          y: Math.min(1 - height / (2 * H), Math.max(height / (2 * H), (event.clientY - rect.top) / rect.height - titleDrag.offsetY)),
+        };
+        feedTitlePositionRef.current = position;
+        setFeedTitlePosition(position);
+      }
       return;
     }
 
@@ -856,7 +929,11 @@ export default function SocialFeedCreator({ posts, onBack }: Props) {
     if (titleDragRef.current?.pointerId === event.pointerId) {
       titleDragRef.current = null;
       setDraggingLogo(false);
-      try { localStorage.setItem("viralizou_reel_title_position", JSON.stringify(titlePositionRef.current)); } catch {}
+      try {
+        const key = format === "reel" ? "viralizou_reel_title_position" : "viralizou_feed_title_position";
+        const position = format === "reel" ? titlePositionRef.current : feedTitlePositionRef.current;
+        localStorage.setItem(key, JSON.stringify(position));
+      } catch {}
     } else if (logoDragRef.current?.pointerId === event.pointerId) {
       logoDragRef.current = null;
       setDraggingLogo(false);
@@ -1212,16 +1289,95 @@ export default function SocialFeedCreator({ posts, onBack }: Props) {
           </div>
 
           {format === "feed" ? (
-            <div className="field">
-              <label>↕️ Ajuste vertical da foto</label>
-              <input
-                type="range"
-                min="-100"
-                max="100"
-                value={imagePosition}
-                onChange={(e) => setImagePosition(Number(e.target.value))}
-              />
-            </div>
+            <>
+              <div className="field">
+                <label>↕️ Ajuste vertical da foto</label>
+                <input
+                  type="range"
+                  min="-100"
+                  max="100"
+                  value={imagePosition}
+                  onChange={(e) => setImagePosition(Number(e.target.value))}
+                />
+              </div>
+
+              <div className="field">
+                <label style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+                  <span>🔤 Tamanho da legenda / título</span>
+                  <b>{feedTitleFontSize === 0 ? "Automático" : `${feedTitleFontSize}px`}</b>
+                </label>
+                <div style={{ display: "flex", gap: "8px", alignItems: "center" }}>
+                  <input
+                    type="range"
+                    min="0"
+                    max="68"
+                    step="2"
+                    value={feedTitleFontSize}
+                    onChange={(e) => saveFeedTitleSize(Number(e.target.value))}
+                    style={{ flex: 1 }}
+                  />
+                  {feedTitleFontSize !== 0 && (
+                    <button
+                      type="button"
+                      className="btn secondary"
+                      style={{ padding: "4px 8px", fontSize: "11px", whiteSpace: "nowrap" }}
+                      onClick={() => saveFeedTitleSize(0)}
+                    >
+                      Resetar Auto
+                    </button>
+                  )}
+                </div>
+                <small>Evita cortar o texto da manchete no rodapé. Em automático, o tamanho se ajusta sozinho.</small>
+              </div>
+
+              <div className="field">
+                <label>🔠 Fonte da manchete</label>
+                <select
+                  value={feedFontFamily}
+                  onChange={(event) => {
+                    const next = event.target.value as ReelFontFamily;
+                    setFeedFontFamily(next);
+                    try { localStorage.setItem("viralizou_feed_font_family", next); } catch {}
+                  }}
+                >
+                  <option value="georgia">Georgia · Editorial</option>
+                  <option value="anton">Anton · Viral</option>
+                  <option value="bebas">Bebas Neue</option>
+                  <option value="montserrat">Montserrat</option>
+                  <option value="poppins">Poppins</option>
+                  <option value="impact">Impact</option>
+                </select>
+              </div>
+
+              <div className="field">
+                <label style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+                  <span>↕️ Posição vertical da legenda</span>
+                  <b>{feedTitleOffsetY > 0 ? `+${feedTitleOffsetY}px` : `${feedTitleOffsetY}px`}</b>
+                </label>
+                <div style={{ display: "flex", gap: "8px", alignItems: "center" }}>
+                  <input
+                    type="range"
+                    min="-150"
+                    max="150"
+                    step="5"
+                    value={feedTitleOffsetY}
+                    onChange={(e) => saveFeedTitleOffsetY(Number(e.target.value))}
+                    style={{ flex: 1 }}
+                  />
+                  {feedTitleOffsetY !== 0 && (
+                    <button
+                      type="button"
+                      className="btn secondary"
+                      style={{ padding: "4px 8px", fontSize: "11px", whiteSpace: "nowrap" }}
+                      onClick={() => saveFeedTitleOffsetY(0)}
+                    >
+                      Resetar
+                    </button>
+                  )}
+                </div>
+                <small>Ajusta a altura da legenda para cima ou para baixo.</small>
+              </div>
+            </>
           ) : (
             <>
               <div className="field">

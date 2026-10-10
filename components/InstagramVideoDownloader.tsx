@@ -1,34 +1,33 @@
 "use client";
 
 import { FormEvent, useEffect, useState } from "react";
+import { DownloadPlatform, detectPlatform } from "@/lib/universal-video-downloader";
 
 type Props = { onBack: () => void };
 
 type ResolveResult = {
+  platform: DownloadPlatform;
+  platformLabel?: string;
   title: string;
   thumbnailUrl?: string;
   author?: string;
   downloadUrl: string;
+  directUrl?: string;
+  format?: string;
+  watermarkFree?: boolean;
 };
 
 type HelperStatus = "unknown" | "ready" | "starting" | "opened" | "error";
 
-function getInstagramPostUrl(value: string) {
-  try {
-    const url = new URL(value.trim());
-    if (url.protocol === "https:" && /(^|\.)instagram\.com$/i.test(url.hostname) && /^\/(?:reel|reels|p|tv)\//i.test(url.pathname)) {
-      return url.toString();
-    }
-  } catch {}
-  return "";
-}
-
 export default function InstagramVideoDownloader({ onBack }: Props) {
   const [url, setUrl] = useState("");
+  const [selectedPlatform, setSelectedPlatform] = useState<"auto" | "tiktok" | "instagram" | "twitter">("auto");
   const [loading, setLoading] = useState(false);
   const [message, setMessage] = useState("");
   const [result, setResult] = useState<ResolveResult | null>(null);
   const [helperStatus, setHelperStatus] = useState<HelperStatus>("unknown");
+
+  const detected = detectPlatform(url);
 
   useEffect(() => {
     function onHelperReady() {
@@ -44,7 +43,6 @@ export default function InstagramVideoDownloader({ onBack }: Props) {
     window.addEventListener("viralizou-instagram-helper-ready", onHelperReady);
     window.addEventListener("viralizou-instagram-helper-status", onHelperStatus);
 
-    // Pede ao auxiliar instalado que informe se está presente nesta aba.
     window.dispatchEvent(new CustomEvent("viralizou-instagram-helper-ping"));
 
     return () => {
@@ -54,35 +52,33 @@ export default function InstagramVideoDownloader({ onBack }: Props) {
   }, []);
 
   function askLocalBrowserDownload() {
-    const value = getInstagramPostUrl(url);
-    if (!value) {
-      setMessage("Cole um link direto e válido de Reel/publicação do Instagram.");
+    if (!url.trim()) {
+      setMessage("Cole um link válido do Instagram Reels.");
       return;
     }
 
     setHelperStatus("starting");
     setMessage(
-      "⏳ Buscando o Reel em segundo plano com a sessão já conectada no Chrome/Edge. Não copiamos nem enviamos sua senha ou cookies."
+      "⏳ Buscando o Reel em segundo plano com a sessão do Instagram logada no navegador. Seus cookies continuam 100% seguros na sua máquina."
     );
 
     window.dispatchEvent(
       new CustomEvent("viralizou-instagram-download", {
-        detail: { url: value },
+        detail: { url: url.trim() },
       }),
     );
   }
 
   function openWithSaveInsta() {
-    const value = getInstagramPostUrl(url);
-    if (!value) {
-      setMessage("Cole um link direto e válido de Reel/publicação do Instagram.");
+    if (!url.trim()) {
+      setMessage("Cole um link antes de abrir no SaveInsta.");
       return;
     }
 
     const saveInstaUrl = new URL("https://saveclip.app/pt8");
-    saveInstaUrl.searchParams.set("q", value);
+    saveInstaUrl.searchParams.set("q", url.trim());
     window.open(saveInstaUrl.toString(), "_blank", "noopener,noreferrer");
-    setMessage("Abrimos o SaveInsta com o Reel. O download é concluído na outra aba; enviamos somente o link público, sem senha ou cookies.");
+    setMessage("Abrimos o SaveInsta com o link. O download é concluído na nova aba.");
   }
 
   async function resolveVideo(e?: FormEvent) {
@@ -90,23 +86,55 @@ export default function InstagramVideoDownloader({ onBack }: Props) {
     setResult(null);
     setMessage("");
 
-    if (!url.trim()) {
-      setMessage("Cole o link de um Reel ou vídeo do Instagram.");
+    const targetUrl = url.trim();
+    if (!targetUrl) {
+      setMessage("Cole o link de um vídeo do Instagram, TikTok ou Twitter/X.");
       return;
     }
 
     setLoading(true);
     try {
-      const response = await fetch("/api/admin/instagram/resolve", {
+      // 1. Tenta o motor universal de alta velocidade (TikTok sem marca, Twitter/X, Instagram)
+      const response = await fetch("/api/video-downloader/resolve", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ url: url.trim() }),
+        body: JSON.stringify({ url: targetUrl }),
       });
-      const data = await response.json().catch(() => ({}));
-      if (!response.ok) throw new Error(data.error || "Não foi possível localizar o vídeo.");
 
-      setResult(data);
-      setMessage("✅ Vídeo público localizado. Use o botão abaixo para baixar.");
+      const data = await response.json().catch(() => ({}));
+
+      if (response.ok && data.downloadUrl) {
+        setResult(data);
+        const tag = data.watermarkFree ? " sem marca d'água" : "";
+        setMessage(`✅ Vídeo localizado (${data.platformLabel || "Vídeo"}${tag}). Clique no botão abaixo para baixar.`);
+        return;
+      }
+
+      // 2. Se for Instagram e o motor universal falhou, tenta o resolvedor legado administrativo
+      if (detected === "instagram") {
+        const legacyRes = await fetch("/api/admin/instagram/resolve", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ url: targetUrl }),
+        });
+        const legacyData = await legacyRes.json().catch(() => ({}));
+        if (legacyRes.ok && legacyData.downloadUrl) {
+          setResult({
+            platform: "instagram",
+            platformLabel: "Instagram Reels",
+            title: legacyData.title || "Reel do Instagram",
+            author: legacyData.author || "Instagram",
+            thumbnailUrl: legacyData.thumbnailUrl,
+            downloadUrl: legacyData.downloadUrl,
+            format: "mp4",
+            watermarkFree: true,
+          });
+          setMessage("✅ Reel público localizado. Clique abaixo para baixar.");
+          return;
+        }
+      }
+
+      throw new Error(data.error || "Não foi possível localizar o vídeo com os motores disponíveis.");
     } catch (err) {
       setMessage(err instanceof Error ? err.message : "Não foi possível localizar o vídeo.");
     } finally {
@@ -118,9 +146,9 @@ export default function InstagramVideoDownloader({ onBack }: Props) {
     <section className="panel adminIgDownloader">
       <div className="toolbar">
         <div>
-          <h1>⬇️ Baixar Vídeo do Instagram</h1>
+          <h1>⬇️ Central de Download de Vídeos</h1>
           <div style={{ color: "#68736e", fontSize: 13 }}>
-            O modo recomendado usa o Instagram já logado no seu navegador. A sessão fica no seu PC; ela não é enviada ao Viralizougoiania.
+            Baixe vídeos e Reels do <b>TikTok sem marca d'água</b>, <b>Instagram Reels</b> e <b>Twitter / X</b> direto pelo site.
           </div>
         </div>
         <button type="button" className="btn secondary" onClick={onBack}>Voltar</button>
@@ -128,77 +156,241 @@ export default function InstagramVideoDownloader({ onBack }: Props) {
 
       {message && <div className={message.startsWith("✅") ? "notice" : "notice error"}>{message}</div>}
 
-      <div className="adminIgLoggedMode">
-        <div>
-          <b>🔐 Download pelo navegador logado</b>
-          <small>
-            Para Reels que o Instagram bloqueia no servidor. Baixe e instale a extensão auxiliar uma única vez no Chrome ou Edge.
-          </small>
-        </div>
-        <div className="adminIgHelperRow">
-          <span className={helperStatus === "ready" ? "adminIgHelperDot ok" : "adminIgHelperDot"} />
-          <span>
-            {helperStatus === "ready"
-              ? "Auxiliar conectado"
-              : helperStatus === "starting"
-                ? "Buscando em segundo plano..."
-                : helperStatus === "opened"
-                  ? "Capturando o vídeo em segundo plano..."
-                  : "Auxiliar não detectado"}
-          </span>
-          <a className="btn secondary" href="/downloads/viralizougoiania-instagram-extension.zip" download>
-            ⬇️ Baixar extensão
-          </a>
-        </div>
-      </div>
-
-      <div className="field">
-        <label>📎 Link público do Instagram</label>
-        <div className="adminFeedUrlRow">
-          <input
-            type="url"
-            required
-            placeholder="https://www.instagram.com/reel/..."
-            value={url}
-            onChange={(e) => setUrl(e.target.value)}
-          />
-        </div>
-      </div>
-
-      <div className="adminIgActions">
+      {/* Seletor de Redes / Abas */}
+      <div style={{ display: "flex", gap: 8, margin: "16px 0 12px", flexWrap: "wrap" }}>
         <button
           type="button"
-          className="btn"
-          disabled={helperStatus === "starting" || helperStatus === "opened"}
-          onClick={askLocalBrowserDownload}
+          className={selectedPlatform === "auto" ? "btn" : "btn secondary"}
+          onClick={() => setSelectedPlatform("auto")}
+          style={{ fontSize: 13, padding: "8px 14px" }}
         >
-          {helperStatus === "starting" ? "Baixando em segundo plano..." : "⬇️ Baixar usando sessão do Instagram"}
+          ⚡ Auto-detectar
         </button>
-        <button type="button" className="btn secondary" disabled={loading} onClick={() => resolveVideo()}>
-          {loading ? "Procurando no servidor..." : "🌐 Tentar modo público"}
+        <button
+          type="button"
+          className={selectedPlatform === "tiktok" ? "btn" : "btn secondary"}
+          onClick={() => setSelectedPlatform("tiktok")}
+          style={{ fontSize: 13, padding: "8px 14px" }}
+        >
+          🎵 TikTok (Sem marca d'água)
         </button>
-        <button type="button" className="btn secondary" onClick={openWithSaveInsta}>
-          ↗️ Abrir no SaveInsta
+        <button
+          type="button"
+          className={selectedPlatform === "instagram" ? "btn" : "btn secondary"}
+          onClick={() => setSelectedPlatform("instagram")}
+          style={{ fontSize: 13, padding: "8px 14px" }}
+        >
+          📸 Instagram (Reels & Feed)
+        </button>
+        <button
+          type="button"
+          className={selectedPlatform === "twitter" ? "btn" : "btn secondary"}
+          onClick={() => setSelectedPlatform("twitter")}
+          style={{ fontSize: 13, padding: "8px 14px" }}
+        >
+          🐦 Twitter / X
         </button>
       </div>
 
-      <div className="adminIgHelp">
-        Para instalar o auxiliar: extraia o ZIP, abra <b>chrome://extensions</b> ou <b>edge://extensions</b>, ative o modo do desenvolvedor e clique em <b>Carregar sem compactação</b>, selecionando a pasta extraída. Depois, entre no Instagram nesse navegador. A extensão não envia sua senha nem cookies ao servidor. O botão SaveInsta abre o serviço em outra aba e encaminha somente o link público.
-      </div>
-
-      {result && (
-        <div className="adminIgResult">
-          {result.thumbnailUrl ? (
-            <img src={result.thumbnailUrl} alt="" referrerPolicy="no-referrer" />
-          ) : (
-            <div className="adminIgNoThumb">🎬</div>
-          )}
+      {/* Opção avançada para Instagram logado */}
+      {(selectedPlatform === "instagram" || (selectedPlatform === "auto" && detected === "instagram")) && (
+        <div className="adminIgLoggedMode" style={{ marginBottom: 16 }}>
           <div>
-            <small>{result.author || "Instagram"}</small>
-            <h3>{result.title || "Vídeo do Instagram"}</h3>
-            <a className="btn" href={result.downloadUrl}>
-              ⬇️ Baixar vídeo MP4
+            <b>🔐 Auxiliar de Reels bloqueados no Instagram</b>
+            <small>
+              Se um Reel do Instagram exigir login fechado, você pode usar a extensão auxiliar instalada no Chrome/Edge.
+            </small>
+          </div>
+          <div className="adminIgHelperRow">
+            <span className={helperStatus === "ready" ? "adminIgHelperDot ok" : "adminIgHelperDot"} />
+            <span>
+              {helperStatus === "ready"
+                ? "Auxiliar conectado"
+                : helperStatus === "starting"
+                  ? "Buscando em segundo plano..."
+                  : helperStatus === "opened"
+                    ? "Capturando o vídeo..."
+                    : "Auxiliar opcional não detectado"}
+            </span>
+            <a className="btn secondary" href="/downloads/viralizougoiania-instagram-extension.zip" download>
+              ⬇️ Baixar extensão
             </a>
+          </div>
+        </div>
+      )}
+
+      {/* Campo de URL com detecção automática */}
+      <form onSubmit={resolveVideo}>
+        <div className="field">
+          <label style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+            <span>📎 Cole o link do vídeo (Instagram, TikTok ou Twitter/X)</span>
+            {detected !== "generic" && (
+              <span style={{ fontSize: 12, color: "#16a34a", fontWeight: 700 }}>
+                {detected === "tiktok" && "🎵 TikTok detectado"}
+                {detected === "instagram" && "📸 Instagram detectado"}
+                {detected === "twitter" && "🐦 Twitter/X detectado"}
+              </span>
+            )}
+          </label>
+          <div className="adminFeedUrlRow" style={{ display: "flex", gap: 8 }}>
+            <input
+              type="url"
+              required
+              placeholder={
+                selectedPlatform === "tiktok"
+                  ? "https://www.tiktok.com/@usuario/video/... ou https://vm.tiktok.com/..."
+                  : selectedPlatform === "twitter"
+                    ? "https://x.com/usuario/status/..."
+                    : selectedPlatform === "instagram"
+                      ? "https://www.instagram.com/reel/..."
+                      : "Cole o link do TikTok, Instagram Reels ou Twitter/X..."
+              }
+              value={url}
+              onChange={(e) => setUrl(e.target.value)}
+              style={{ flex: 1 }}
+            />
+            {url && (
+              <button
+                type="button"
+                className="btn secondary"
+                onClick={() => {
+                  setUrl("");
+                  setResult(null);
+                  setMessage("");
+                }}
+                style={{ padding: "0 12px" }}
+              >
+                Limpar
+              </button>
+            )}
+          </div>
+        </div>
+
+        <div className="adminIgActions" style={{ display: "flex", gap: 10, flexWrap: "wrap", marginTop: 12 }}>
+          <button type="submit" className="btn" disabled={loading || !url.trim()}>
+            {loading ? "⏳ Processando link via API..." : "🚀 Localizar e Baixar Vídeo"}
+          </button>
+
+          {(selectedPlatform === "instagram" || (selectedPlatform === "auto" && detected === "instagram")) && (
+            <>
+              <button
+                type="button"
+                className="btn secondary"
+                disabled={helperStatus === "starting" || helperStatus === "opened"}
+                onClick={askLocalBrowserDownload}
+              >
+                {helperStatus === "starting" ? "Baixando..." : "⬇️ Baixar via Navegador Logado"}
+              </button>
+              <button type="button" className="btn secondary" onClick={openWithSaveInsta}>
+                ↗️ Abrir no SaveInsta
+              </button>
+            </>
+          )}
+        </div>
+      </form>
+
+      {/* Card de Resultado do Vídeo Encontrado */}
+      {result && (
+        <div
+          className="adminIgResult"
+          style={{
+            marginTop: 20,
+            padding: 16,
+            background: "#ffffff",
+            borderRadius: 12,
+            border: "1px solid #e2e8f0",
+            display: "flex",
+            gap: 16,
+            alignItems: "center",
+            boxShadow: "0 4px 12px rgba(0,0,0,0.06)",
+          }}
+        >
+          {result.thumbnailUrl ? (
+            <img
+              src={result.thumbnailUrl}
+              alt=""
+              referrerPolicy="no-referrer"
+              style={{ width: 110, height: 110, objectFit: "cover", borderRadius: 8, flexShrink: 0 }}
+            />
+          ) : (
+            <div
+              style={{
+                width: 110,
+                height: 110,
+                background: "#f1f5f9",
+                borderRadius: 8,
+                display: "grid",
+                placeItems: "center",
+                fontSize: 36,
+                flexShrink: 0,
+              }}
+            >
+              🎬
+            </div>
+          )}
+
+          <div style={{ flex: 1, minWidth: 0 }}>
+            <div style={{ display: "flex", gap: 8, alignItems: "center", marginBottom: 4 }}>
+              <span
+                style={{
+                  background:
+                    result.platform === "tiktok"
+                      ? "#000000"
+                      : result.platform === "twitter"
+                        ? "#1d9bf0"
+                        : "#e1306c",
+                  color: "#ffffff",
+                  fontSize: 11,
+                  fontWeight: 700,
+                  padding: "2px 8px",
+                  borderRadius: 4,
+                }}
+              >
+                {result.platformLabel || result.platform.toUpperCase()}
+              </span>
+              {result.watermarkFree && (
+                <span
+                  style={{
+                    background: "#16a34a",
+                    color: "#ffffff",
+                    fontSize: 11,
+                    fontWeight: 700,
+                    padding: "2px 8px",
+                    borderRadius: 4,
+                  }}
+                >
+                  ✨ SEM MARCA D'ÁGUA
+                </span>
+              )}
+              {result.author && <small style={{ color: "#64748b" }}>{result.author}</small>}
+            </div>
+
+            <h3 style={{ fontSize: 16, margin: "4px 0 10px", lineHeight: 1.3, wordBreak: "break-word" }}>
+              {result.title || "Vídeo pronto para download"}
+            </h3>
+
+            <div style={{ display: "flex", gap: 10, flexWrap: "wrap", alignItems: "center" }}>
+              <a
+                className="btn"
+                href={result.downloadUrl}
+                download
+                style={{ background: "#ff5a1f", color: "#fff", textDecoration: "none", padding: "9px 16px" }}
+              >
+                ⬇️ Baixar Vídeo MP4
+              </a>
+
+              {result.directUrl && (
+                <a
+                  className="btn secondary"
+                  href={result.directUrl}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  style={{ textDecoration: "none", padding: "9px 14px", fontSize: 13 }}
+                >
+                  ↗️ Assistir no Navegador
+                </a>
+              )}
+            </div>
           </div>
         </div>
       )}

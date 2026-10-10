@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation";
 import type { AdminUser, Category, ImportedNews, Post, PostStatus, SocialLinks } from "@/lib/types";
 import { slugify } from "@/lib/slug";
 import { formatViralizouArticle } from "@/lib/rewrite";
+import { inferLocation } from "@/lib/category-classifier";
 import SocialFeedCreator from "@/components/SocialFeedCreator";
 import InstagramVideoDownloader from "@/components/InstagramVideoDownloader";
 import AudienceAnalytics from "@/components/AudienceAnalytics";
@@ -420,6 +421,12 @@ export default function AdminApp() {
         ? (activeItem.source_name ? `${activeItem.source_author} | ${activeItem.source_name}` : activeItem.source_author)
         : (activeItem.source_name || "Redação");
 
+      const inferredLocation = inferLocation({
+        title: activeItem.title,
+        excerpt: activeItem.excerpt,
+        source_name: activeItem.source_name,
+        source_url: activeItem.source_url,
+      });
       const payload = {
         title: activeItem.title,
         slug: slugify(activeItem.title),
@@ -427,7 +434,7 @@ export default function AdminApp() {
         content: formatted,
         source_content: rawSource,
         category: targetCategory,
-        city: "Goiânia",
+        city: inferredLocation.city,
         author: computedAuthor,
         image_url: activeItem.image_url || "",
         image_credit: activeItem.image_credit || (activeItem.source_author ? `Reportagem: ${activeItem.source_author}${activeItem.source_name ? ` | ${activeItem.source_name}` : ""}` : `Foto: Reprodução / ${activeItem.source_name || "Divulgação"}`),
@@ -440,7 +447,7 @@ export default function AdminApp() {
         source_author: activeItem.source_author || "",
         seo_title: activeItem.title,
         seo_description: activeItem.excerpt || activeItem.title,
-        seo_keywords: `Goiânia, ${targetCategory}`,
+        seo_keywords: `${inferredLocation.city}, ${targetCategory}`,
       };
 
       const res = await fetch("/api/posts", {
@@ -1600,7 +1607,7 @@ export default function AdminApp() {
             <a href="#" onClick={(e) => { e.preventDefault(); setView("categories"); setCategoryMessage(""); }}>🗂️ Abas / editorias</a>
             <a href="#" onClick={(e) => { e.preventDefault(); setView("socials"); setSocialMessage(""); }}>📱 Redes Sociais</a>
             <a href="#" onClick={(e) => { e.preventDefault(); setView("feedCreator"); setMessage(""); }}>🎨 Criador de Post Feed</a>
-            <a href="#" onClick={(e) => { e.preventDefault(); setView("instagramDownloader"); setMessage(""); }}>⬇️ Baixar Vídeo Instagram</a>
+            <a href="#" onClick={(e) => { e.preventDefault(); setView("instagramDownloader"); setMessage(""); }}>⬇️ Baixar Vídeos (Insta / TikTok / X)</a>
             <a href="#" onClick={(e) => { e.preventDefault(); setView("analytics"); setMessage(""); }}>📊 Audiência & Patrocínio</a>
             <a
               href="#"

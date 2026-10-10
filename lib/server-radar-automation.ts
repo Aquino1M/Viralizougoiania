@@ -3,7 +3,7 @@ import { buildEditorialExcerpt, formatViralizouArticle, needsEditorialRepair } f
 import { slugify } from "@/lib/slug";
 import type { ImportedNews, Post, PostStatus } from "@/lib/types";
 import { getAutomationState, saveAutomationState, saveRadarSnapshot, type RadarSnapshotItem } from "@/lib/automation-state";
-import { classifyEditorial } from "@/lib/category-classifier";
+import { classifyEditorial, inferLocation, isGoiasOrigin } from "@/lib/category-classifier";
 import { syncBrasileiraoData } from "@/lib/football-sync";
 import { hasBrokenEncoding, readResponseTextSmart, repairMojibake } from "@/lib/text-encoding";
 import { refreshAudienceSnapshot } from "@/lib/audience-analytics";
@@ -34,7 +34,7 @@ const SOURCES: RadarSource[] = [
   { name:"GE Goiás & Clubes", feedUrl:"https://ge.globo.com/rss/ge/go/", hosts:["ge.globo.com"], group:"futebol", category:"Futebol" },
   { name:"Metrópoles Futebol", feedUrl:"https://www.metropoles.com/esportes/futebol/feed", hosts:["metropoles.com","www.metropoles.com"], group:"futebol", category:"Futebol" },
   { name:"Gazeta Esportiva", feedUrl:"https://www.gazetaesportiva.com/feed/", hosts:["gazetaesportiva.com","www.gazetaesportiva.com"], group:"futebol", category:"Futebol" },
-  { name:"UOL Esporte", feedUrl:"https://rss.uol.com.br/feed/esporte.xml", hosts:["uol.com.br","rss.uol.com.br"], group:"futebol", category:"Futebol" },
+  { name:"UOL Esporte", feedUrl:"https://rss.uol.com.br/feed/esporte.xml", hosts:["uol.com.br","rss.uol.com.br"], group:"futebol" },
   { name:"Lance Futebol Nacional", feedUrl:"https://www.lance.com.br/futebol-nacional/feed", hosts:["lance.com.br","www.lance.com.br"], group:"futebol", category:"Futebol" },
   { name:"Lance Brasileirão", feedUrl:"https://www.lance.com.br/brasileirao/feed", hosts:["lance.com.br","www.lance.com.br"], group:"futebol", category:"Futebol" },
 
@@ -316,13 +316,32 @@ export async function runServerRadarAutomation(options:{force?:boolean}={}):Prom
     }else errors.push("Tabela/Jogos: "+(footballResult.error instanceof Error?footballResult.error.message:"falha na sincronização"));
 
     const categoryNames=new Set(categories.map(c=>c.name.toLowerCase()));const builtIn=new Set(["fofocas","fofoca","futebol"]);
-    all.forEach(item=>{const cat=(item.category||"").toLowerCase();if(!cat||(!categoryNames.has(cat)&&!builtIn.has(cat)))item.category="Goiânia";});
-    const unseen=dedupeIncoming(all,postIdentityIndex);newItems=unseen.length;const planned=planSchedule(unseen,posts,intervalMinutes,queueMode);
+    const generalCategories=new Set(["política","politica","esportes","economia","futebol","fofocas","fofoca"]);
+    all.forEach(item=>{
+      const isLocal = isGoiasOrigin(item);
+      let cat=(item.category||"").toLowerCase();
+      if(!cat||(!categoryNames.has(cat)&&!builtIn.has(cat))) {
+        item.category = isLocal ? "Goiânia" : "Fofocas";
+      } else if (!isLocal && !generalCategories.has(cat)) {
+        // Matérias que NÃO são de Goiás NUNCA podem ir para abas locais (Goiânia, Bairros, Trânsito, Segurança, etc.)
+        item.category = "Fofocas";
+      }
+    });
+    const unseen=dedupeIncoming(all,postIdentityIndex);
+    // Prioriza matérias de Goiás para agendamento em destaque
+    unseen.sort((a,b) => (isGoiasOrigin(b)?1:0) - (isGoiasOrigin(a)?1:0));
+    newItems=unseen.length;const planned=planSchedule(unseen,posts,intervalMinutes,queueMode);
     const created=await parallelMap(planned,6,async plannedItem=>{
       const item=plannedItem.item;const sourceText=item.source_content||item.excerpt||item.title;
       const content=formatViralizouArticle({title:item.title,excerpt:item.excerpt,sourceText,sourceName:item.source_name,category:item.category});
+      const loc=inferLocation(item);
+      const postCity=loc.city || (loc.isGoias ? "Goiás" : "Brasil");
+      let postCat=item.category || (loc.isGoias ? "Goiânia" : "Fofocas");
+      if(!loc.isGoias && !generalCategories.has(postCat.toLowerCase())) {
+        postCat = "Fofocas";
+      }
       try{
-        return await createPost({slug:slugify(item.title),title:item.title,excerpt:item.excerpt||item.title,content,source_content:sourceText,category:item.category||"Goiânia",city:"Goiânia",author:item.source_author?item.source_author+" | "+item.source_name:(item.source_name||"Redação"),image_url:item.image_url||"",image_credit:item.image_credit||("Foto: Reprodução / "+(item.source_name||"Fonte")),video_url:item.video_url||"",featured:false,status:"scheduled" as PostStatus,published_at:plannedItem.publishedAt,source_name:item.source_name||"",source_url:item.source_url||"",source_author:item.source_author||"",seo_title:item.title,seo_description:item.excerpt||item.title,seo_keywords:"Goiânia, Goiás, "+(item.category||"Goiânia")});
+        return await createPost({slug:slugify(item.title),title:item.title,excerpt:item.excerpt||item.title,content,source_content:sourceText,category:postCat,city:postCity,author:item.source_author?item.source_author+" | "+item.source_name:(item.source_name||"Redação"),image_url:item.image_url||"",image_credit:item.image_credit||("Foto: Reprodução / "+(item.source_name||"Fonte")),video_url:item.video_url||"",featured:false,status:"scheduled" as PostStatus,published_at:plannedItem.publishedAt,source_name:item.source_name||"",source_url:item.source_url||"",source_author:item.source_author||"",seo_title:item.title,seo_description:item.excerpt||item.title,seo_keywords:loc.isGoias?("Goiás, Goiânia, "+postCat):(postCat+", Brasil")});
       }catch(e){errors.push("Agendamento: "+(e instanceof Error?e.message:"erro desconhecido"));return null;}
     });
     added=created.filter(Boolean).length;

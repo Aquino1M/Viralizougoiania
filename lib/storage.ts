@@ -3,7 +3,7 @@ import path from "node:path";
 import { randomUUID } from "node:crypto";
 import type { AdminUser, Category, CategoryInput, Post, PostInput, PostStatus, SiteSettings } from "@/lib/types";
 import { slugify } from "@/lib/slug";
-import { classifyEditorial, normalizePostCategory } from "@/lib/category-classifier";
+import { classifyEditorial, inferLocation, isGoiasOrigin, normalizePostCategory } from "@/lib/category-classifier";
 import { buildEditorialExcerpt, formatViralizouArticle, needsEditorialRepair } from "@/lib/rewrite";
 
 const localFile = path.join(process.cwd(), "data", "posts.json");
@@ -342,8 +342,17 @@ export async function publishDuePosts(): Promise<Post[]> {
   return updatedPosts;
 }
 
+let hasAutoReclassified = false;
+
 export async function getPosts(opts: { includeDrafts?: boolean; category?: string; limit?: number } = {}) {
   const { includeDrafts = false, category, limit } = opts;
+
+  if (!hasAutoReclassified && hasSupabaseConfig()) {
+    hasAutoReclassified = true;
+    reclassifyExternalPosts().catch((err) => {
+      console.warn("Reclassificação automática em background:", err.message);
+    });
+  }
 
   // O Ciclo Único 24/7 é a única automação que libera agendamentos.
   // Leituras do painel e do portal não publicam nada por efeito colateral.
@@ -432,7 +441,9 @@ export async function createPost(input: PostInput) {
       : (input.source_name || "Redação");
   }
   const autoCategory = (input.source_name || input.source_url) ? classifyEditorial(input) : input.category;
-  const post: Post = { ...input, category: autoCategory, author, id: randomUUID(), created_at: now, updated_at: now };
+  const loc = inferLocation(input);
+  const city = input.city && input.city !== "Goiânia" ? input.city : (loc.isGoias ? (loc.city || "Goiânia") : loc.city);
+  const post: Post = { ...input, category: autoCategory, city, author, id: randomUUID(), created_at: now, updated_at: now };
   if (hasSupabaseConfig()) {
     try {
       let rows: any;
@@ -571,7 +582,7 @@ export async function reclassifyExternalPosts(): Promise<{ checked: number; chan
   let rawPosts: Post[] = [];
   if (hasSupabaseConfig()) {
     try {
-      const rows = await sb("posts?select=*&order=created_at.desc");
+      const rows = await sb("posts?select=*&order=created_at.desc&limit=2000");
       if (Array.isArray(rows)) rawPosts = rows as Post[];
     } catch (err: any) {
       console.warn("Erro ao carregar matérias para reclassificação:", err.message);
@@ -581,29 +592,89 @@ export async function reclassifyExternalPosts(): Promise<{ checked: number; chan
     try { rawPosts = await readLocal(); } catch { rawPosts = []; }
   }
 
-  const changes = rawPosts
-    .filter((post) => Boolean(post.source_name || post.source_url))
-    .map((post) => ({ post, target: classifyEditorial(post) }))
-    .filter(({ post, target }) => post.category !== target);
-
+  const changes: Array<{ post: Post; targetCategory: string; targetCity: string; featuredFix?: boolean }> = [];
   const byCategory: Record<string, number> = {};
-  for (const { target } of changes) byCategory[target] = (byCategory[target] || 0) + 1;
+
+  for (const post of rawPosts) {
+    const isGoias = isGoiasOrigin(post);
+    const loc = inferLocation(post);
+    const targetCategory = classifyEditorial(post);
+
+    let targetCity = loc.city;
+    if (post.city === "Goiânia" && !loc.isGoiania) {
+      // Se era "Goiânia" mas a notícia é estadual de Goiás ou interior, muda para "Goiás" ou para a cidade correta
+      targetCity = loc.city;
+    } else if (!post.city || (post.city === "Goiânia" && !isGoias)) {
+      targetCity = loc.city;
+    } else if (post.city && post.city !== "Goiânia" && loc.isGoias) {
+      targetCity = post.city;
+    }
+
+    let featuredFix: boolean | undefined = undefined;
+    // Se um post não é de Goiás e está marcado como featured, desmarque-o
+    if (!isGoias && post.featured) {
+      featuredFix = false;
+    }
+
+    if (post.category !== targetCategory || post.city !== targetCity || featuredFix !== undefined) {
+      changes.push({ post, targetCategory, targetCity, featuredFix });
+      byCategory[targetCategory] = (byCategory[targetCategory] || 0) + 1;
+    }
+  }
+
+  // Garante que o post mais recente de Goiás publicado tenha featured: true para ancorar o Hero
+  const publishedGoias = rawPosts
+    .filter((p) => isGoiasOrigin(p) && p.status === "published")
+    .sort((a, b) => +new Date(b.published_at || b.created_at) - +new Date(a.published_at || a.created_at));
+
+  if (publishedGoias.length > 0 && !publishedGoias.some((p) => p.featured)) {
+    const topLead = publishedGoias[0];
+    const existingChange = changes.find((c) => c.post.id === topLead.id);
+    if (existingChange) {
+      existingChange.featuredFix = true;
+    } else {
+      changes.push({
+        post: topLead,
+        targetCategory: topLead.category,
+        targetCity: topLead.city,
+        featuredFix: true,
+      });
+    }
+  }
 
   if (hasSupabaseConfig() && changes.length) {
-    const grouped = new Map<string, string[]>();
-    for (const { post, target } of changes) {
-      if (!grouped.has(target)) grouped.set(target, []);
-      grouped.get(target)!.push(post.id);
+    // Agrupa por combinação (category + city + featured) para patches eficientes
+    const grouped = new Map<string, { category: string; city: string; featured?: boolean; ids: string[] }>();
+    for (const { post, targetCategory, targetCity, featuredFix } of changes) {
+      const key = `${targetCategory}:::${targetCity}:::${featuredFix === undefined ? "" : featuredFix}`;
+      if (!grouped.has(key)) {
+        grouped.set(key, { category: targetCategory, city: targetCity, featured: featuredFix, ids: [] });
+      }
+      grouped.get(key)!.ids.push(post.id);
     }
-    for (const [category, ids] of grouped) {
-      for (let i = 0; i < ids.length; i += 75) {
-        const chunk = ids.slice(i, i + 75);
+
+    const updatedAt = new Date().toISOString();
+    for (const [, group] of grouped) {
+      for (let i = 0; i < group.ids.length; i += 75) {
+        const chunk = group.ids.slice(i, i + 75);
         const filter = chunk.map((id) => `"${id.replace(/"/g, "")}"`).join(",");
-        await sb(`posts?id=in.(${filter})`, {
-          method: "PATCH",
-          headers: { Prefer: "return=minimal" },
-          body: JSON.stringify({ category, updated_at: new Date().toISOString() }),
-        });
+        const patchBody: Record<string, unknown> = {
+          category: group.category,
+          city: group.city,
+          updated_at: updatedAt,
+        };
+        if (group.featured !== undefined) {
+          patchBody.featured = group.featured;
+        }
+        try {
+          await sb(`posts?id=in.(${filter})`, {
+            method: "PATCH",
+            headers: { Prefer: "return=minimal" },
+            body: JSON.stringify(patchBody),
+          });
+        } catch (e: any) {
+          console.warn("Erro ao atualizar lote de reclassificação no Supabase:", e.message);
+        }
       }
     }
   }
@@ -611,12 +682,13 @@ export async function reclassifyExternalPosts(): Promise<{ checked: number; chan
   try {
     const local = await readLocal();
     let localChanged = false;
-    for (const post of local) {
-      if (!post.source_name && !post.source_url) continue;
-      const target = classifyEditorial(post);
-      if (post.category !== target) {
-        post.category = target;
-        post.updated_at = new Date().toISOString();
+    for (const item of changes) {
+      const p = local.find((l) => l.id === item.post.id);
+      if (p) {
+        p.category = item.targetCategory;
+        p.city = item.targetCity;
+        if (item.featuredFix !== undefined) p.featured = item.featuredFix;
+        p.updated_at = new Date().toISOString();
         localChanged = true;
       }
     }

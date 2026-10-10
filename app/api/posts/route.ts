@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { createPost, getPosts, storageMode } from "@/lib/storage";
 import { isAdmin } from "@/lib/session";
 import { slugify } from "@/lib/slug";
+import { inferLocation } from "@/lib/category-classifier";
 import type { PostStatus } from "@/lib/types";
 
 function normalizePublishing(status: unknown, publishedAt: unknown) {
@@ -23,6 +24,12 @@ export async function POST(req: Request) {
   try {
     const b = await req.json();
     const publishing = normalizePublishing(b.status, b.published_at);
+    const inferredLocation = inferLocation({
+      title: typeof b.title === "string" ? b.title : "",
+      excerpt: typeof b.excerpt === "string" ? b.excerpt : "",
+      source_name: typeof b.source_name === "string" ? b.source_name : "",
+      source_url: typeof b.source_url === "string" ? b.source_url : "",
+    });
     if (!b.image_url || typeof b.image_url !== "string" || b.image_url.trim().length < 10) {
       return NextResponse.json({ error: "É obrigatório que toda matéria tenha uma imagem válida para ser postada ou agendada na fila." }, { status: 400 });
     }
@@ -35,7 +42,8 @@ export async function POST(req: Request) {
       excerpt: b.excerpt,
       content: b.content,
       category: b.category,
-      city: b.city || "Goiânia",
+      // Evita que o valor antigo/padrão "Goiânia" rotule notícias de outras cidades de Goiás.
+      city: !b.city || b.city === "Goiânia" ? inferredLocation.city : b.city,
       author: b.author || "Redação Viralizougoiania",
       image_url: b.image_url || "",
       image_credit: b.image_credit || "",

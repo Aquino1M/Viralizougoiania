@@ -2,33 +2,57 @@ import Header from "@/components/Header";
 import Footer from "@/components/Footer";
 import NewsCard from "@/components/NewsCard";
 import { getCategories, getPosts } from "@/lib/storage";
+import { inferLocation, isGoiasOrigin } from "@/lib/category-classifier";
 import Link from "next/link";
 import { unstable_cache } from "next/cache";
 
 export const revalidate = 60;
 
 const getHomePosts = unstable_cache(
-  async () => getPosts({ limit: 30 }),
-  ["public-home-posts-v2"],
+  async () => getPosts({ limit: 80 }),
+  ["public-home-posts-v3"],
   { revalidate: 60 }
 );
 
 const getHomeCategories = unstable_cache(
   async () => getCategories(),
-  ["public-home-categories-v2"],
+  ["public-home-categories-v3"],
   { revalidate: 300 }
 );
 function fmt(v:string|null){return new Intl.DateTimeFormat("pt-BR",{hour:"2-digit",minute:"2-digit",timeZone:"America/Sao_Paulo"}).format(new Date(v||Date.now()))}
 
 export default async function Home(){
  const [posts,categories]=await Promise.all([getHomePosts(),getHomeCategories()]);
- const featured=posts.find(p=>p.featured)||posts[0];
- const secondary=posts.filter(p=>p.id!==featured?.id).slice(0,2);
- const agora=posts.filter(p=>p.id!==featured?.id).slice(2,6);
- const latest=posts.slice(0,7);
- const bairroPosts=posts.filter(p=>["Bairros","Trânsito","Serviços"].includes(p.category)).slice(0,3);
- const cityPosts=posts.filter(p=>["Goiânia","Segurança","Política"].includes(p.category)).slice(0,3);
- return <><Header breakingTitle={posts[0]?.title}/><main>
+
+ const goiasPosts = posts.filter(p => isGoiasOrigin(p));
+
+ // Destaque principal do Hero: prioriza o post em destaque de Goiânia/Goiás
+ const featured = goiasPosts.find(p => p.featured) || goiasPosts[0] || posts.find(p => p.featured) || posts[0];
+ 
+ // Secundárias do Hero: notícias de Goiânia/Goiás
+ const secondaryCandidates = goiasPosts.filter(p => p.id !== featured?.id);
+ const secondary = (secondaryCandidates.length >= 2 ? secondaryCandidates : posts.filter(p => p.id !== featured?.id)).slice(0, 2);
+
+ const heroIds = new Set([featured?.id, ...secondary.map(s => s.id)].filter(Boolean));
+
+ // Goiânia Agora: pautas locais de Goiás/Goiânia
+ const agoraCandidates = goiasPosts.filter(p => !heroIds.has(p.id));
+ const agora = (agoraCandidates.length >= 4 ? agoraCandidates : posts.filter(p => !heroIds.has(p.id))).slice(0, 4);
+
+ const latest = posts.slice(0, 7);
+
+ // Goiânia e seus bairros: pautas de bairros, trânsito ou serviços locais de Goiânia. Nunca matérias nacionais!
+ const bairroCandidates = goiasPosts.filter(
+   p => p.category === "Bairros" || inferLocation(p).isBairro || ["Trânsito", "Serviços"].includes(p.category)
+ );
+ const bairroPosts = (bairroCandidates.length >= 3 ? bairroCandidates : goiasPosts).slice(0, 3);
+
+ // Cidade em pauta: O assunto que movimenta Goiânia (política local, segurança local ou pautas municipais)
+ const cityCandidates = goiasPosts.filter(
+   p => !heroIds.has(p.id) && ["Goiânia", "Política", "Segurança"].includes(p.category)
+ );
+ const cityPosts = (cityCandidates.length >= 3 ? cityCandidates : goiasPosts.filter(p => !heroIds.has(p.id))).slice(0, 3);
+ return <><Header breakingTitle={featured?.title || posts[0]?.title}/><main>
   <section className="heroSection"><div className="container">
    <div className="cityEyebrow"><span>●</span> O que está acontecendo em Goiânia agora</div>
    {featured ? <div className="leadGrid">

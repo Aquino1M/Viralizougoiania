@@ -5,25 +5,32 @@ import NewsCard from "@/components/NewsCard";
 import FootballHub from "@/components/FootballHub";
 import { getCategories, getPosts } from "@/lib/storage";
 import { getLiveFootballData } from "@/lib/football-sync";
+import { inferLocation, isGoiasOrigin } from "@/lib/category-classifier";
 import { slugify } from "@/lib/slug";
 
 export const revalidate = 60;
 
 const getCachedCategories = unstable_cache(
   async () => getCategories({ includeInactive: true }),
-  ["public-category-list-v2"],
+  ["public-category-list-v3"],
   { revalidate: 300 }
 );
 
 const getCachedCategoryPosts = unstable_cache(
-  async (category: string) => getPosts({ category, limit: 36 }),
-  ["public-category-posts-v2"],
+  async (category: string) => getPosts({ category, limit: 60 }),
+  ["public-category-posts-v3"],
+  { revalidate: 60 }
+);
+
+const getCachedAllPosts = unstable_cache(
+  async () => getPosts({ limit: 120 }),
+  ["public-category-all-posts-v3"],
   { revalidate: 60 }
 );
 
 const getCachedFootballData = unstable_cache(
   async () => getLiveFootballData(),
-  ["public-category-football-v2"],
+  ["public-category-football-v3"],
   { revalidate: 60 }
 );
 
@@ -47,11 +54,17 @@ export default async function CategoryPage({
     requested === "fofoca" ||
     canonical.toLowerCase() === "fofocas" ||
     canonical.toLowerCase() === "fofoca";
+  const isGoiania =
+    requested === "goiania" ||
+    canonical.toLowerCase() === "goiânia" ||
+    canonical.toLowerCase() === "goiania";
+  const isBairros = requested === "bairros" || canonical.toLowerCase() === "bairros";
 
   const queryCategory = isFutebol ? "Futebol" : isFofocas ? "Fofocas" : canonical;
 
-  let [rawPosts, liveFootballData] = await Promise.all([
+  let [rawPosts, allPosts, liveFootballData] = await Promise.all([
     getCachedCategoryPosts(queryCategory),
+    isGoiania || isBairros ? getCachedAllPosts() : Promise.resolve([]),
     isFutebol ? getCachedFootballData() : Promise.resolve(null),
   ]);
 
@@ -60,16 +73,73 @@ export default async function CategoryPage({
     rawPosts = await getCachedCategoryPosts("Fofoca");
   }
 
-  const posts = rawPosts
-    .filter((p) => {
+  let posts: typeof rawPosts = [];
+
+  if (isGoiania) {
+    // Na aba Goiânia: APENAS notícias de Goiânia e Goiás! Nunca coisas de outros estados ou países!
+    const pool = [...rawPosts, ...allPosts];
+    const seen = new Set<string>();
+    posts = pool.filter((p) => {
       if (!p.image_url || p.image_url.trim().length < 10) return false;
-      const postCat = (p.category || "").toLowerCase().trim();
-      if (isFutebol) return postCat === "futebol";
-      if (isFofocas) return postCat === "fofocas" || postCat === "fofoca";
-      return postCat === canonical.toLowerCase().trim();
-    })
-    .slice(0, isFutebol ? 24 : 36)
-    .map((p) => (isFutebol ? { ...p, content: "" } : p));
+      if (seen.has(p.id)) return false;
+      // REGRA DE OURO: Deve ser comprovadamente de Goiás/Goiânia
+      if (!isGoiasOrigin(p)) return false;
+      seen.add(p.id);
+      return true;
+    }).slice(0, 36);
+  } else if (isBairros) {
+    // Na aba Bairros: pautas de bairros de Goiânia e melhorias locais
+    const pool = [...rawPosts, ...allPosts];
+    const seen = new Set<string>();
+    posts = pool.filter((p) => {
+      if (!p.image_url || p.image_url.trim().length < 10) return false;
+      if (seen.has(p.id)) return false;
+      if (!isGoiasOrigin(p)) return false;
+      const isBairroItem =
+        (p.category || "").toLowerCase() === "bairros" ||
+        inferLocation(p).isBairro ||
+        ["Trânsito", "Serviços"].includes(p.category);
+      if (!isBairroItem) return false;
+      seen.add(p.id);
+      return true;
+    }).slice(0, 36);
+
+    // Se ainda houver poucos bairros específicos, complementa com matérias gerais de Goiânia
+    if (posts.length < 6) {
+      allPosts.forEach((p) => {
+        if (!seen.has(p.id) && isGoiasOrigin(p) && p.image_url && p.image_url.trim().length >= 10) {
+          seen.add(p.id);
+          posts.push(p);
+        }
+      });
+      posts = posts.slice(0, 36);
+    }
+  } else {
+    const isGeneralCategory = [
+      "política",
+      "politica",
+      "esportes",
+      "economia",
+      "futebol",
+      "fofocas",
+      "fofoca",
+    ].includes(canonical.toLowerCase().trim());
+
+    posts = rawPosts
+      .filter((p) => {
+        if (!p.image_url || p.image_url.trim().length < 10) return false;
+        // As únicas abas que aceitam pautas nacionais/gerais são: Política, Esportes, Economia, Futebol e Fofocas.
+        // Todas as demais abas (Trânsito, Segurança, Empregos, Eventos, Serviços) são 100% Goiás/Goiânia!
+        if (!isGeneralCategory && !isGoiasOrigin(p)) return false;
+
+        const postCat = (p.category || "").toLowerCase().trim();
+        if (isFutebol) return postCat === "futebol";
+        if (isFofocas) return postCat === "fofocas" || postCat === "fofoca";
+        return postCat === canonical.toLowerCase().trim();
+      })
+      .slice(0, isFutebol ? 24 : 36)
+      .map((p) => (isFutebol ? { ...p, content: "" } : p));
+  }
 
   return (
     <>
