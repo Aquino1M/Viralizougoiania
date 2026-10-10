@@ -14,7 +14,9 @@ const W = 1080;
 const H = 1350;
 const REEL_H = 1920;
 const DEFAULT_LOGO_POSITION = { x: 0.5, y: 0.615 };
+const DEFAULT_TITLE_POSITION = { x: 0.5, y: 0.7 };
 type LogoPosition = { x: number; y: number };
+type ReelTitleLayout = { lines: string[]; fontSize: number; lineHeight: number; width: number; height: number };
 type ReelTextStyle = "standard" | "highlight";
 
 function slugFromInput(value: string) {
@@ -86,8 +88,14 @@ function fitHeadline(ctx: CanvasRenderingContext2D, text: string, maxWidth: numb
   return { size: 48, lines: lines.slice(0, maxLines) };
 }
 
-function drawHighlightHeadline(ctx: CanvasRenderingContext2D, headline: string) {
+function getReelTitleLayout(ctx: CanvasRenderingContext2D, headline: string, textStyle: ReelTextStyle): ReelTitleLayout {
   const text = headline.trim().toLocaleUpperCase("pt-BR") || "NOVO REEL";
+  if (textStyle === "standard") {
+    const fitted = fitHeadline(ctx, text, 920, 4);
+    ctx.font = `800 ${fitted.size}px Georgia, "Times New Roman", serif`;
+    const lineHeight = fitted.size * 1.08;
+    return { lines: fitted.lines, fontSize: fitted.size, lineHeight, width: Math.max(...fitted.lines.map((line) => ctx.measureText(line).width), 0), height: fitted.lines.length * lineHeight };
+  }
   let fontSize = 76;
   let lines: string[] = [];
   while (fontSize >= 48) {
@@ -97,18 +105,40 @@ function drawHighlightHeadline(ctx: CanvasRenderingContext2D, headline: string) 
     fontSize -= 2;
   }
   lines = lines.slice(0, 3);
-
-  ctx.textAlign = "left";
-  ctx.textBaseline = "alphabetic";
   ctx.font = `900 ${fontSize}px Impact, "Arial Narrow", sans-serif`;
-  let baseline = 340;
-  for (const line of lines) {
-    const width = Math.min(ctx.measureText(line).width, 960);
-    ctx.fillStyle = "#ffffff";
-    ctx.fillRect(48, baseline - fontSize * 0.88, width + 24, fontSize + 16);
-    ctx.fillStyle = "#111111";
-    ctx.fillText(line, 60, baseline, 960);
-    baseline += fontSize * 1.18;
+  const lineHeight = fontSize * 1.18;
+  return { lines, fontSize, lineHeight, width: Math.max(...lines.map((line) => Math.min(ctx.measureText(line).width, 960)), 0), height: lines.length * lineHeight };
+}
+
+function drawReelHeadline(ctx: CanvasRenderingContext2D, headline: string, textStyle: ReelTextStyle, position: LogoPosition, progress: number) {
+  const layout = getReelTitleLayout(ctx, headline, textStyle);
+  const lineCount = Math.min(layout.lines.length, Math.ceil(layout.lines.length * progress));
+  let remaining = Math.ceil(layout.lines.join("").length * progress);
+  const visibleLines = layout.lines.slice(0, lineCount).map((line) => {
+    const visible = line.slice(0, remaining);
+    remaining -= line.length;
+    return visible;
+  });
+  const centerX = position.x * W;
+  let baseline = position.y * REEL_H - layout.height / 2 + layout.lineHeight * 0.84;
+  ctx.textAlign = "center";
+  ctx.textBaseline = "alphabetic";
+  for (const line of visibleLines) {
+    if (textStyle === "highlight") {
+      ctx.font = `900 ${layout.fontSize}px Impact, "Arial Narrow", sans-serif`;
+      const width = Math.min(ctx.measureText(line).width, 960);
+      if (line) {
+        ctx.fillStyle = "#ffffff";
+        ctx.fillRect(centerX - width / 2 - 12, baseline - layout.fontSize * 0.88, width + 24, layout.fontSize + 16);
+      }
+      ctx.fillStyle = "#111111";
+      ctx.fillText(line, centerX, baseline, 960);
+    } else {
+      ctx.font = `800 ${layout.fontSize}px Georgia, "Times New Roman", serif`;
+      ctx.fillStyle = "#ffffff";
+      ctx.fillText(line, centerX, baseline, 920);
+    }
+    baseline += layout.lineHeight;
   }
 }
 
@@ -119,6 +149,7 @@ function drawReelFrame(
   headline: string,
   handle: string,
   logoPosition: LogoPosition,
+  titlePosition: LogoPosition,
   textStyle: ReelTextStyle,
   showStrongSceneWarning: boolean,
   logoScale: number,
@@ -158,21 +189,8 @@ function drawReelFrame(
     ctx.fillText("GOIÂNIA", W / 2 + 214, 1200);
   }
 
-  if (textStyle === "highlight") {
-    drawHighlightHeadline(ctx, headline);
-  } else {
-    ctx.textAlign = "center";
-    ctx.textBaseline = "alphabetic";
-    ctx.fillStyle = "#ffffff";
-    const fitted = fitHeadline(ctx, headline.trim() || "Novo Reel", 920, 4);
-    ctx.font = `800 ${fitted.size}px Georgia, "Times New Roman", serif`;
-    const lineHeight = fitted.size * 1.08;
-    let y = 1510 - ((fitted.lines.length - 1) * lineHeight) / 2;
-    for (const line of fitted.lines) {
-      ctx.fillText(line, W / 2, y);
-      y += lineHeight;
-    }
-  }
+  const typingDuration = video && Number.isFinite(video.duration) ? Math.min(2.5, Math.max(0.5, video.duration * 0.3)) : 2.5;
+  drawReelHeadline(ctx, headline, textStyle, titlePosition, video ? Math.min(1, video.currentTime / typingDuration) : 1);
 
   ctx.textAlign = "center";
   ctx.textBaseline = "alphabetic";
@@ -187,7 +205,9 @@ export default function SocialFeedCreator({ posts, onBack }: Props) {
   const logoImageRef = useRef<HTMLImageElement | null>(null);
   const articleImageRef = useRef<{ src: string; image: HTMLImageElement } | null>(null);
   const logoPositionRef = useRef<LogoPosition>(DEFAULT_LOGO_POSITION);
+  const titlePositionRef = useRef<LogoPosition>(DEFAULT_TITLE_POSITION);
   const logoDragRef = useRef<{ pointerId: number; offsetX: number; offsetY: number } | null>(null);
+  const titleDragRef = useRef<{ pointerId: number; offsetX: number; offsetY: number } | null>(null);
   const audioContextRef = useRef<AudioContext | null>(null);
   const audioSourceRef = useRef<MediaElementAudioSourceNode | null>(null);
   const [format, setFormat] = useState<"feed" | "reel">("feed");
@@ -204,6 +224,7 @@ export default function SocialFeedCreator({ posts, onBack }: Props) {
   const [handle, setHandle] = useState("@viralizougoiania");
   const [logoData, setLogoData] = useState("");
   const [logoPosition, setLogoPosition] = useState<LogoPosition>(DEFAULT_LOGO_POSITION);
+  const [titlePosition, setTitlePosition] = useState<LogoPosition>(DEFAULT_TITLE_POSITION);
   const [logoScale, setLogoScale] = useState(100);
   const [handleFontSize, setHandleFontSize] = useState(33);
   const [draggingLogo, setDraggingLogo] = useState(false);
@@ -222,6 +243,7 @@ export default function SocialFeedCreator({ posts, onBack }: Props) {
       const savedLogo = localStorage.getItem("viralizou_feed_logo") || "";
       const savedHandle = localStorage.getItem("viralizou_feed_handle") || "";
       const savedPosition = JSON.parse(localStorage.getItem("viralizou_feed_logo_position") || "null");
+      const savedTitlePosition = JSON.parse(localStorage.getItem("viralizou_reel_title_position") || "null");
       const savedTextStyle = localStorage.getItem("viralizou_reel_text_style");
       const savedWarning = localStorage.getItem("viralizou_reel_strong_scene_warning");
       const savedLogoScale = Number(localStorage.getItem("viralizou_reel_logo_scale"));
@@ -236,6 +258,11 @@ export default function SocialFeedCreator({ posts, onBack }: Props) {
         const position = { x: Math.min(1, Math.max(0, savedPosition.x)), y: Math.min(1, Math.max(0, savedPosition.y)) };
         logoPositionRef.current = position;
         setLogoPosition(position);
+      }
+      if (savedTitlePosition && Number.isFinite(savedTitlePosition.x) && Number.isFinite(savedTitlePosition.y)) {
+        const position = { x: Math.min(1, Math.max(0, savedTitlePosition.x)), y: Math.min(1, Math.max(0, savedTitlePosition.y)) };
+        titlePositionRef.current = position;
+        setTitlePosition(position);
       }
     } catch {}
   }, []);
@@ -260,7 +287,7 @@ export default function SocialFeedCreator({ posts, onBack }: Props) {
         } else {
           logoImageRef.current = null;
         }
-        drawReelFrame(ctx, videoPreviewRef.current, logoImageRef.current, title || selectedPost?.title || "", handle, logoPositionRef.current, reelTextStyle, showStrongSceneWarning, logoScale, handleFontSize);
+        drawReelFrame(ctx, videoPreviewRef.current, logoImageRef.current, title || selectedPost?.title || "", handle, logoPositionRef.current, titlePositionRef.current, reelTextStyle, showStrongSceneWarning, logoScale, handleFontSize);
         setMessage("");
         return;
       }
@@ -351,7 +378,7 @@ export default function SocialFeedCreator({ posts, onBack }: Props) {
   useEffect(() => {
     renderCard();
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [selectedPost?.slug, selectedPost?.updated_at, title, logoData, handle, imagePosition, format, logoPosition.x, logoPosition.y, reelTextStyle, showStrongSceneWarning, logoScale, handleFontSize]);
+  }, [selectedPost?.slug, selectedPost?.updated_at, title, logoData, handle, imagePosition, format, logoPosition.x, logoPosition.y, titlePosition.x, titlePosition.y, reelTextStyle, showStrongSceneWarning, logoScale, handleFontSize]);
 
   useEffect(() => {
     const video = videoPreviewRef.current;
@@ -362,7 +389,7 @@ export default function SocialFeedCreator({ posts, onBack }: Props) {
       if (time - lastDraw >= 1000 / 30) {
         const canvas = canvasRef.current;
         const ctx = canvas?.getContext("2d");
-        if (ctx && video.readyState >= 2) drawReelFrame(ctx, video, logoImageRef.current, title || selectedPost?.title || "", handle, logoPositionRef.current, reelTextStyle, showStrongSceneWarning, logoScale, handleFontSize);
+        if (ctx && video.readyState >= 2) drawReelFrame(ctx, video, logoImageRef.current, title || selectedPost?.title || "", handle, logoPositionRef.current, titlePositionRef.current, reelTextStyle, showStrongSceneWarning, logoScale, handleFontSize);
         lastDraw = time;
       }
       frameId = requestAnimationFrame(draw);
@@ -522,6 +549,25 @@ export default function SocialFeedCreator({ posts, onBack }: Props) {
   }
 
   function onPreviewPointerDown(event: ReactPointerEvent<HTMLCanvasElement>) {
+    if (format === "reel") {
+      const ctx = event.currentTarget.getContext("2d");
+      if (ctx) {
+        const layout = getReelTitleLayout(ctx, title || selectedPost?.title || "", reelTextStyle);
+        const rect = event.currentTarget.getBoundingClientRect();
+        const x = ((event.clientX - rect.left) / rect.width) * W;
+        const y = ((event.clientY - rect.top) / rect.height) * REEL_H;
+        const centerX = titlePositionRef.current.x * W;
+        const centerY = titlePositionRef.current.y * REEL_H;
+        if (x >= centerX - layout.width / 2 - 20 && x <= centerX + layout.width / 2 + 20 && y >= centerY - layout.height / 2 - 20 && y <= centerY + layout.height / 2 + 20) {
+          event.preventDefault();
+          event.currentTarget.setPointerCapture(event.pointerId);
+          titleDragRef.current = { pointerId: event.pointerId, offsetX: x / W - titlePositionRef.current.x, offsetY: y / REEL_H - titlePositionRef.current.y };
+          setDraggingLogo(true);
+          return;
+        }
+      }
+    }
+
     const logo = logoImageRef.current;
     if (!logoData || !logo?.naturalWidth) return;
 
@@ -541,6 +587,20 @@ export default function SocialFeedCreator({ posts, onBack }: Props) {
   }
 
   function onPreviewPointerMove(event: ReactPointerEvent<HTMLCanvasElement>) {
+    const titleDrag = titleDragRef.current;
+    if (titleDrag?.pointerId === event.pointerId) {
+      const ctx = event.currentTarget.getContext("2d");
+      const rect = event.currentTarget.getBoundingClientRect();
+      const layout = ctx ? getReelTitleLayout(ctx, title || selectedPost?.title || "", reelTextStyle) : { width: 0, height: 0 };
+      const position = {
+        x: Math.min(1 - layout.width / (2 * W), Math.max(layout.width / (2 * W), (event.clientX - rect.left) / rect.width - titleDrag.offsetX)),
+        y: Math.min(1 - layout.height / (2 * REEL_H), Math.max(layout.height / (2 * REEL_H), (event.clientY - rect.top) / rect.height - titleDrag.offsetY)),
+      };
+      titlePositionRef.current = position;
+      setTitlePosition(position);
+      return;
+    }
+
     const drag = logoDragRef.current;
     if (!drag || drag.pointerId !== event.pointerId) return;
 
@@ -557,10 +617,17 @@ export default function SocialFeedCreator({ posts, onBack }: Props) {
   }
 
   function onPreviewPointerUp(event: ReactPointerEvent<HTMLCanvasElement>) {
-    if (logoDragRef.current?.pointerId !== event.pointerId) return;
-    logoDragRef.current = null;
-    setDraggingLogo(false);
-    try { localStorage.setItem("viralizou_feed_logo_position", JSON.stringify(logoPositionRef.current)); } catch {}
+    if (titleDragRef.current?.pointerId === event.pointerId) {
+      titleDragRef.current = null;
+      setDraggingLogo(false);
+      try { localStorage.setItem("viralizou_reel_title_position", JSON.stringify(titlePositionRef.current)); } catch {}
+    } else if (logoDragRef.current?.pointerId === event.pointerId) {
+      logoDragRef.current = null;
+      setDraggingLogo(false);
+      try { localStorage.setItem("viralizou_feed_logo_position", JSON.stringify(logoPositionRef.current)); } catch {}
+    } else {
+      return;
+    }
     if (event.currentTarget.hasPointerCapture(event.pointerId)) event.currentTarget.releasePointerCapture(event.pointerId);
   }
 
@@ -747,6 +814,7 @@ export default function SocialFeedCreator({ posts, onBack }: Props) {
               onChange={(e) => setTitle(e.target.value)}
               placeholder="O título da notícia aparece automaticamente e você pode ajustar antes de baixar."
             />
+            {format === "reel" && <small>Arraste o título na prévia para escolher onde ele aparece.</small>}
           </div>
 
           <div className="field">
@@ -830,7 +898,7 @@ export default function SocialFeedCreator({ posts, onBack }: Props) {
               onPointerMove={onPreviewPointerMove}
               onPointerUp={onPreviewPointerUp}
               onPointerCancel={onPreviewPointerUp}
-              style={{ cursor: logoData ? (draggingLogo ? "grabbing" : "grab") : "default", touchAction: "none" }}
+              style={{ cursor: logoData || format === "reel" ? (draggingLogo ? "grabbing" : "grab") : "default", touchAction: "none" }}
             />
           </div>
           <small>{format === "feed" ? "Formato 4:5 · 1080×1350" : "Formato vertical 9:16 · 1080×1920"}</small>
