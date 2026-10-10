@@ -23,6 +23,8 @@ export async function POST(req: Request) {
       socials: body.socials || {},
       site_name: body.site_name,
       tagline: body.tagline,
+      feed_logo: body.feed_logo,
+      feed_handle: body.feed_handle,
     });
     return NextResponse.json({ settings, success: true });
   } catch (e) {

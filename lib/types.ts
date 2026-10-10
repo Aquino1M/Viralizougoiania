@@ -68,6 +68,9 @@ export type SiteSettings = {
   site_name: string;
   tagline: string;
   socials: SocialLinks;
+  feed_logo?: string;
+  feed_handle?: string;
+  feed_logo_position?: { x: number; y: number };
   updated_at?: string;
 };
 
