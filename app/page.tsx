@@ -10,8 +10,11 @@ import { unstable_cache } from "next/cache";
 export const revalidate = 60;
 
 const getHomePosts = unstable_cache(
-  async () => getPosts({ limit: 80 }),
-  ["public-home-posts-v3"],
+  async () => getPosts({ limit: 80 }).then((posts) => {
+    const cutoff = Date.now() - 30 * 24 * 60 * 60 * 1000;
+    return posts.filter((post) => new Date(post.published_at || post.created_at).getTime() >= cutoff);
+  }),
+  ["public-home-posts-v4"],
   { revalidate: 60 }
 );
 

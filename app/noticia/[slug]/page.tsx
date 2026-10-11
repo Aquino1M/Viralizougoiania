@@ -4,9 +4,16 @@ import Header from "@/components/Header";
 import Footer from "@/components/Footer";
 import NewsCard from "@/components/NewsCard";
 import { getPostBySlug, getPosts } from "@/lib/storage";
+import { unstable_cache } from "next/cache";
 import { notFound } from "next/navigation";
 
 export const dynamic = "force-dynamic";
+
+const getCachedRelatedPosts = unstable_cache(
+  async (category: string) => getPosts({ category, limit: 24 }),
+  ["article-related-posts-v2"],
+  { revalidate: 300 }
+);
 
 export async function generateMetadata({
   params,
@@ -128,11 +135,11 @@ export default async function Article({
     return null;
   }
   const post = found;
-  const all = await getPosts();
+  const relatedPool = await getCachedRelatedPosts(post.category);
   const paras = post.content.split(/\n\n+/).filter(Boolean);
   const sourceUrl = safeSourceUrl(post.source_url);
-  const related = all
-    .filter((p) => p.id !== post.id && (p.category === post.category || p.city === post.city))
+  const related = relatedPool
+    .filter((p) => p.id !== post.id)
     .slice(0, 3);
 
   const shareText = `*${post.title}*\n\nLeia a matéria completa no Viralizougoiania:\n`;
@@ -165,7 +172,7 @@ export default async function Article({
         type="application/ld+json"
         dangerouslySetInnerHTML={{ __html: JSON.stringify(jsonLd) }}
       />
-      <Header breakingTitle={all[0]?.title} />
+      <Header breakingTitle={post.title} />
       <main>
         <article className="article">
           <div className="articleBreadcrumb">
@@ -181,11 +188,6 @@ export default async function Article({
           </div>
           <h1>{post.title}</h1>
           <p className="lead">{post.excerpt}</p>
-
-          {/* Modo Leitura Ultra Rápida (AMP / Instant News) */}
-          <div className="instantNewsBanner">
-            <span>⚡ Modo Leitura Ultra-Rápida · Carregamento instantâneo otimizado para redes 4G/5G</span>
-          </div>
 
           <div className="articleMeta">
             <div style={{ display: "flex", flexDirection: "column", gap: 3 }}>

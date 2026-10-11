@@ -404,10 +404,14 @@ main{min-height:65vh}.heroSection{padding:30px 0 25px}.cityEyebrow{font-size:12p
 .adminFeedUrlRow{display:grid;grid-template-columns:minmax(0,1fr) auto;gap:8px}
 .adminFeedUrlRow input{min-width:0}
 .adminFeedPreview{display:flex;flex-direction:column;gap:8px;align-items:center;position:sticky;top:88px}
-.adminFeedCanvasFrame{width:min(100%,480px);aspect-ratio:4/5;background:#0b0b0b;border-radius:18px;overflow:hidden;box-shadow:0 14px 36px rgba(15,23,42,.18);border:1px solid #dce2ea}
+.adminFeedCanvasFrame{background:#0b0b0b;border-radius:18px;overflow:hidden;box-shadow:0 14px 36px rgba(15,23,42,.18);border:1px solid #dce2ea;margin:0 auto}
 .adminFeedCanvasFrame canvas{width:100%;height:100%;display:block}
-.adminFeedCanvasFrame[data-format="reel"]{width:min(100%,360px);aspect-ratio:9/16}
-.adminFeedVideoResult{width:min(100%,360px);display:flex;flex-direction:column;gap:8px;padding:12px;border:1px solid #dce2ea;border-radius:12px;background:#fff}
+.adminFeedCanvasFrame[data-format="feed"]{width:min(100%,450px);aspect-ratio:4/5}
+.adminFeedCanvasFrame[data-format="feed-square"]{width:min(100%,450px);aspect-ratio:1/1}
+.adminFeedCanvasFrame[data-format="reel-cover"]{width:min(100%,450px);aspect-ratio:4/5}
+.adminFeedCanvasFrame[data-format="story"],
+.adminFeedCanvasFrame[data-format="reel"]{width:min(100%,350px);aspect-ratio:9/16}
+.adminFeedVideoResult{width:min(100%,350px);display:flex;flex-direction:column;gap:8px;padding:12px;border:1px solid #dce2ea;border-radius:12px;background:#fff}
 .adminFeedVideoResult video{width:100%;max-height:60vh;background:#000;border-radius:8px}
 .adminFeedRecordingProgress{width:100%;height:8px;accent-color:#ff5a1f}
 .adminFeedLogoSaved{margin-top:9px;padding:10px;border:1px solid #e2e8f0;border-radius:10px;display:flex;align-items:center;justify-content:space-between;gap:12px;background:#f8fafc}
@@ -419,6 +423,37 @@ main{min-height:65vh}.heroSection{padding:30px 0 25px}.cityEyebrow{font-size:12p
 .adminFeedWarningOption{display:flex;align-items:center;gap:8px;cursor:pointer}
 .adminFeedWarningOption input{width:auto;margin:0}
 .adminFeedCreator input[type="range"]{width:100%}
+
+/* Grid de Formatos do Instagram */
+.adminFeedFormatGrid{display:grid;grid-template-columns:repeat(2,1fr);gap:10px;margin-top:6px}
+.adminFeedFormatBtn{background:#fff;border:1.5px solid #dce2ea;border-radius:12px;padding:12px 14px;display:flex;flex-direction:column;align-items:flex-start;gap:4px;cursor:pointer;transition:all .18s;text-align:left}
+.adminFeedFormatBtn:hover{border-color:#ff5a1f;background:#fff8f5;transform:translateY(-1px)}
+.adminFeedFormatBtn.active{background:#ff5a1f;border-color:#ff5a1f;color:#fff;box-shadow:0 6px 18px rgba(255,90,31,.28)}
+.adminFeedFormatBtn .formatRatio{font-size:11px;font-weight:900;background:rgba(0,0,0,.08);padding:2px 7px;border-radius:6px;letter-spacing:.04em}
+.adminFeedFormatBtn.active .formatRatio{background:rgba(255,255,255,.24);color:#fff}
+.adminFeedFormatBtn .formatName{font-size:13px;font-weight:800;color:inherit}
+.adminFeedFormatBtn .formatDims{font-size:11px;color:#64748b;font-weight:600}
+.adminFeedFormatBtn.active .formatDims{color:rgba(255,255,255,.9)}
+
+/* Painel de Sobreposição de Camadas (Layers) */
+.layerOverlayBox{background:#0b0d14;border:1px solid #1e2230;border-radius:14px;padding:16px;display:flex;flex-direction:column;gap:13px;color:#f1f5f9;box-shadow:0 10px 25px rgba(0,0,0,.35)}
+.layerOverlayHeader{display:flex;flex-direction:column;gap:4px;padding-bottom:10px;border-bottom:1px solid #1f2438}
+.layerOverlayHeader h3{margin:0;font-size:14px;font-weight:800;color:#fff}
+.layerBadge{font-size:10px;text-transform:uppercase;letter-spacing:.06em;font-weight:800;color:#38bdf8;background:rgba(56,189,248,.12);padding:3px 8px;border-radius:6px;border:1px solid rgba(56,189,248,.25)}
+.layerControlItem{display:flex;flex-direction:column;gap:8px;background:#131722;padding:12px;border-radius:10px;border:1px solid #23293c}
+.layerControlHeader label{display:flex;justify-content:space-between;align-items:center;font-size:12px;font-weight:750;color:#e2e8f0;margin-bottom:2px}
+.layerValueHighlight{font-size:13px;font-weight:900;color:#38bdf8;font-family:monospace}
+.layerControlHint{font-size:10px;color:#94a3b8}
+.layerResetBtn{background:#1e2436;border:1px solid #334155;color:#94a3b8;font-size:10px;font-weight:700;padding:4px 8px;border-radius:6px;cursor:pointer;white-space:nowrap}
+.layerResetBtn:hover{background:#334155;color:#fff}
+.layerTogglesGrid{display:grid;grid-template-columns:repeat(auto-fit,minmax(210px,1fr));gap:9px}
+.layerToggleCard{background:#131722;border:1px solid #23293c;border-radius:10px;padding:10px 12px;display:flex;align-items:flex-start;gap:10px;cursor:pointer;transition:all .15s}
+.layerToggleCard:hover{background:#181d2c;border-color:#38bdf8}
+.layerToggleCard.active{border-color:#38bdf8;background:#0e1e2d;box-shadow:0 0 10px rgba(56,189,248,.15)}
+.layerToggleCard input[type="checkbox"]{width:16px;height:16px;accent-color:#38bdf8;margin-top:2px;cursor:pointer}
+.layerToggleInfo{display:flex;flex-direction:column;gap:2px}
+.layerToggleTitle{font-size:12px;font-weight:750;color:#f1f5f9}
+.layerToggleDesc{font-size:10px;color:#94a3b8;line-height:1.3}
 
 /* Painel Dark de Customização de Legenda (Estilo Foto 1) */
 .captionStudioBox{background:#0e1017;border:1px solid #1e2230;border-radius:14px;padding:16px;display:flex;flex-direction:column;gap:13px;color:#f1f5f9;box-shadow:0 10px 25px rgba(0,0,0,.35)}
@@ -831,20 +866,27 @@ main{min-height:65vh}.heroSection{padding:30px 0 25px}.cityEyebrow{font-size:12p
   background: #0284c7;
   color: #ffffff;
 }
-.instantReadBadge {
+/* Corrige camadas de mídia: a imagem é a camada inferior; os selos ficam acima. */
+.categoryGrid .cardImage,
+.cardGrid .cardImage {
+  isolation: isolate;
+  min-height: 160px;
+  background: #e9edf1;
+}
+.categoryGrid .cardImage > img,
+.cardGrid .cardImage > img {
   position: absolute;
-  top: 10px;
-  right: 10px;
-  background: rgba(16, 185, 129, 0.92);
-  color: #ffffff;
-  font-size: 10px;
-  font-weight: 800;
-  letter-spacing: 0.03em;
-  padding: 3px 7px;
-  border-radius: 999px;
+  inset: 0;
+  z-index: 0;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  background: transparent;
+}
+.categoryGrid .cardBadgesRow,
+.cardGrid .cardBadgesRow {
   z-index: 2;
-  box-shadow: 0 2px 6px rgba(16, 185, 129, 0.4);
-  backdrop-filter: blur(4px);
+  pointer-events: none;
 }
 
 @keyframes urgentPulse {

@@ -17,14 +17,22 @@ const getCachedCategories = unstable_cache(
 );
 
 const getCachedCategoryPosts = unstable_cache(
-  async (category: string) => getPosts({ category, limit: 60 }),
-  ["public-category-posts-v3"],
+  async (category: string) => {
+    const posts = await getPosts({ category, limit: 120 });
+    const cutoff = Date.now() - 30 * 24 * 60 * 60 * 1000;
+    return posts.filter((post) => new Date(post.published_at || post.created_at).getTime() >= cutoff).slice(0, 60);
+  },
+  ["public-category-posts-v4"],
   { revalidate: 60 }
 );
 
 const getCachedAllPosts = unstable_cache(
-  async () => getPosts({ limit: 120 }),
-  ["public-category-all-posts-v3"],
+  async () => {
+    const posts = await getPosts({ limit: 200 });
+    const cutoff = Date.now() - 30 * 24 * 60 * 60 * 1000;
+    return posts.filter((post) => new Date(post.published_at || post.created_at).getTime() >= cutoff).slice(0, 120);
+  },
+  ["public-category-all-posts-v4"],
   { revalidate: 60 }
 );
 

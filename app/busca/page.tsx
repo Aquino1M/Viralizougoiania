@@ -1,9 +1,16 @@
 import Header from "@/components/Header";
 import Footer from "@/components/Footer";
 import NewsCard from "@/components/NewsCard";
-import { getPosts } from "@/lib/storage";
+import { getPosts, searchArchivedPosts } from "@/lib/storage";
+import { unstable_cache } from "next/cache";
 
 export const dynamic = "force-dynamic";
+
+const getRecentSearchPool = unstable_cache(
+  async () => getPosts({ limit: 300 }),
+  ["recent-search-pool-v2"],
+  { revalidate: 120 }
+);
 
 export default async function SearchPage({
   searchParams,
@@ -12,24 +19,18 @@ export default async function SearchPage({
 }) {
   const { q = "" } = await searchParams;
   const term = q.trim();
-  const allPosts = await getPosts();
-
-  const results = term
-    ? allPosts.filter((p) => {
-        const query = term.toLowerCase();
-        return (
-          p.title.toLowerCase().includes(query) ||
-          p.excerpt.toLowerCase().includes(query) ||
-          p.category.toLowerCase().includes(query) ||
-          p.city.toLowerCase().includes(query) ||
-          p.content.toLowerCase().includes(query)
-        );
-      })
+  const recentPool = term ? await getRecentSearchPool() : [];
+  const query = term.toLocaleLowerCase("pt-BR");
+  const recentResults = term
+    ? recentPool.filter((p) => [p.title, p.excerpt, p.category, p.city, p.content].some((value) => (value || "").toLocaleLowerCase("pt-BR").includes(query))).slice(0, 30)
     : [];
+  const archiveResults = term && recentResults.length < 30 ? await searchArchivedPosts(term) : [];
+  const seen = new Set(recentResults.map((post) => post.id));
+  const results = [...recentResults, ...archiveResults.filter((post) => !seen.has(post.id))].slice(0, 30);
 
   return (
     <>
-      <Header breakingTitle={allPosts[0]?.title} />
+      <Header breakingTitle={results[0]?.title} />
       <main>
         <div className="categoryHero">
           <div className="container">
@@ -39,7 +40,7 @@ export default async function SearchPage({
               {term
                 ? `Encontramos ${results.length} ${
                     results.length === 1 ? "matéria relacionada" : "matérias relacionadas"
-                  }.`
+                  }${archiveResults.length ? ", incluindo notícias do arquivo." : "."}`
                 : "Digite uma palavra-chave para encontrar notícias em Goiânia."}
             </p>
           </div>

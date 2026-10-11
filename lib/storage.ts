@@ -5,6 +5,7 @@ import type { AdminUser, Category, CategoryInput, Post, PostInput, PostStatus, S
 import { slugify } from "@/lib/slug";
 import { classifyEditorial, inferLocation, isGoiasOrigin, normalizePostCategory } from "@/lib/category-classifier";
 import { buildEditorialExcerpt, formatViralizouArticle, needsEditorialRepair } from "@/lib/rewrite";
+import { unstable_cache } from "next/cache";
 
 const localFile = path.join(process.cwd(), "data", "posts.json");
 const localCategoriesFile = path.join(process.cwd(), "data", "categories.json");
@@ -375,6 +376,7 @@ export async function getPosts(opts: { includeDrafts?: boolean; category?: strin
   }
 
   if (postsList.length === 0) {
+    // O fallback local preserva o acervo; o corte público é aplicado após normalizar as linhas.
     postsList = await readLocal();
   }
 
@@ -397,6 +399,42 @@ export async function getPosts(opts: { includeDrafts?: boolean; category?: strin
   result = result.sort((a, b) => +new Date(b.published_at || b.created_at) - +new Date(a.published_at || a.created_at));
   if (limit) result = result.slice(0, limit);
   return result;
+}
+
+const getArchivedPostIndexCached = unstable_cache(
+  async (query: string) => {
+    const safeQuery = query.trim().replace(/[,*()]/g, " ").replace(/\s+/g, " ").slice(0, 120);
+    if (!safeQuery) return [] as Post[];
+    if (hasSupabaseConfig()) {
+      try {
+        const encodedQuery = encodeURIComponent(`%${safeQuery}%`);
+        const cutoff = encodeURIComponent(new Date(Date.now() - 30 * 24 * 60 * 60 * 1000).toISOString());
+        const rows = await sb(
+          `posts?select=id,slug,title,excerpt,category,city,author,image_url,featured,status,published_at,created_at,updated_at&status=eq.published&published_at=lt.${cutoff}&or=(title.ilike.${encodedQuery},excerpt.ilike.${encodedQuery},category.ilike.${encodedQuery},city.ilike.${encodedQuery})&order=published_at.desc.nullslast&limit=30`
+        );
+        return Array.isArray(rows) ? rows.map((row) => normalizePostCategory(row as Post)) : [];
+      } catch (error) {
+        console.warn("Busca no arquivo de notícias indisponível no Supabase:", error instanceof Error ? error.message : error);
+      }
+    }
+    const local = await readLocal();
+    const queryLower = safeQuery.toLocaleLowerCase("pt-BR");
+    const cutoffMs = Date.now() - 30 * 24 * 60 * 60 * 1000;
+    return local
+      .filter((post) => post.status === "published" && new Date(post.published_at || post.created_at).getTime() < cutoffMs)
+      .filter((post) => [post.title, post.excerpt, post.category, post.city, post.content, post.source_content].some((field) => (field || "").toLocaleLowerCase("pt-BR").includes(queryLower)))
+      .sort((a, b) => +new Date(b.published_at || b.created_at) - +new Date(a.published_at || a.created_at))
+      .slice(0, 30)
+      .map((post) => normalizePublicEditorial(normalizePostCategory(post)));
+  },
+  ["archived-post-search-v1"],
+  { revalidate: 300 }
+);
+
+export async function searchArchivedPosts(query: string): Promise<Post[]> {
+  const term = query.trim();
+  if (term.length < 2) return [];
+  return getArchivedPostIndexCached(term);
 }
 
 export async function getPostBySlug(slug: string, includeDrafts = false) {

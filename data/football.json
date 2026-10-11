@@ -2,65 +2,65 @@
   "standings": [
     {
       "position": 1,
-      "teamCode": "FLA",
-      "teamName": "Flamengo",
-      "points": 61,
-      "played": 29,
+      "teamCode": "PAL",
+      "teamName": "Palmeiras",
+      "points": 63,
+      "played": 30,
       "won": 18,
-      "drawn": 7,
-      "lost": 4,
-      "goalsFor": 57,
-      "goalsAgainst": 25,
-      "goalDiff": 32,
+      "drawn": 9,
+      "lost": 3,
+      "goalsFor": 52,
+      "goalsAgainst": 21,
+      "goalDiff": 31,
       "percentage": 70,
       "recentForm": [
+        "D",
         "W",
+        "D",
         "W",
-        "W",
-        "W",
-        "D"
+        "W"
       ]
     },
     {
       "position": 2,
-      "teamCode": "PAL",
-      "teamName": "Palmeiras",
-      "points": 60,
-      "played": 29,
-      "won": 17,
-      "drawn": 9,
-      "lost": 3,
-      "goalsFor": 48,
-      "goalsAgainst": 21,
-      "goalDiff": 27,
+      "teamCode": "FLA",
+      "teamName": "Flamengo",
+      "points": 62,
+      "played": 30,
+      "won": 18,
+      "drawn": 8,
+      "lost": 4,
+      "goalsFor": 57,
+      "goalsAgainst": 25,
+      "goalDiff": 32,
       "percentage": 68,
       "recentForm": [
-        "D",
-        "D",
+        "W",
+        "W",
         "W",
         "D",
-        "W"
+        "D"
       ]
     },
     {
       "position": 3,
       "teamCode": "FLU",
       "teamName": "Fluminense",
-      "points": 51,
-      "played": 29,
+      "points": 52,
+      "played": 30,
       "won": 14,
-      "drawn": 9,
+      "drawn": 10,
       "lost": 6,
       "goalsFor": 48,
       "goalsAgainst": 36,
       "goalDiff": 12,
-      "percentage": 58,
+      "percentage": 57,
       "recentForm": [
-        "D",
         "W",
         "L",
         "W",
-        "W"
+        "W",
+        "D"
       ]
     },
     {
@@ -107,6 +107,27 @@
     },
     {
       "position": 6,
+      "teamCode": "CAM",
+      "teamName": "Atlético-MG",
+      "points": 47,
+      "played": 30,
+      "won": 13,
+      "drawn": 8,
+      "lost": 9,
+      "goalsFor": 41,
+      "goalsAgainst": 35,
+      "goalDiff": 6,
+      "percentage": 52,
+      "recentForm": [
+        "L",
+        "W",
+        "D",
+        "D",
+        "W"
+      ]
+    },
+    {
+      "position": 7,
       "teamCode": "BAH",
       "teamName": "Bahia",
       "points": 46,
@@ -127,49 +148,49 @@
       ]
     },
     {
-      "position": 7,
-      "teamCode": "CAM",
-      "teamName": "Atlético-MG",
-      "points": 44,
-      "played": 29,
-      "won": 12,
-      "drawn": 8,
-      "lost": 9,
-      "goalsFor": 39,
-      "goalsAgainst": 34,
-      "goalDiff": 5,
-      "percentage": 50,
-      "recentForm": [
-        "W",
-        "L",
-        "W",
-        "D",
-        "D"
-      ]
-    },
-    {
       "position": 8,
       "teamCode": "SAN",
       "teamName": "Santos",
       "points": 42,
-      "played": 29,
+      "played": 30,
       "won": 11,
       "drawn": 9,
-      "lost": 9,
-      "goalsFor": 45,
-      "goalsAgainst": 43,
-      "goalDiff": 2,
-      "percentage": 48,
+      "lost": 10,
+      "goalsFor": 46,
+      "goalsAgainst": 45,
+      "goalDiff": 1,
+      "percentage": 46,
       "recentForm": [
         "W",
         "W",
         "W",
-        "W",
-        "D"
+        "D",
+        "L"
       ]
     },
     {
       "position": 9,
+      "teamCode": "SAO",
+      "teamName": "São Paulo",
+      "points": 39,
+      "played": 30,
+      "won": 11,
+      "drawn": 6,
+      "lost": 13,
+      "goalsFor": 35,
+      "goalsAgainst": 35,
+      "goalDiff": 0,
+      "percentage": 43,
+      "recentForm": [
+        "W",
+        "L",
+        "W",
+        "L",
+        "W"
+      ]
+    },
+    {
+      "position": 10,
       "teamCode": "CFC",
       "teamName": "Coritiba",
       "points": 38,
@@ -190,7 +211,7 @@
       ]
     },
     {
-      "position": 10,
+      "position": 11,
       "teamCode": "RBB",
       "teamName": "Bragantino",
       "points": 37,
@@ -211,45 +232,24 @@
       ]
     },
     {
-      "position": 11,
-      "teamCode": "SAO",
-      "teamName": "São Paulo",
-      "points": 36,
-      "played": 29,
-      "won": 10,
-      "drawn": 6,
-      "lost": 13,
-      "goalsFor": 33,
-      "goalsAgainst": 34,
-      "goalDiff": -1,
-      "percentage": 41,
-      "recentForm": [
-        "W",
-        "W",
-        "L",
-        "W",
-        "L"
-      ]
-    },
-    {
       "position": 12,
       "teamCode": "VIT",
       "teamName": "Vitória",
       "points": 36,
-      "played": 29,
+      "played": 30,
       "won": 10,
       "drawn": 6,
-      "lost": 13,
-      "goalsFor": 32,
-      "goalsAgainst": 42,
-      "goalDiff": -10,
-      "percentage": 41,
+      "lost": 14,
+      "goalsFor": 33,
+      "goalsAgainst": 44,
+      "goalDiff": -11,
+      "percentage": 40,
       "recentForm": [
-        "L",
         "W",
         "D",
         "L",
-        "W"
+        "W",
+        "L"
       ]
     },
     {
@@ -277,25 +277,46 @@
       "position": 14,
       "teamCode": "VAS",
       "teamName": "Vasco",
-      "points": 34,
-      "played": 28,
+      "points": 35,
+      "played": 29,
       "won": 9,
-      "drawn": 7,
+      "drawn": 8,
       "lost": 12,
       "goalsFor": 36,
       "goalsAgainst": 42,
       "goalDiff": -6,
       "percentage": 40,
       "recentForm": [
-        "W",
         "L",
         "W",
+        "W",
+        "W",
+        "D"
+      ]
+    },
+    {
+      "position": 15,
+      "teamCode": "INT",
+      "teamName": "Internacional",
+      "points": 34,
+      "played": 30,
+      "won": 8,
+      "drawn": 10,
+      "lost": 12,
+      "goalsFor": 33,
+      "goalsAgainst": 37,
+      "goalDiff": -4,
+      "percentage": 37,
+      "recentForm": [
+        "L",
+        "W",
+        "L",
         "W",
         "W"
       ]
     },
     {
-      "position": 15,
+      "position": 16,
       "teamCode": "MIR",
       "teamName": "Mirassol",
       "points": 33,
@@ -316,18 +337,18 @@
       ]
     },
     {
-      "position": 16,
+      "position": 17,
       "teamCode": "COR",
       "teamName": "Corinthians",
       "points": 32,
-      "played": 29,
+      "played": 30,
       "won": 8,
       "drawn": 8,
-      "lost": 13,
+      "lost": 14,
       "goalsFor": 30,
-      "goalsAgainst": 34,
-      "goalDiff": -4,
-      "percentage": 36,
+      "goalsAgainst": 38,
+      "goalDiff": -8,
+      "percentage": 35,
       "recentForm": [
         "L",
         "L",
@@ -337,55 +358,34 @@
       ]
     },
     {
-      "position": 17,
-      "teamCode": "INT",
-      "teamName": "Internacional",
-      "points": 31,
-      "played": 29,
-      "won": 7,
-      "drawn": 10,
-      "lost": 12,
-      "goalsFor": 32,
-      "goalsAgainst": 37,
-      "goalDiff": -5,
-      "percentage": 35,
-      "recentForm": [
-        "L",
-        "L",
-        "W",
-        "L",
-        "W"
-      ]
-    },
-    {
       "position": 18,
       "teamCode": "GRE",
       "teamName": "Grêmio",
       "points": 30,
-      "played": 29,
+      "played": 30,
       "won": 7,
       "drawn": 9,
-      "lost": 13,
+      "lost": 14,
       "goalsFor": 31,
-      "goalsAgainst": 39,
-      "goalDiff": -8,
-      "percentage": 34,
+      "goalsAgainst": 40,
+      "goalDiff": -9,
+      "percentage": 33,
       "recentForm": [
-        "W",
         "L",
         "L",
         "D",
-        "D"
+        "D",
+        "L"
       ]
     },
     {
       "position": 19,
       "teamCode": "REM",
       "teamName": "Remo",
-      "points": 24,
-      "played": 29,
+      "points": 25,
+      "played": 30,
       "won": 5,
-      "drawn": 9,
+      "drawn": 10,
       "lost": 15,
       "goalsFor": 33,
       "goalsAgainst": 48,
@@ -395,7 +395,7 @@
         "L",
         "L",
         "L",
-        "L",
+        "D",
         "D"
       ]
     },
@@ -430,7 +430,9 @@
       "stadium": "São Januário",
       "homeTeamCode": "VAS",
       "awayTeamCode": "REM",
-      "status": "scheduled"
+      "homeScore": 0,
+      "awayScore": 0,
+      "status": "finished"
     },
     {
       "id": "346557",
@@ -440,7 +442,9 @@
       "stadium": "Morumbis",
       "homeTeamCode": "SAO",
       "awayTeamCode": "VIT",
-      "status": "scheduled"
+      "homeScore": 2,
+      "awayScore": 1,
+      "status": "finished"
     },
     {
       "id": "346563",
@@ -450,7 +454,9 @@
       "stadium": "Arena MRV",
       "homeTeamCode": "CAM",
       "awayTeamCode": "SAN",
-      "status": "scheduled"
+      "homeScore": 2,
+      "awayScore": 1,
+      "status": "finished"
     },
     {
       "id": "346555",
@@ -460,7 +466,9 @@
       "stadium": "Maracanã",
       "homeTeamCode": "FLA",
       "awayTeamCode": "FLU",
-      "status": "scheduled"
+      "homeScore": 0,
+      "awayScore": 0,
+      "status": "finished"
     },
     {
       "id": "346559",
@@ -470,7 +478,9 @@
       "stadium": "Nubank Parque",
       "homeTeamCode": "PAL",
       "awayTeamCode": "COR",
-      "status": "scheduled"
+      "homeScore": 4,
+      "awayScore": 0,
+      "status": "finished"
     },
     {
       "id": "346565",
@@ -480,7 +490,9 @@
       "stadium": "Arena do Grêmio",
       "homeTeamCode": "GRE",
       "awayTeamCode": "INT",
-      "status": "scheduled"
+      "homeScore": 0,
+      "awayScore": 1,
+      "status": "finished"
     },
     {
       "id": "346568",
@@ -524,5 +536,5 @@
     }
   ],
   "currentRound": 30,
-  "updated_at": "2026-10-10T16:37:50.565Z"
+  "updated_at": "2026-10-11T21:55:34.534Z"
 }

@@ -12,10 +12,29 @@ type FeedPost = Pick<Post, "slug" | "title" | "image_url" | "category" | "city" 
 
 const W = 1080;
 const H = 1350;
+const FEED_SQUARE_H = 1080;
 const REEL_H = 1920;
 const DEFAULT_LOGO_POSITION = { x: 0.5, y: 0.615 };
 const DEFAULT_TITLE_POSITION = { x: 0.5, y: 0.7 };
 const DEFAULT_FEED_TITLE_POSITION = { x: 0.5, y: 0.79 };
+
+export type PublicationFormat = "feed" | "feed-square" | "reel-cover" | "story" | "reel";
+
+function getCanvasDimensions(fmt: PublicationFormat) {
+  switch (fmt) {
+    case "feed-square":
+      return { width: 1080, height: 1080, label: "Feed 1:1 (Quadrado) · 1080×1080 px" };
+    case "reel-cover":
+      return { width: 1080, height: 1350, label: "Capa do Reels 4:5 · 1080×1350 px" };
+    case "story":
+      return { width: 1080, height: 1920, label: "Stories 9:16 · 1080×1920 px" };
+    case "reel":
+      return { width: 1080, height: 1920, label: "Reels Vertical 9:16 · 1080×1920 px" };
+    case "feed":
+    default:
+      return { width: 1080, height: 1350, label: "Feed Recomendado 4:5 · 1080×1350 px" };
+  }
+}
 
 type LogoPosition = { x: number; y: number };
 type ReelTitleLayout = { lines: string[]; fontSize: number; lineHeight: number; width: number; height: number };
@@ -113,14 +132,14 @@ function getRenderableLogo(
       const g = d[i + 1];
       const b = d[i + 2];
 
-      // Preserva o símbolo "VG" que é vermelho vibrante
-      const isRed = r > 110 && r > g * 1.35 && r > b * 1.35;
+      // Preserva o símbolo "VG" que é vermelho vivo/vibrante
+      const isRed = r > 140 && (r - g) > 55 && (r - b) > 55 && r > (g + b) * 0.85;
       if (isRed) continue;
 
       const lum = r * 0.299 + g * 0.587 + b * 0.114;
       if (colorStyle === "white") {
-        // Converte letras escuras/pretas/cinzas em branco puro e luminoso
-        if (lum < 195) {
+        // Converte letras escuras/pretas/cinzas/douradas em branco puro e luminoso
+        if (lum < 235) {
           d[i] = 255;
           d[i + 1] = 255;
           d[i + 2] = 255;
@@ -145,13 +164,13 @@ function getRenderableLogo(
 
 function getLogoSize(
   logo: HTMLImageElement | HTMLCanvasElement,
-  format: "feed" | "reel" | "story",
+  format: PublicationFormat,
   multiplier = 1
 ) {
   const w = "naturalWidth" in logo && logo.naturalWidth ? logo.naturalWidth : logo.width;
   const h = "naturalHeight" in logo && logo.naturalHeight ? logo.naturalHeight : logo.height;
-  const maxWidth = format === "reel" || format === "story" ? 600 : 430;
-  const maxHeight = format === "reel" || format === "story" ? 145 : 105;
+  const maxWidth = format === "reel" || format === "story" ? 600 : format === "feed-square" ? 400 : 430;
+  const maxHeight = format === "reel" || format === "story" ? 145 : format === "feed-square" ? 95 : 105;
   const scale = Math.min(maxWidth / (w || 1), maxHeight / (h || 1), 1) * multiplier;
   return { width: (w || 1) * scale, height: (h || 1) * scale };
 }
@@ -266,16 +285,16 @@ function getReelTitleLayout(
   return { lines: chosenLines, fontSize: chosenSize, lineHeight, width, height };
 }
 
-function drawInstagramSafeZone(ctx: CanvasRenderingContext2D) {
+function drawReelSafeZone(ctx: CanvasRenderingContext2D) {
   ctx.save();
-  // Header do Instagram (topo)
+  // Header do Instagram Reels (topo 200px)
   ctx.fillStyle = "rgba(10, 15, 26, 0.45)";
   ctx.fillRect(0, 0, W, 200);
 
   // Barra de ações laterais (Like, Comentários, Compartilhar, Áudio)
   ctx.fillRect(910, 850, 170, 850);
 
-  // Rodapé do Instagram (Perfil, Seguir, Legenda)
+  // Rodapé do Instagram Reels (Perfil, Seguir, Legenda)
   ctx.fillRect(0, 1680, W, 240);
 
   // Linhas-guia pontilhadas da área segura ideal
@@ -289,7 +308,7 @@ function drawInstagramSafeZone(ctx: CanvasRenderingContext2D) {
   ctx.fillStyle = "#ffffff";
   ctx.font = '700 24px "Inter", sans-serif';
   ctx.textAlign = "center";
-  ctx.fillText("🛡️ ÁREA SEGURA DO INSTAGRAM REELS", W / 2, 260);
+  ctx.fillText("🛡️ ÁREA SEGURA DO INSTAGRAM REELS (9:16)", W / 2, 260);
 
   ctx.font = '600 20px "Inter", sans-serif';
   ctx.fillStyle = "#fca5a5";
@@ -301,6 +320,80 @@ function drawInstagramSafeZone(ctx: CanvasRenderingContext2D) {
   ctx.fillText("⚠️ Ícones Reels (Like, Comentários, Share)", 0, 0);
   ctx.restore();
 
+  ctx.restore();
+}
+
+function drawStorySafeZone(ctx: CanvasRenderingContext2D) {
+  ctx.save();
+  // Topo do Story (Cabeçalho do perfil, barra de progresso, botão fechar) ~230px
+  ctx.fillStyle = "rgba(10, 15, 26, 0.45)";
+  ctx.fillRect(0, 0, W, 230);
+
+  // Rodapé do Story (Barra de enviar mensagem rápida e direct) ~250px
+  ctx.fillRect(0, 1670, W, 250);
+
+  // Margem lateral do Story
+  ctx.fillRect(0, 230, 60, 1440);
+  ctx.fillRect(W - 60, 230, 60, 1440);
+
+  // Retângulo pontilhado da área segura do Story
+  ctx.strokeStyle = "rgba(249, 115, 22, 0.85)";
+  ctx.lineWidth = 3;
+  ctx.setLineDash([10, 6]);
+  ctx.strokeRect(70, 240, W - 140, 1420);
+
+  ctx.setLineDash([]);
+  ctx.fillStyle = "#ffffff";
+  ctx.font = '700 24px "Inter", sans-serif';
+  ctx.textAlign = "center";
+  ctx.fillText("🛡️ ÁREA SEGURA DO INSTAGRAM STORIES (9:16)", W / 2, 280);
+
+  ctx.font = '600 20px "Inter", sans-serif';
+  ctx.fillStyle = "#fed7aa";
+  ctx.fillText("⚠️ Topo do Story: Barras de Stories e Perfil", W / 2, 120);
+  ctx.fillText("⚠️ Rodapé do Story: Campo Enviar Mensagem", W / 2, 1800);
+
+  ctx.restore();
+}
+
+function drawFeedSafeZone(ctx: CanvasRenderingContext2D) {
+  ctx.save();
+  // O Instagram corta no perfil os 135px do topo e os 135px da base
+  ctx.fillStyle = "rgba(10, 15, 26, 0.45)";
+  ctx.fillRect(0, 0, W, 135);
+  ctx.fillRect(0, 1215, W, 135);
+
+  ctx.strokeStyle = "rgba(59, 130, 246, 0.85)";
+  ctx.lineWidth = 3;
+  ctx.setLineDash([10, 6]);
+  ctx.strokeRect(40, 135, W - 80, 1080);
+
+  ctx.setLineDash([]);
+  ctx.fillStyle = "#ffffff";
+  ctx.font = '700 22px "Inter", sans-serif';
+  ctx.textAlign = "center";
+  ctx.fillText("📐 RECORTE DA GRADE DO PERFIL (1:1 - 1080×1080)", W / 2, 175);
+
+  ctx.font = '600 18px "Inter", sans-serif';
+  ctx.fillStyle = "#93c5fd";
+  ctx.fillText("⚠️ Fora do quadrado 1:1 (não aparece na grade do perfil)", W / 2, 75);
+  ctx.fillText("⚠️ Fora do quadrado 1:1 (não aparece na grade do perfil)", W / 2, 1275);
+
+  ctx.restore();
+}
+
+function drawFeedSquareSafeZone(ctx: CanvasRenderingContext2D) {
+  ctx.save();
+  ctx.strokeStyle = "rgba(16, 185, 129, 0.85)";
+  ctx.lineWidth = 3;
+  ctx.setLineDash([10, 6]);
+  ctx.strokeRect(50, 50, W - 100, FEED_SQUARE_H - 100);
+
+  ctx.setLineDash([]);
+  ctx.fillStyle = "#ffffff";
+  ctx.font = '700 22px "Inter", sans-serif';
+  ctx.textAlign = "center";
+  ctx.fillText("🛡️ ÁREA SEGURA FEED QUADRADO (1:1 - 1080×1080)", W / 2, 90);
   ctx.restore();
 }
 
@@ -727,6 +820,12 @@ function drawReelFrame(
   tagPositionY: number,
   showSafeZone: boolean = false,
   logoColorStyle: LogoColorStyle = "white",
+  shadeOpacity: number = 85,
+  showLogoLayer: boolean = true,
+  showTitleLayer: boolean = true,
+  showHandleLayer: boolean = true,
+  showStorySticker: boolean = true,
+  format: PublicationFormat = "reel",
 ) {
   ctx.save();
   ctx.imageSmoothingEnabled = true;
@@ -737,12 +836,15 @@ function drawReelFrame(
   ctx.fillRect(0, 0, W, REEL_H);
   if (video && video.readyState >= 2) drawCover(ctx, video, 0, 0, W, REEL_H);
 
-  const shade = ctx.createLinearGradient(0, 650, 0, REEL_H);
-  shade.addColorStop(0, "rgba(0,0,0,.05)");
-  shade.addColorStop(0.42, "rgba(0,0,0,.68)");
-  shade.addColorStop(1, "rgba(0,0,0,.94)");
-  ctx.fillStyle = shade;
-  ctx.fillRect(0, 600, W, REEL_H - 600);
+  const maxAlpha = shadeOpacity / 100;
+  if (shadeOpacity > 0) {
+    const shade = ctx.createLinearGradient(0, 650, 0, REEL_H);
+    shade.addColorStop(0, `rgba(0,0,0,${(0.05 * maxAlpha).toFixed(2)})`);
+    shade.addColorStop(0.42, `rgba(0,0,0,${(0.68 * maxAlpha).toFixed(2)})`);
+    shade.addColorStop(1, `rgba(0,0,0,${(0.96 * maxAlpha).toFixed(2)})`);
+    ctx.fillStyle = shade;
+    ctx.fillRect(0, 600, W, REEL_H - 600);
+  }
 
   if (showStrongSceneWarning) {
     ctx.fillStyle = "#b91c1c";
@@ -754,42 +856,74 @@ function drawReelFrame(
     ctx.fillText("AVISO: CENAS FORTES", W / 2, 95);
   }
 
-  const renderLogo = getRenderableLogo(logo, logoColorStyle);
-  if (renderLogo) {
-    const { width, height } = getLogoSize(renderLogo, "reel", logoScale / 100);
-    ctx.drawImage(renderLogo, logoPosition.x * W - width / 2, logoPosition.y * REEL_H - height / 2, width, height);
-  } else {
-    ctx.textAlign = "center";
-    ctx.fillStyle = logoColorStyle === "dark" ? "#111111" : "#ffffff";
-    ctx.font = "900 57px Arial, sans-serif";
-    ctx.fillText("VIRALIZOU", W / 2 - 22, 1200);
-    ctx.fillStyle = "#ff5a1f";
-    ctx.font = "900 35px Arial, sans-serif";
-    ctx.fillText("GOIÂNIA", W / 2 + 214, 1200);
+  if (showLogoLayer) {
+    const renderLogo = getRenderableLogo(logo, logoColorStyle);
+    if (renderLogo) {
+      const { width, height } = getLogoSize(renderLogo, format, logoScale / 100);
+      ctx.drawImage(renderLogo, logoPosition.x * W - width / 2, logoPosition.y * REEL_H - height / 2, width, height);
+    } else {
+      ctx.textAlign = "center";
+      ctx.fillStyle = logoColorStyle === "dark" ? "#111111" : "#ffffff";
+      ctx.font = "900 57px Arial, sans-serif";
+      ctx.fillText("VIRALIZOU", W / 2 - 22, 1200);
+      ctx.fillStyle = "#ff5a1f";
+      ctx.font = "900 35px Arial, sans-serif";
+      ctx.fillText("GOIÂNIA", W / 2 + 214, 1200);
+    }
   }
 
-  const currentTime = video ? video.currentTime : 10;
-  const duration = video && Number.isFinite(video.duration) ? video.duration : 10;
-  drawReelHeadline(
-    ctx,
-    headline,
-    category,
-    fontFamily,
-    fontWeight,
-    textStyle,
-    textAlign,
-    textCase,
-    fontSize,
-    textAnimation,
-    titlePosition,
-    currentTime,
-    duration,
-    REEL_H,
-    820,
-  );
+  if (showTitleLayer) {
+    const currentTime = video ? video.currentTime : 10;
+    const duration = video && Number.isFinite(video.duration) ? video.duration : 10;
+    drawReelHeadline(
+      ctx,
+      headline,
+      category,
+      fontFamily,
+      fontWeight,
+      textStyle,
+      textAlign,
+      textCase,
+      fontSize,
+      textAnimation,
+      titlePosition,
+      currentTime,
+      duration,
+      REEL_H,
+      820,
+    );
+  }
 
-  // Assinatura / Tag Inferior (posicionada em altura segura para não ser tapada pelo perfil do Instagram)
-  if (handle && handle.trim()) {
+  if (format === "story" && showStorySticker) {
+    ctx.save();
+    ctx.strokeStyle = "rgba(255, 255, 255, 0.85)";
+    ctx.lineWidth = 3;
+    ctx.setLineDash([12, 8]);
+    ctx.fillStyle = "rgba(255, 255, 255, 0.14)";
+    const stkW = 580;
+    const stkH = 110;
+    const stkX = (W - stkW) / 2;
+    const stkY = 1440;
+    if (typeof ctx.roundRect === "function") {
+      ctx.beginPath();
+      ctx.roundRect(stkX, stkY, stkW, stkH, 24);
+      ctx.stroke();
+      ctx.fill();
+    } else {
+      ctx.strokeRect(stkX, stkY, stkW, stkH);
+      ctx.fillRect(stkX, stkY, stkW, stkH);
+    }
+    ctx.setLineDash([]);
+    ctx.fillStyle = "#ffffff";
+    ctx.font = '800 26px "Inter", sans-serif';
+    ctx.textAlign = "center";
+    ctx.textBaseline = "middle";
+    ctx.fillText("🔗 ÁREA DA FIGURINHA DE LINK / ENQUETE 👆", W / 2, stkY + stkH / 2);
+    ctx.restore();
+  }
+
+  // Assinatura / Tag Inferior
+  if (showHandleLayer && handle && handle.trim()) {
     const tagText = handle.trim();
     const tagY = tagPositionY || 1670;
 
@@ -831,7 +965,11 @@ function drawReelFrame(
 
   // Guia opcional de área segura do Instagram
   if (showSafeZone) {
-    drawInstagramSafeZone(ctx);
+    if (format === "story") {
+      drawStorySafeZone(ctx);
+    } else {
+      drawReelSafeZone(ctx);
+    }
   }
 
   ctx.restore();
@@ -851,7 +989,7 @@ export default function SocialFeedCreator({ posts, onBack }: Props) {
   const audioSourceRef = useRef<MediaElementAudioSourceNode | null>(null);
   const isRecordingRef = useRef<boolean>(false);
 
-  const [format, setFormat] = useState<"feed" | "reel" | "story">("feed");
+  const [format, setFormat] = useState<PublicationFormat>("feed");
   const [importVideoUrl, setImportVideoUrl] = useState("");
   const [importingVideo, setImportingVideo] = useState(false);
   const [videoUrl, setVideoUrl] = useState("");
@@ -883,6 +1021,13 @@ export default function SocialFeedCreator({ posts, onBack }: Props) {
   const [showSafeZone, setShowSafeZone] = useState<boolean>(true);
   const [reelTextAnimation, setReelTextAnimation] = useState<ReelTextAnimation>("typewriter");
   const [showStrongSceneWarning, setShowStrongSceneWarning] = useState(false);
+  const [shadeOpacity, setShadeOpacity] = useState<number>(85);
+  const [showOverlayLayer, setShowOverlayLayer] = useState<boolean>(false);
+  const [showLayerPanel, setShowLayerPanel] = useState<boolean>(true);
+  const [showLogoLayer, setShowLogoLayer] = useState<boolean>(true);
+  const [showTitleLayer, setShowTitleLayer] = useState<boolean>(true);
+  const [showHandleLayer, setShowHandleLayer] = useState<boolean>(true);
+  const [showStorySticker, setShowStorySticker] = useState<boolean>(true);
   const [imagePosition, setImagePosition] = useState(0);
   const [feedTitleFontSize, setFeedTitleFontSize] = useState<number>(0); // 0 = automático
   const [feedFontFamily, setFeedFontFamily] = useState<ReelFontFamily>("georgia");
@@ -921,6 +1066,13 @@ export default function SocialFeedCreator({ posts, onBack }: Props) {
       const savedFeedTitleOffsetY = Number(localStorage.getItem("viralizou_feed_title_offset_y") || "0");
       const savedFeedFontFamily = localStorage.getItem("viralizou_feed_font_family") as ReelFontFamily | null;
       const savedFeedTitlePosition = JSON.parse(localStorage.getItem("viralizou_feed_title_position") || "null");
+      const savedShadeOpacity = Number(localStorage.getItem("viralizou_shade_opacity"));
+      const savedOverlayLayer = localStorage.getItem("viralizou_show_overlay_layer");
+      const savedLayerPanel = localStorage.getItem("viralizou_show_layer_panel");
+      const savedLogoLayer = localStorage.getItem("viralizou_show_logo_layer");
+      const savedTitleLayer = localStorage.getItem("viralizou_show_title_layer");
+      const savedHandleLayer = localStorage.getItem("viralizou_show_handle_layer");
+      const savedStorySticker = localStorage.getItem("viralizou_show_story_sticker");
 
       if (savedLogo) setLogoData(savedLogo);
       if (savedHandle) setHandle(savedHandle);
@@ -939,6 +1091,13 @@ export default function SocialFeedCreator({ posts, onBack }: Props) {
       if (Number.isFinite(savedHandleFontSize) && savedHandleFontSize >= 18 && savedHandleFontSize <= 72) setHandleFontSize(savedHandleFontSize);
       if (Number.isFinite(savedFeedTitleSize)) setFeedTitleFontSize(savedFeedTitleSize);
       if (Number.isFinite(savedFeedTitleOffsetY)) setFeedTitleOffsetY(savedFeedTitleOffsetY);
+      if (Number.isFinite(savedShadeOpacity) && savedShadeOpacity >= 0 && savedShadeOpacity <= 100) setShadeOpacity(savedShadeOpacity);
+      if (savedOverlayLayer !== null) setShowOverlayLayer(savedOverlayLayer === "true");
+      if (savedLayerPanel !== null) setShowLayerPanel(savedLayerPanel === "true");
+      if (savedLogoLayer !== null) setShowLogoLayer(savedLogoLayer === "true");
+      if (savedTitleLayer !== null) setShowTitleLayer(savedTitleLayer === "true");
+      if (savedHandleLayer !== null) setShowHandleLayer(savedHandleLayer === "true");
+      if (savedStorySticker !== null) setShowStorySticker(savedStorySticker === "true");
       if (savedFeedFontFamily && ["anton", "bebas", "montserrat", "poppins", "impact", "georgia"].includes(savedFeedFontFamily)) setFeedFontFamily(savedFeedFontFamily);
       if (savedFeedTitlePosition && Number.isFinite(savedFeedTitlePosition.x) && Number.isFinite(savedFeedTitlePosition.y)) {
         const position = { x: Math.min(1, Math.max(0, savedFeedTitlePosition.x)), y: Math.min(1, Math.max(0, savedFeedTitlePosition.y)) };
@@ -981,8 +1140,9 @@ export default function SocialFeedCreator({ posts, onBack }: Props) {
 
     setRendering(true);
     try {
-      canvas.width = W;
-      canvas.height = format === "feed" ? H : REEL_H;
+      const { width: currentW, height: currentH } = getCanvasDimensions(format);
+      canvas.width = currentW;
+      canvas.height = currentH;
 
       if (format === "story" && (!videoPreviewRef.current || !videoReady)) {
         await document.fonts?.ready;
@@ -990,99 +1150,121 @@ export default function SocialFeedCreator({ posts, onBack }: Props) {
         ctx.imageSmoothingEnabled = true;
         ctx.imageSmoothingQuality = "high";
         ctx.fillStyle = "#050505";
-        ctx.fillRect(0, 0, W, REEL_H);
+        ctx.fillRect(0, 0, currentW, currentH);
 
         if (selectedPost?.image_url) {
           const src = `/api/admin/feed-image?slug=${encodeURIComponent(selectedPost.slug)}&v=${encodeURIComponent(selectedPost.updated_at || selectedPost.created_at || "")}`;
           const img = articleImageRef.current?.src === src ? articleImageRef.current.image : await loadImage(src);
           articleImageRef.current = { src, image: img };
-          drawCover(ctx, img, 0, 0, W, REEL_H, imagePosition);
+          drawCover(ctx, img, 0, 0, currentW, currentH, imagePosition);
         } else {
-          const gradient = ctx.createLinearGradient(0, 0, W, REEL_H);
+          const gradient = ctx.createLinearGradient(0, 0, currentW, currentH);
           gradient.addColorStop(0, "#0f172a");
           gradient.addColorStop(1, "#1e293b");
           ctx.fillStyle = gradient;
-          ctx.fillRect(0, 0, W, REEL_H);
+          ctx.fillRect(0, 0, currentW, currentH);
         }
 
-        const shade = ctx.createLinearGradient(0, 600, 0, REEL_H);
-        shade.addColorStop(0, "rgba(0,0,0,0.1)");
-        shade.addColorStop(0.4, "rgba(0,0,0,0.7)");
-        shade.addColorStop(1, "rgba(0,0,0,0.96)");
-        ctx.fillStyle = shade;
-        ctx.fillRect(0, 500, W, REEL_H - 500);
+        const maxAlpha = shadeOpacity / 100;
+        if (showOverlayLayer && shadeOpacity > 0) {
+          const shade = ctx.createLinearGradient(0, 600, 0, currentH);
+          shade.addColorStop(0, `rgba(0,0,0,${(0.08 * maxAlpha).toFixed(2)})`);
+          shade.addColorStop(0.4, `rgba(0,0,0,${(0.72 * maxAlpha).toFixed(2)})`);
+          shade.addColorStop(1, `rgba(5,5,5,${(0.96 * maxAlpha).toFixed(2)})`);
+          ctx.fillStyle = shade;
+          ctx.fillRect(0, 500, currentW, currentH - 500);
+        }
 
-        if (logoData) {
-          try {
-            if (!logoImageRef.current || logoImageRef.current.src !== logoData) logoImageRef.current = await loadImage(logoData);
-            const renderLogo = getRenderableLogo(logoImageRef.current, logoColorStyle);
-            if (renderLogo) {
-              const { width, height } = getLogoSize(renderLogo, "story", logoScale / 100);
-              ctx.drawImage(renderLogo, logoPositionRef.current.x * W - width / 2, logoPositionRef.current.y * REEL_H - height / 2, width, height);
-            }
-          } catch { logoImageRef.current = null; }
-        } else {
+        if (showStrongSceneWarning) {
+          ctx.fillStyle = "#b91c1c";
+          ctx.fillRect(48, 56, currentW - 96, 78);
+          ctx.fillStyle = "#ffffff";
           ctx.textAlign = "center";
-          ctx.fillStyle = logoColorStyle === "dark" ? "#111111" : "#ffffff";
-          ctx.font = "900 57px Arial, sans-serif";
-          ctx.fillText("VIRALIZOU", W / 2 - 22, 1050);
-          ctx.fillStyle = "#ff5a1f";
-          ctx.font = "900 35px Arial, sans-serif";
-          ctx.fillText("GOIÂNIA", W / 2 + 214, 1050);
+          ctx.textBaseline = "middle";
+          ctx.font = '800 36px Arial, sans-serif';
+          ctx.fillText("AVISO: CENAS FORTES", currentW / 2, 95);
         }
 
-        drawReelHeadline(
-          ctx,
-          title || selectedPost?.title || "Título da Notícia",
-          selectedPost?.category || "GOIÂNIA",
-          reelFontFamily,
-          reelFontWeight,
-          reelTextStyle,
-          reelTextAlign,
-          reelTextCase,
-          reelFontSize,
-          "static",
-          titlePositionRef.current,
-          10,
-          10,
-          REEL_H,
-          860
-        );
-
-        // Guia / área para figurinha de link ou enquete do Instagram Stories
-        ctx.save();
-        ctx.strokeStyle = "rgba(255, 255, 255, 0.85)";
-        ctx.lineWidth = 3;
-        ctx.setLineDash([12, 8]);
-        ctx.fillStyle = "rgba(255, 255, 255, 0.14)";
-        const stkW = 580;
-        const stkH = 110;
-        const stkX = (W - stkW) / 2;
-        const stkY = 1440;
-        if (typeof ctx.roundRect === "function") {
-          ctx.beginPath();
-          ctx.roundRect(stkX, stkY, stkW, stkH, 24);
-          ctx.stroke();
-          ctx.fill();
-        } else {
-          ctx.strokeRect(stkX, stkY, stkW, stkH);
-          ctx.fillRect(stkX, stkY, stkW, stkH);
+        if (showLogoLayer) {
+          if (logoData) {
+            try {
+              if (!logoImageRef.current || logoImageRef.current.src !== logoData) logoImageRef.current = await loadImage(logoData);
+              const renderLogo = getRenderableLogo(logoImageRef.current, logoColorStyle);
+              if (renderLogo) {
+                const { width, height } = getLogoSize(renderLogo, "story", logoScale / 100);
+                ctx.drawImage(renderLogo, logoPositionRef.current.x * currentW - width / 2, logoPositionRef.current.y * currentH - height / 2, width, height);
+              }
+            } catch { logoImageRef.current = null; }
+          } else {
+            ctx.textAlign = "center";
+            ctx.fillStyle = logoColorStyle === "dark" ? "#111111" : "#ffffff";
+            ctx.font = "900 57px Arial, sans-serif";
+            ctx.fillText("VIRALIZOU", currentW / 2 - 22, 1050);
+            ctx.fillStyle = "#ff5a1f";
+            ctx.font = "900 35px Arial, sans-serif";
+            ctx.fillText("GOIÂNIA", currentW / 2 + 214, 1050);
+          }
         }
-        ctx.setLineDash([]);
-        ctx.fillStyle = "#ffffff";
-        ctx.font = '800 26px "Inter", sans-serif';
-        ctx.textAlign = "center";
-        ctx.textBaseline = "middle";
-        ctx.fillText("🔗 ÁREA DA FIGURINHA DE LINK / ENQUETE 👆", W / 2, stkY + stkH / 2);
-        ctx.restore();
 
-        if (handle && handle.trim()) {
+        if (showTitleLayer) {
+          drawReelHeadline(
+            ctx,
+            title || selectedPost?.title || "Título da Notícia",
+            selectedPost?.category || "GOIÂNIA",
+            reelFontFamily,
+            reelFontWeight,
+            reelTextStyle,
+            reelTextAlign,
+            reelTextCase,
+            reelFontSize,
+            "static",
+            titlePositionRef.current,
+            10,
+            10,
+            currentH,
+            860
+          );
+        }
+
+        if (showStorySticker) {
+          ctx.save();
+          ctx.strokeStyle = "rgba(255, 255, 255, 0.85)";
+          ctx.lineWidth = 3;
+          ctx.setLineDash([12, 8]);
+          ctx.fillStyle = "rgba(255, 255, 255, 0.14)";
+          const stkW = 580;
+          const stkH = 110;
+          const stkX = (currentW - stkW) / 2;
+          const stkY = 1440;
+          if (typeof ctx.roundRect === "function") {
+            ctx.beginPath();
+            ctx.roundRect(stkX, stkY, stkW, stkH, 24);
+            ctx.stroke();
+            ctx.fill();
+          } else {
+            ctx.strokeRect(stkX, stkY, stkW, stkH);
+            ctx.fillRect(stkX, stkY, stkW, stkH);
+          }
+          ctx.setLineDash([]);
+          ctx.fillStyle = "#ffffff";
+          ctx.font = '800 26px "Inter", sans-serif';
+          ctx.textAlign = "center";
+          ctx.textBaseline = "middle";
+          ctx.fillText("🔗 ÁREA DA FIGURINHA DE LINK / ENQUETE 👆", currentW / 2, stkY + stkH / 2);
+          ctx.restore();
+        }
+
+        if (showHandleLayer && handle && handle.trim()) {
           ctx.save();
           ctx.font = `800 ${handleFontSize}px "Montserrat", sans-serif`;
           ctx.fillStyle = "#ffffff";
           ctx.textAlign = "center";
-          ctx.fillText(handle.trim(), W / 2, tagPositionY || 1670);
+          ctx.fillText(handle.trim(), currentW / 2, tagPositionY || 1670);
           ctx.restore();
+        }
+
+        if (showSafeZone) {
+          drawStorySafeZone(ctx);
         }
 
         ctx.restore();
@@ -1090,13 +1272,12 @@ export default function SocialFeedCreator({ posts, onBack }: Props) {
         return;
       }
 
-      if (format === "reel" || format === "story") {
+      if (format === "reel" || (format === "story" && videoPreviewRef.current && videoReady)) {
         await document.fonts?.ready;
         if (logoData) {
           try {
             if (!logoImageRef.current || logoImageRef.current.src !== logoData) logoImageRef.current = await loadImage(logoData);
-          }
-          catch { logoImageRef.current = null; }
+          } catch { logoImageRef.current = null; }
         } else {
           logoImageRef.current = null;
         }
@@ -1123,11 +1304,18 @@ export default function SocialFeedCreator({ posts, onBack }: Props) {
           tagPositionY,
           showSafeZone,
           logoColorStyle,
+          showOverlayLayer ? shadeOpacity : 0,
+          showLogoLayer,
+          showTitleLayer,
+          showHandleLayer,
+          showStorySticker,
+          format,
         );
         setMessage("");
         return;
       }
 
+      // FEED (4:5 Recomendado ou 1:1 Quadrado)
       await document.fonts?.ready;
       const fontStr = getReelFont(reelFontFamily, feedTitleFontSize > 0 ? feedTitleFontSize : reelFontSize, reelFontWeight);
       await ensureFontReady(fontStr);
@@ -1138,99 +1326,131 @@ export default function SocialFeedCreator({ posts, onBack }: Props) {
       (ctx as any).textRendering = "geometricPrecision";
 
       ctx.fillStyle = "#050505";
-      ctx.fillRect(0, 0, W, H);
+      ctx.fillRect(0, 0, currentW, currentH);
+
+      const coverH = format === "feed-square" ? 760 : 930;
 
       if (selectedPost?.image_url) {
         const src = `/api/admin/feed-image?slug=${encodeURIComponent(selectedPost.slug)}&v=${encodeURIComponent(selectedPost.updated_at || selectedPost.created_at || "")}`;
         const img = articleImageRef.current?.src === src ? articleImageRef.current.image : await loadImage(src);
         articleImageRef.current = { src, image: img };
-        drawCover(ctx, img, 0, 0, W, 930, imagePosition);
+        drawCover(ctx, img, 0, 0, currentW, coverH, imagePosition);
       } else {
-        const gradient = ctx.createLinearGradient(0, 0, W, 930);
+        const gradient = ctx.createLinearGradient(0, 0, currentW, coverH);
         gradient.addColorStop(0, "#172033");
         gradient.addColorStop(1, "#334155");
         ctx.fillStyle = gradient;
-        ctx.fillRect(0, 0, W, 930);
+        ctx.fillRect(0, 0, currentW, coverH);
         ctx.fillStyle = "rgba(255,255,255,.75)";
         ctx.font = "700 38px Arial, sans-serif";
         ctx.textAlign = "center";
-        ctx.fillText("Selecione uma notícia do portal", W / 2, 465);
+        ctx.fillText("Selecione uma notícia do portal", currentW / 2, coverH / 2);
       }
 
-      // Base Y centralizada no terço inferior
-      const effectiveSize = feedTitleFontSize > 0 ? feedTitleFontSize : reelFontSize;
-      const overlayTop = Math.max(380, feedTitlePosition.y * H - 280 + feedTitleOffsetY);
-      const overlay = ctx.createLinearGradient(0, overlayTop, 0, 1140);
-      overlay.addColorStop(0, "rgba(0,0,0,0)");
-      overlay.addColorStop(0.32, "rgba(0,0,0,.82)");
-      overlay.addColorStop(1, "#050505");
-      ctx.fillStyle = overlay;
-      ctx.fillRect(0, overlayTop, W, H - overlayTop);
+      const maxAlpha = shadeOpacity / 100;
+      if (showOverlayLayer && shadeOpacity > 0) {
+        const overlayTop = Math.max(format === "feed-square" ? 320 : 380, feedTitlePosition.y * currentH - 280 + feedTitleOffsetY);
+        const overlay = ctx.createLinearGradient(0, overlayTop, 0, currentH - 140);
+        overlay.addColorStop(0, "rgba(0,0,0,0)");
+        overlay.addColorStop(0.32, `rgba(0,0,0,${(0.82 * maxAlpha).toFixed(2)})`);
+        overlay.addColorStop(1, `rgba(5,5,5,${(0.98 * maxAlpha).toFixed(2)})`);
+        ctx.fillStyle = overlay;
+        ctx.fillRect(0, overlayTop, currentW, currentH - overlayTop);
+      }
 
-      // Logo do jornal sobre o overlay
-      if (logoData) {
-        try {
-          if (!logoImageRef.current || logoImageRef.current.src !== logoData) logoImageRef.current = await loadImage(logoData);
-          const logo = logoImageRef.current;
-          const renderLogo = getRenderableLogo(logo, logoColorStyle);
-          if (renderLogo) {
-            const { width, height } = getLogoSize(renderLogo, "feed", logoScale / 100);
-            ctx.drawImage(renderLogo, logoPosition.x * W - width / 2, logoPosition.y * H - height / 2, width, height);
-          }
-        } catch {
-          logoImageRef.current = null;
-          setLogoData("");
-        }
-      } else {
+      if (showStrongSceneWarning) {
+        ctx.fillStyle = "#b91c1c";
+        const bannerH = format === "feed-square" ? 64 : 72;
+        ctx.fillRect(40, 40, currentW - 80, bannerH);
+        ctx.fillStyle = "#ffffff";
         ctx.textAlign = "center";
-        ctx.fillStyle = logoColorStyle === "dark" ? "#111111" : "#ffffff";
-        ctx.font = "900 57px Arial, sans-serif";
-        ctx.fillText("VIRALIZOU", W / 2 - 22, 838);
-        ctx.fillStyle = "#ff5a1f";
-        ctx.font = "900 35px Arial, sans-serif";
-        ctx.fillText("GOIÂNIA", W / 2 + 214, 838);
+        ctx.textBaseline = "middle";
+        ctx.font = '800 32px Arial, sans-serif';
+        ctx.fillText("AVISO: CENAS FORTES", currentW / 2, 40 + bannerH / 2);
       }
 
-      const headline = (title || selectedPost?.title || "Título da notícia").trim();
-      const targetPos = {
-        x: feedTitlePosition.x,
-        y: Math.min(0.92, Math.max(0.55, feedTitlePosition.y + feedTitleOffsetY / H)),
-      };
+      if (showLogoLayer) {
+        if (logoData) {
+          try {
+            if (!logoImageRef.current || logoImageRef.current.src !== logoData) logoImageRef.current = await loadImage(logoData);
+            const logo = logoImageRef.current;
+            const renderLogo = getRenderableLogo(logo, logoColorStyle);
+            if (renderLogo) {
+              const { width, height } = getLogoSize(renderLogo, format, logoScale / 100);
+              const logoY = format === "feed-square" ? logoPosition.y * currentH - 40 : logoPosition.y * currentH;
+              ctx.drawImage(renderLogo, logoPosition.x * currentW - width / 2, logoY - height / 2, width, height);
+            }
+          } catch {
+            logoImageRef.current = null;
+            setLogoData("");
+          }
+        } else {
+          ctx.textAlign = "center";
+          ctx.fillStyle = logoColorStyle === "dark" ? "#111111" : "#ffffff";
+          ctx.font = "900 57px Arial, sans-serif";
+          const defaultLogoY = format === "feed-square" ? 680 : 838;
+          ctx.fillText("VIRALIZOU", currentW / 2 - 22, defaultLogoY);
+          ctx.fillStyle = "#ff5a1f";
+          ctx.font = "900 35px Arial, sans-serif";
+          ctx.fillText("GOIÂNIA", currentW / 2 + 214, defaultLogoY);
+        }
+      }
 
-      drawReelHeadline(
-        ctx,
-        headline,
-        selectedPost?.category || "",
-        reelFontFamily,
-        reelFontWeight,
-        reelTextStyle,
-        reelTextAlign,
-        reelTextCase,
-        effectiveSize,
-        "static",
-        targetPos,
-        10,
-        10,
-        H,
-        920,
-      );
+      if (showTitleLayer) {
+        const headline = (title || selectedPost?.title || "Título da notícia").trim();
+        const effectiveSize = feedTitleFontSize > 0 ? feedTitleFontSize : (format === "feed-square" ? Math.min(reelFontSize, 62) : reelFontSize);
+        const targetPos = {
+          x: feedTitlePosition.x,
+          y: Math.min(0.92, Math.max(0.45, feedTitlePosition.y + feedTitleOffsetY / currentH)),
+        };
 
-      // Assinatura do rodapé
-      ctx.save();
-      ctx.textAlign = "center";
-      ctx.textBaseline = "middle";
-      ctx.font = `800 ${handleFontSize}px "Montserrat", -apple-system, sans-serif`;
+        drawReelHeadline(
+          ctx,
+          headline,
+          selectedPost?.category || "",
+          reelFontFamily,
+          reelFontWeight,
+          reelTextStyle,
+          reelTextAlign,
+          reelTextCase,
+          effectiveSize,
+          "static",
+          targetPos,
+          10,
+          10,
+          currentH,
+          920,
+        );
+      }
 
-      let handleColor = "rgba(255,255,255,.94)";
-      if (tagColor === "red") handleColor = "#ff3b30";
-      else if (tagColor === "yellow") handleColor = "#ffcc00";
-      else if (tagColor === "orange") handleColor = "#ff5a1f";
+      if (showHandleLayer && handle && handle.trim()) {
+        ctx.save();
+        ctx.textAlign = "center";
+        ctx.textBaseline = "middle";
+        ctx.font = `800 ${handleFontSize}px "Montserrat", -apple-system, sans-serif`;
 
-      ctx.fillStyle = handleColor;
-      ctx.shadowColor = "rgba(0,0,0,0.6)";
-      ctx.shadowBlur = 8;
-      ctx.fillText(handle.trim() || "@viralizougoiania", W / 2, 1300);
-      ctx.restore();
+        let handleColor = "rgba(255,255,255,.94)";
+        if (tagColor === "red") handleColor = "#ff3b30";
+        else if (tagColor === "yellow") handleColor = "#ffcc00";
+        else if (tagColor === "orange") handleColor = "#ff5a1f";
+
+        ctx.fillStyle = handleColor;
+        ctx.shadowColor = "rgba(0,0,0,0.6)";
+        ctx.shadowBlur = 8;
+        const handleY = format === "feed-square" ? 1030 : 1300;
+        ctx.fillText(handle.trim() || "@viralizougoiania", currentW / 2, handleY);
+        ctx.restore();
+      }
+
+      if (showSafeZone) {
+        if (format === "feed") {
+          drawFeedSafeZone(ctx);
+        } else if (format === "feed-square") {
+          drawFeedSquareSafeZone(ctx);
+        } else if (format === "reel-cover") {
+          drawFeedSafeZone(ctx);
+        }
+      }
 
       ctx.restore();
       setMessage("");
@@ -1244,51 +1464,77 @@ export default function SocialFeedCreator({ posts, onBack }: Props) {
   useEffect(() => {
     renderCard();
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [selectedPost?.slug, selectedPost?.updated_at, title, logoData, handle, imagePosition, feedTitleFontSize, feedFontFamily, feedTitlePosition.x, feedTitlePosition.y, feedTitleOffsetY, format, logoPosition.x, logoPosition.y, titlePosition.x, titlePosition.y, reelTextStyle, reelFontFamily, reelFontWeight, reelTextAlign, reelTextCase, reelFontSize, tagColor, tagPositionY, showSafeZone, reelTextAnimation, showStrongSceneWarning, logoScale, handleFontSize]);
+  }, [selectedPost?.slug, selectedPost?.updated_at, title, logoData, handle, imagePosition, feedTitleFontSize, feedFontFamily, feedTitlePosition.x, feedTitlePosition.y, feedTitleOffsetY, format, logoPosition.x, logoPosition.y, titlePosition.x, titlePosition.y, reelTextStyle, reelFontFamily, reelFontWeight, reelTextAlign, reelTextCase, reelFontSize, tagColor, tagPositionY, showSafeZone, reelTextAnimation, showStrongSceneWarning, logoScale, handleFontSize, shadeOpacity, showOverlayLayer, showLogoLayer, showTitleLayer, showHandleLayer, showStorySticker, logoColorStyle]);
 
-  // Loop de pré-visualização interativa do Reel
+  // Loop de pré-visualização interativa do Reel e Story
   useEffect(() => {
     const video = videoPreviewRef.current;
-    if (format !== "reel" || !videoUrl || !video) return;
+    if ((format !== "reel" && format !== "story") || !videoUrl || !video) return;
     let frameId = 0;
-    const draw = () => {
+    let videoFrameId = 0;
+    let lastFallbackFrame = 0;
+    const draw = (timestamp = 0) => {
       if (!isRecordingRef.current) {
-        const canvas = canvasRef.current;
-        const ctx = canvas?.getContext("2d");
-        if (ctx && video.readyState >= 2) {
-          drawReelFrame(
-            ctx,
-            video,
-            logoImageRef.current,
-            title || selectedPost?.title || "",
-            selectedPost?.category || "",
-            handle,
-            logoPositionRef.current,
-            titlePositionRef.current,
-            reelTextStyle,
-            reelFontFamily,
-            reelFontWeight,
-            reelTextAlign,
-            reelTextCase,
-            reelFontSize,
-            reelTextAnimation,
-            showStrongSceneWarning,
-            logoScale,
-            handleFontSize,
-            tagColor,
-            tagPositionY,
-            showSafeZone,
-          );
+        const supportsVideoFrameCallback = typeof (video as any).requestVideoFrameCallback === "function";
+        if (supportsVideoFrameCallback || timestamp - lastFallbackFrame >= 33) {
+          const canvas = canvasRef.current;
+          const ctx = canvas?.getContext("2d");
+          if (ctx && video.readyState >= 2) {
+            drawReelFrame(
+              ctx,
+              video,
+              logoImageRef.current,
+              title || selectedPost?.title || "",
+              selectedPost?.category || "",
+              handle,
+              logoPositionRef.current,
+              titlePositionRef.current,
+              reelTextStyle,
+              reelFontFamily,
+              reelFontWeight,
+              reelTextAlign,
+              reelTextCase,
+              reelFontSize,
+              reelTextAnimation,
+              showStrongSceneWarning,
+              logoScale,
+              handleFontSize,
+              tagColor,
+              tagPositionY,
+              showSafeZone,
+              logoColorStyle,
+              showOverlayLayer ? shadeOpacity : 0,
+              showLogoLayer,
+              showTitleLayer,
+              showHandleLayer,
+              showStorySticker,
+              format,
+            );
+          }
+          lastFallbackFrame = timestamp;
         }
       }
-      frameId = requestAnimationFrame(draw);
+      if (typeof (video as any).requestVideoFrameCallback === "function") {
+        videoFrameId = (video as any).requestVideoFrameCallback(draw);
+      } else {
+        frameId = requestAnimationFrame(draw);
+      }
     };
     video.loop = true;
     video.muted = true;
     video.play().catch(() => {});
-    frameId = requestAnimationFrame(draw);
-    return () => cancelAnimationFrame(frameId);
-  }, [format, videoUrl, title, handle, logoData, selectedPost?.title, reelTextStyle, reelFontFamily, reelFontWeight, reelTextAlign, reelTextCase, reelFontSize, tagColor, tagPositionY, showSafeZone, reelTextAnimation, showStrongSceneWarning, logoScale, handleFontSize]);
+    if (typeof (video as any).requestVideoFrameCallback === "function") {
+      videoFrameId = (video as any).requestVideoFrameCallback(draw);
+    } else {
+      frameId = requestAnimationFrame(draw);
+    }
+    return () => {
+      cancelAnimationFrame(frameId);
+      if (videoFrameId && typeof (video as any).cancelVideoFrameCallback === "function") {
+        (video as any).cancelVideoFrameCallback(videoFrameId);
+      }
+    };
+  }, [format, videoUrl, title, handle, logoData, selectedPost?.title, reelTextStyle, reelFontFamily, reelFontWeight, reelTextAlign, reelTextCase, reelFontSize, tagColor, tagPositionY, showSafeZone, reelTextAnimation, showStrongSceneWarning, logoScale, handleFontSize, shadeOpacity, showOverlayLayer, showLogoLayer, showTitleLayer, showHandleLayer, showStorySticker, logoColorStyle]);
 
   async function loadArticle() {
     const slug = slugFromInput(articleUrl);
@@ -1540,14 +1786,24 @@ export default function SocialFeedCreator({ posts, onBack }: Props) {
     try { localStorage.setItem("viralizou_reel_tag_position_y", String(pos)); } catch {}
   }
 
-  function toggleSafeZone(enabled: boolean) {
-    setShowSafeZone(enabled);
-    try { localStorage.setItem("viralizou_reel_show_safe_zone", String(enabled)); } catch {}
+  function saveShadeOpacity(val: number) {
+    setShadeOpacity(val);
+    try { localStorage.setItem("viralizou_shade_opacity", String(val)); } catch {}
   }
 
-  function chooseReelTextAnimation(anim: ReelTextAnimation) {
-    setReelTextAnimation(anim);
-    try { localStorage.setItem("viralizou_reel_text_animation", anim); } catch {}
+  function toggleOverlayLayer(enabled: boolean) {
+    setShowOverlayLayer(enabled);
+    try { localStorage.setItem("viralizou_show_overlay_layer", String(enabled)); } catch {}
+  }
+
+  function toggleLayerPanel(enabled: boolean) {
+    setShowLayerPanel(enabled);
+    try { localStorage.setItem("viralizou_show_layer_panel", String(enabled)); } catch {}
+  }
+
+  function toggleSafeZone(enabled: boolean) {
+    setShowSafeZone(enabled);
+    try { localStorage.setItem("viralizou_reel_safe_zone", String(enabled)); } catch {}
   }
 
   function toggleStrongSceneWarning(enabled: boolean) {
@@ -1555,18 +1811,64 @@ export default function SocialFeedCreator({ posts, onBack }: Props) {
     try { localStorage.setItem("viralizou_reel_strong_scene_warning", String(enabled)); } catch {}
   }
 
-  function downloadPng() {
+  function toggleLogoLayer(enabled: boolean) {
+    setShowLogoLayer(enabled);
+    try { localStorage.setItem("viralizou_show_logo_layer", String(enabled)); } catch {}
+  }
+
+  function toggleTitleLayer(enabled: boolean) {
+    setShowTitleLayer(enabled);
+    try { localStorage.setItem("viralizou_show_title_layer", String(enabled)); } catch {}
+  }
+
+  function toggleHandleLayer(enabled: boolean) {
+    setShowHandleLayer(enabled);
+    try { localStorage.setItem("viralizou_show_handle_layer", String(enabled)); } catch {}
+  }
+
+  function toggleStorySticker(enabled: boolean) {
+    setShowStorySticker(enabled);
+    try { localStorage.setItem("viralizou_show_story_sticker", String(enabled)); } catch {}
+  }
+
+  function chooseReelTextAnimation(anim: ReelTextAnimation) {
+    setReelTextAnimation(anim);
+    try { localStorage.setItem("viralizou_reel_text_animation", anim); } catch {}
+  }
+
+  async function downloadPng() {
     const canvas = canvasRef.current;
-    if (!canvas || !selectedPost) {
+    if (!canvas || (!selectedPost && !title)) {
       setMessage("Carregue uma notícia antes de baixar.");
       return;
     }
+    setMessage("Preparando PNG na resolução do formato selecionado...");
+    await renderCard();
+    const slug = selectedPost?.slug || "arte";
+    const prefix =
+      format === "feed-square"
+        ? "feed-1080x1080"
+        : format === "reel-cover"
+        ? "reel-cover-1080x1350"
+        : format === "story"
+        ? "story-1080x1920"
+        : format === "reel"
+        ? "reel-cover-1080x1920"
+        : "feed-1080x1350";
+    const blob = await new Promise<Blob | null>((resolve) => canvas.toBlob(resolve, "image/png"));
+    if (!blob) {
+      setMessage("Não foi possível gerar o PNG. Atualize a prévia e tente novamente.");
+      return;
+    }
+    const objectUrl = URL.createObjectURL(blob);
     const a = document.createElement("a");
-    a.href = canvas.toDataURL("image/png");
-    a.download = `feed-${selectedPost.slug}.png`;
+    a.href = objectUrl;
+    a.download = `${prefix}-${slug}.png`;
     document.body.appendChild(a);
     a.click();
     a.remove();
+    window.setTimeout(() => URL.revokeObjectURL(objectUrl), 30_000);
+    setMessage(`✅ PNG pronto · ${canvas.width}×${canvas.height} px.`);
   }
 
   function centerLogo() {
@@ -1577,26 +1879,28 @@ export default function SocialFeedCreator({ posts, onBack }: Props) {
   }
 
   function onPreviewPointerDown(event: ReactPointerEvent<HTMLCanvasElement>) {
-    if (format === "reel") {
+    const { width: currentW, height: currentH } = getCanvasDimensions(format);
+
+    if (format === "reel" || format === "story") {
       const ctx = event.currentTarget.getContext("2d");
       if (ctx) {
         const layout = getReelTitleLayout(ctx, title || selectedPost?.title || "", reelFontFamily, reelFontWeight, reelTextCase, reelFontSize);
         const rect = event.currentTarget.getBoundingClientRect();
-        const x = ((event.clientX - rect.left) / rect.width) * W;
-        const y = ((event.clientY - rect.top) / rect.height) * REEL_H;
-        const centerX = titlePositionRef.current.x * W;
-        const centerY = titlePositionRef.current.y * REEL_H;
+        const x = ((event.clientX - rect.left) / rect.width) * currentW;
+        const y = ((event.clientY - rect.top) / rect.height) * currentH;
+        const centerX = titlePositionRef.current.x * currentW;
+        const centerY = titlePositionRef.current.y * currentH;
         if (x >= centerX - layout.width / 2 - 20 && x <= centerX + layout.width / 2 + 20 && y >= centerY - layout.height / 2 - 20 && y <= centerY + layout.height / 2 + 20) {
           event.preventDefault();
           event.currentTarget.setPointerCapture(event.pointerId);
-          titleDragRef.current = { pointerId: event.pointerId, offsetX: x / W - titlePositionRef.current.x, offsetY: y / REEL_H - titlePositionRef.current.y };
+          titleDragRef.current = { pointerId: event.pointerId, offsetX: x / currentW - titlePositionRef.current.x, offsetY: y / currentH - titlePositionRef.current.y };
           setDraggingLogo(true);
           return;
         }
       }
     }
 
-    if (format === "feed") {
+    if (format === "feed" || format === "feed-square") {
       const ctx = event.currentTarget.getContext("2d");
       if (ctx) {
         const fitted = fitHeadline(ctx, (title || selectedPost?.title || "Título da notícia").trim(), 920, feedTitleFontSize, feedFontFamily);
@@ -1604,14 +1908,14 @@ export default function SocialFeedCreator({ posts, onBack }: Props) {
         const width = Math.max(...fitted.lines.map((line) => ctx.measureText(line).width), 0);
         const height = fitted.lines.length * fitted.size * 1.1;
         const rect = event.currentTarget.getBoundingClientRect();
-        const x = ((event.clientX - rect.left) / rect.width) * W;
-        const y = ((event.clientY - rect.top) / rect.height) * H;
-        const centerX = feedTitlePositionRef.current.x * W;
-        const centerY = feedTitlePositionRef.current.y * H;
+        const x = ((event.clientX - rect.left) / rect.width) * currentW;
+        const y = ((event.clientY - rect.top) / rect.height) * currentH;
+        const centerX = feedTitlePositionRef.current.x * currentW;
+        const centerY = feedTitlePositionRef.current.y * currentH;
         if (x >= centerX - width / 2 - 24 && x <= centerX + width / 2 + 24 && y >= centerY - height / 2 - 24 && y <= centerY + height / 2 + 24) {
           event.preventDefault();
           event.currentTarget.setPointerCapture(event.pointerId);
-          titleDragRef.current = { pointerId: event.pointerId, offsetX: x / W - feedTitlePositionRef.current.x, offsetY: y / H - feedTitlePositionRef.current.y };
+          titleDragRef.current = { pointerId: event.pointerId, offsetX: x / currentW - feedTitlePositionRef.current.x, offsetY: y / currentH - feedTitlePositionRef.current.y };
           setDraggingLogo(true);
           return;
         }
@@ -1622,30 +1926,30 @@ export default function SocialFeedCreator({ posts, onBack }: Props) {
     if (!logoData || !logo?.naturalWidth) return;
 
     const rect = event.currentTarget.getBoundingClientRect();
-    const x = ((event.clientX - rect.left) / rect.width) * W;
-    const canvasHeight = format === "reel" ? REEL_H : H;
-    const y = ((event.clientY - rect.top) / rect.height) * canvasHeight;
-    const { width, height } = getLogoSize(logo, format, format === "reel" ? logoScale / 100 : 1);
-    const centerX = logoPositionRef.current.x * W;
-    const centerY = logoPositionRef.current.y * canvasHeight;
+    const x = ((event.clientX - rect.left) / rect.width) * currentW;
+    const y = ((event.clientY - rect.top) / rect.height) * currentH;
+    const { width, height } = getLogoSize(logo, format, format === "reel" || format === "story" ? logoScale / 100 : 1);
+    const centerX = logoPositionRef.current.x * currentW;
+    const centerY = logoPositionRef.current.y * currentH;
     if (x < centerX - width / 2 || x > centerX + width / 2 || y < centerY - height / 2 || y > centerY + height / 2) return;
 
     event.preventDefault();
     event.currentTarget.setPointerCapture(event.pointerId);
-    logoDragRef.current = { pointerId: event.pointerId, offsetX: x / W - logoPositionRef.current.x, offsetY: y / canvasHeight - logoPositionRef.current.y };
+    logoDragRef.current = { pointerId: event.pointerId, offsetX: x / currentW - logoPositionRef.current.x, offsetY: y / currentH - logoPositionRef.current.y };
     setDraggingLogo(true);
   }
 
   function onPreviewPointerMove(event: ReactPointerEvent<HTMLCanvasElement>) {
+    const { width: currentW, height: currentH } = getCanvasDimensions(format);
     const titleDrag = titleDragRef.current;
     if (titleDrag?.pointerId === event.pointerId) {
       const ctx = event.currentTarget.getContext("2d");
       const rect = event.currentTarget.getBoundingClientRect();
-      if (format === "reel") {
+      if (format === "reel" || format === "story") {
         const layout = ctx ? getReelTitleLayout(ctx, title || selectedPost?.title || "", reelFontFamily, reelFontWeight, reelTextCase, reelFontSize) : { width: 0, height: 0 };
         const position = {
-          x: Math.min(1 - layout.width / (2 * W), Math.max(layout.width / (2 * W), (event.clientX - rect.left) / rect.width - titleDrag.offsetX)),
-          y: Math.min(1 - layout.height / (2 * REEL_H), Math.max(layout.height / (2 * REEL_H), (event.clientY - rect.top) / rect.height - titleDrag.offsetY)),
+          x: Math.min(1 - layout.width / (2 * currentW), Math.max(layout.width / (2 * currentW), (event.clientX - rect.left) / rect.width - titleDrag.offsetX)),
+          y: Math.min(1 - layout.height / (2 * currentH), Math.max(layout.height / (2 * currentH), (event.clientY - rect.top) / rect.height - titleDrag.offsetY)),
         };
         titlePositionRef.current = position;
         setTitlePosition(position);
@@ -1655,8 +1959,8 @@ export default function SocialFeedCreator({ posts, onBack }: Props) {
         const width = Math.max(...fitted.lines.map((line) => ctx.measureText(line).width), 0);
         const height = fitted.lines.length * fitted.size * 1.1;
         const position = {
-          x: Math.min(1 - width / (2 * W), Math.max(width / (2 * W), (event.clientX - rect.left) / rect.width - titleDrag.offsetX)),
-          y: Math.min(1 - height / (2 * H), Math.max(height / (2 * H), (event.clientY - rect.top) / rect.height - titleDrag.offsetY)),
+          x: Math.min(1 - width / (2 * currentW), Math.max(width / (2 * currentW), (event.clientX - rect.left) / rect.width - titleDrag.offsetX)),
+          y: Math.min(1 - height / (2 * currentH), Math.max(height / (2 * currentH), (event.clientY - rect.top) / rect.height - titleDrag.offsetY)),
         };
         feedTitlePositionRef.current = position;
         setFeedTitlePosition(position);
@@ -1669,11 +1973,10 @@ export default function SocialFeedCreator({ posts, onBack }: Props) {
 
     const logo = logoImageRef.current;
     const rect = event.currentTarget.getBoundingClientRect();
-    const canvasHeight = format === "reel" ? REEL_H : H;
-    const { width, height } = logo ? getLogoSize(logo, format, format === "reel" ? logoScale / 100 : 1) : { width: 0, height: 0 };
+    const { width, height } = logo ? getLogoSize(logo, format, format === "reel" || format === "story" ? logoScale / 100 : 1) : { width: 0, height: 0 };
     const position = {
-      x: Math.min(1 - width / (2 * W), Math.max(width / (2 * W), (event.clientX - rect.left) / rect.width - drag.offsetX)),
-      y: Math.min(1 - height / (2 * canvasHeight), Math.max(height / (2 * canvasHeight), (event.clientY - rect.top) / rect.height - drag.offsetY)),
+      x: Math.min(1 - width / (2 * currentW), Math.max(width / (2 * currentW), (event.clientX - rect.left) / rect.width - drag.offsetX)),
+      y: Math.min(1 - height / (2 * currentH), Math.max(height / (2 * currentH), (event.clientY - rect.top) / rect.height - drag.offsetY)),
     };
     logoPositionRef.current = position;
     setLogoPosition(position);
@@ -1684,8 +1987,8 @@ export default function SocialFeedCreator({ posts, onBack }: Props) {
       titleDragRef.current = null;
       setDraggingLogo(false);
       try {
-        const key = format === "reel" ? "viralizou_reel_title_position" : "viralizou_feed_title_position";
-        const position = format === "reel" ? titlePositionRef.current : feedTitlePositionRef.current;
+        const key = format === "reel" || format === "story" ? "viralizou_reel_title_position" : "viralizou_feed_title_position";
+        const position = format === "reel" || format === "story" ? titlePositionRef.current : feedTitlePositionRef.current;
         localStorage.setItem(key, JSON.stringify(position));
       } catch {}
     } else if (logoDragRef.current?.pointerId === event.pointerId) {
@@ -1717,11 +2020,11 @@ export default function SocialFeedCreator({ posts, onBack }: Props) {
     }
 
     const mimeType = [
-      'video/mp4; codecs="avc1.42E01E, mp4a.40.2"',
-      "video/mp4",
       'video/webm; codecs="vp9, opus"',
       'video/webm; codecs="vp8, opus"',
       "video/webm",
+      'video/mp4; codecs="avc1.42E01E, mp4a.40.2"',
+      "video/mp4",
     ].find((type) => MediaRecorder.isTypeSupported(type));
     if (!mimeType) {
       setMessage("Este navegador não oferece um formato de gravação compatível.");
@@ -1804,8 +2107,8 @@ export default function SocialFeedCreator({ posts, onBack }: Props) {
 
       recorder = new MediaRecorder(combinedStream, {
         mimeType,
-        videoBitsPerSecond: 14_000_000,
-        audioBitsPerSecond: 192_000,
+        videoBitsPerSecond: 5_000_000,
+        audioBitsPerSecond: 128_000,
       });
       const activeRecorder = recorder;
 
@@ -1837,6 +2140,12 @@ export default function SocialFeedCreator({ posts, onBack }: Props) {
             tagPositionY,
             false,
             logoColorStyle,
+            showOverlayLayer ? shadeOpacity : 0,
+            showLogoLayer,
+            showTitleLayer,
+            showHandleLayer,
+            showStorySticker,
+            format,
           );
         }
         if ("requestVideoFrameCallback" in video) {
@@ -1886,16 +2195,17 @@ export default function SocialFeedCreator({ posts, onBack }: Props) {
       });
 
       const extension = blob.type.includes("mp4") ? "mp4" : "webm";
-      const basename = (selectedPost?.slug || videoFileName.replace(/\.[^.]+$/, "") || "viralizou-reel")
-        .replace(/[^a-zA-Z0-9_-]/g, "-") || "viralizou-reel";
+      const formatLabel = format === "story" ? "story" : "reel";
+      const basename = (selectedPost?.slug || videoFileName.replace(/\.[^.]+$/, "") || `viralizou-${formatLabel}`)
+        .replace(/[^a-zA-Z0-9_-]/g, "-") || `viralizou-${formatLabel}`;
 
       setVideoExport({
         url: URL.createObjectURL(blob),
-        filename: `${basename}-reel.${extension}`,
+        filename: `${basename}-${formatLabel}.${extension}`,
         type: blob.type,
       });
       setRecordingProgress(100);
-      setMessage(`✅ Reel pronto em ${extension.toUpperCase()}! Áudio e vídeo perfeitamente sincronizados.`);
+      setMessage(`✅ Vídeo (${formatLabel.toUpperCase()}) pronto em ${extension.toUpperCase()}! Áudio e vídeo sincronizados.`);
     } catch (error) {
       setMessage(error instanceof Error ? error.message : "Não foi possível gravar o Reel.");
     } finally {
@@ -1954,11 +2264,53 @@ export default function SocialFeedCreator({ posts, onBack }: Props) {
       <div className="adminFeedGrid">
         <div className="adminFeedControls">
           <div className="field">
-            <label>📐 Formato da publicação</label>
-            <div className="adminFeedActions">
-              <button type="button" className={format === "feed" ? "btn" : "btn secondary"} onClick={() => setFormat("feed")}>Feed 4:5 · PNG</button>
-              <button type="button" className={format === "reel" ? "btn" : "btn secondary"} onClick={() => setFormat("reel")}>Reel 9:16 · Vídeo</button>
-              <button type="button" className={format === "story" ? "btn" : "btn secondary"} onClick={() => setFormat("story")}>Story 9:16 · Link / Enquete</button>
+            <label>📐 Formato da publicação no Instagram</label>
+            <div className="adminFeedFormatGrid">
+              <button
+                type="button"
+                className={`adminFeedFormatBtn ${format === "feed" ? "active" : ""}`}
+                onClick={() => setFormat("feed")}
+              >
+                <span className="formatRatio">4:5</span>
+                <span className="formatName">Feed (Recomendado)</span>
+                <span className="formatDims">1080 × 1350 px · PNG</span>
+              </button>
+              <button
+                type="button"
+                className={`adminFeedFormatBtn ${format === "feed-square" ? "active" : ""}`}
+                onClick={() => setFormat("feed-square")}
+              >
+                <span className="formatRatio">1:1</span>
+                <span className="formatName">Feed (Quadrado)</span>
+                <span className="formatDims">1080 × 1080 px · PNG</span>
+              </button>
+              <button
+                type="button"
+                className={`adminFeedFormatBtn ${format === "reel-cover" ? "active" : ""}`}
+                onClick={() => setFormat("reel-cover")}
+              >
+                <span className="formatRatio">4:5</span>
+                <span className="formatName">Capa do Reels</span>
+                <span className="formatDims">1080 × 1350 px · PNG</span>
+              </button>
+              <button
+                type="button"
+                className={`adminFeedFormatBtn ${format === "story" ? "active" : ""}`}
+                onClick={() => setFormat("story")}
+              >
+                <span className="formatRatio">9:16</span>
+                <span className="formatName">Stories</span>
+                <span className="formatDims">1080 × 1920 px · Link / PNG</span>
+              </button>
+              <button
+                type="button"
+                className={`adminFeedFormatBtn ${format === "reel" ? "active" : ""}`}
+                onClick={() => setFormat("reel")}
+              >
+                <span className="formatRatio">9:16</span>
+                <span className="formatName">Reels</span>
+                <span className="formatDims">1080 × 1920 px · Vídeo MP4</span>
+              </button>
             </div>
           </div>
 
@@ -2030,7 +2382,22 @@ export default function SocialFeedCreator({ posts, onBack }: Props) {
                   🎯 Centralizar Título e Caixa
                 </button>
               </div>
-              <span>{format === "feed" ? "Feed 4:5" : format === "story" ? "Story 9:16" : "Reel 9:16"}</span>
+              <span>{format === "feed" ? "Feed 4:5" : format === "feed-square" ? "Feed quadrado 1:1" : format === "reel-cover" ? "Capa do Reels 4:5" : format === "story" ? "Story 9:16" : "Reel 9:16"}</span>
+            </div>
+
+            <div className="captionStudioField">
+              <label className="captionSafeZoneToggle">
+                <span>🧩 Painel de camadas</span>
+                <input type="checkbox" checked={showLayerPanel} onChange={(e) => toggleLayerPanel(e.target.checked)} />
+              </label>
+              {showLayerPanel && (
+                <div className="captionTagShortcuts" style={{ marginTop: 8 }}>
+                  <label className="captionSafeZoneToggle"><span>Logo</span><input type="checkbox" checked={showLogoLayer} onChange={(e) => toggleLogoLayer(e.target.checked)} /></label>
+                  <label className="captionSafeZoneToggle"><span>Título</span><input type="checkbox" checked={showTitleLayer} onChange={(e) => toggleTitleLayer(e.target.checked)} /></label>
+                  <label className="captionSafeZoneToggle"><span>Tag / assinatura</span><input type="checkbox" checked={showHandleLayer} onChange={(e) => toggleHandleLayer(e.target.checked)} /></label>
+                  {format === "story" && <label className="captionSafeZoneToggle"><span>Área de figurinha</span><input type="checkbox" checked={showStorySticker} onChange={(e) => toggleStorySticker(e.target.checked)} /></label>}
+                </div>
+              )}
             </div>
 
             <div className="captionStudioField">
@@ -2236,6 +2603,20 @@ export default function SocialFeedCreator({ posts, onBack }: Props) {
                   🔲 Contorno forte
                 </button>
               </div>
+            </div>
+
+            <div className="captionStudioField">
+              <label className="captionSafeZoneToggle">
+                <span>🌘 Sobreposição escura para melhorar o contraste</span>
+                <input type="checkbox" checked={showOverlayLayer} onChange={(e) => toggleOverlayLayer(e.target.checked)} />
+              </label>
+              <small>A sobreposição começa desligada para preservar a claridade da foto/vídeo. Ative apenas quando precisar de mais contraste.</small>
+              {showOverlayLayer && (
+                <>
+                  <label>Intensidade da sobreposição: {shadeOpacity}%</label>
+                  <input type="range" min="0" max="100" step="5" value={shadeOpacity} onChange={(e) => saveShadeOpacity(Number(e.target.value))} />
+                </>
+              )}
             </div>
 
             {format === "reel" && (
@@ -2560,14 +2941,14 @@ export default function SocialFeedCreator({ posts, onBack }: Props) {
           )}
 
           <div className="adminFeedActions">
-            {(format === "feed" || format === "story") && (
+            {(format === "feed" || format === "feed-square" || format === "reel-cover" || format === "story") && (
               <button type="button" className="btn secondary" disabled={rendering} onClick={renderCard}>
                 {rendering ? "Gerando..." : "🔄 Atualizar prévia"}
               </button>
             )}
-            {format === "feed" && (
+            {(format === "feed" || format === "feed-square" || format === "reel-cover") && (
               <button type="button" className="btn" disabled={!selectedPost || rendering} onClick={downloadPng}>
-                ⬇️ Baixar PNG 1080×1350
+                {format === "feed-square" ? "⬇️ Baixar PNG 1080×1080" : format === "reel-cover" ? "⬇️ Baixar capa 1080×1350" : "⬇️ Baixar PNG 1080×1350"}
               </button>
             )}
             {format === "story" && (
@@ -2596,7 +2977,7 @@ export default function SocialFeedCreator({ posts, onBack }: Props) {
             <canvas
               ref={canvasRef}
               width={W}
-              height={format === "reel" ? REEL_H : H}
+              height={getCanvasDimensions(format).height}
               onPointerDown={onPreviewPointerDown}
               onPointerMove={onPreviewPointerMove}
               onPointerUp={onPreviewPointerUp}
@@ -2604,7 +2985,7 @@ export default function SocialFeedCreator({ posts, onBack }: Props) {
               style={{ cursor: logoData || format === "reel" || format === "story" || Boolean(title || selectedPost) ? (draggingLogo ? "grabbing" : "grab") : "default", touchAction: "none" }}
             />
           </div>
-          <small>{format === "feed" ? "Formato Feed 4:5 · 1080×1350" : format === "story" ? "Formato Story 9:16 · 1080×1920 (Área de Link)" : "Formato Reel Vertical 9:16 · 1080×1920"}</small>
+          <small>{format === "feed" ? "Formato Feed 4:5 · 1080×1350" : format === "feed-square" ? "Formato Feed quadrado 1:1 · 1080×1080" : format === "reel-cover" ? "Capa do Reels 4:5 · 1080×1350 (recorte da grade do perfil)" : format === "story" ? "Formato Story 9:16 · 1080×1920 (Área de Link)" : "Formato Reel 9:16 · 1080×1920"}</small>
           {videoExport && (
             <div className="adminFeedVideoResult">
               <video src={videoExport.url} controls playsInline />
