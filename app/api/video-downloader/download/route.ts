@@ -7,7 +7,7 @@ export const maxDuration = 120;
 function isAllowedMediaHost(hostname: string, platform: string) {
   const host = hostname.toLowerCase().replace(/\.$/, "");
   const suffixes: Record<string, string[]> = {
-    tiktok: ["tikwm.com", "tiktok.com", "tiktokcdn.com", "akamaized.net", "ibytedtos.com", "byteoversea.com", "byteimg.com"],
+    tiktok: ["tikwm.com", "tiktok.com", "tiktokcdn.com", "tiktokcdn-us.com", "akamaized.net", "ibytedtos.com", "byteoversea.com", "byteimg.com"],
     instagram: ["instagram.com", "cdninstagram.com", "fbcdn.net"],
     twitter: ["twimg.com", "twitter.com", "x.com"],
   };
