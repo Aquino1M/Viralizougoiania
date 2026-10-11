@@ -988,6 +988,8 @@ export default function SocialFeedCreator({ posts, onBack }: Props) {
   const audioContextRef = useRef<AudioContext | null>(null);
   const audioSourceRef = useRef<MediaElementAudioSourceNode | null>(null);
   const isRecordingRef = useRef<boolean>(false);
+  const previewLastFrameAtRef = useRef<number>(0);
+  const previewFrameIntervalRef = useRef<number>(1000 / 24);
 
   const [format, setFormat] = useState<PublicationFormat>("feed");
   const [importVideoUrl, setImportVideoUrl] = useState("");
@@ -1473,10 +1475,12 @@ export default function SocialFeedCreator({ posts, onBack }: Props) {
     let frameId = 0;
     let videoFrameId = 0;
     let lastFallbackFrame = 0;
+    // Preview is deliberately capped at 24 fps; compositing a 1080x1920
+    // canvas at source 60 fps repeatedly recalculates expensive text effects.
+    const previewInterval = previewFrameIntervalRef.current;
     const draw = (timestamp = 0) => {
       if (!isRecordingRef.current) {
-        const supportsVideoFrameCallback = typeof (video as any).requestVideoFrameCallback === "function";
-        if (supportsVideoFrameCallback || timestamp - lastFallbackFrame >= 33) {
+        if (timestamp - previewLastFrameAtRef.current >= previewInterval) {
           const canvas = canvasRef.current;
           const ctx = canvas?.getContext("2d");
           if (ctx && video.readyState >= 2) {
@@ -1510,6 +1514,7 @@ export default function SocialFeedCreator({ posts, onBack }: Props) {
               showStorySticker,
               format,
             );
+            previewLastFrameAtRef.current = timestamp;
           }
           lastFallbackFrame = timestamp;
         }
