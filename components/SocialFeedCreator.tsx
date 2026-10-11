@@ -988,8 +988,6 @@ export default function SocialFeedCreator({ posts, onBack }: Props) {
   const audioContextRef = useRef<AudioContext | null>(null);
   const audioSourceRef = useRef<MediaElementAudioSourceNode | null>(null);
   const isRecordingRef = useRef<boolean>(false);
-  const previewLastFrameAtRef = useRef<number>(0);
-  const previewFrameIntervalRef = useRef<number>(1000 / 24);
 
   const [format, setFormat] = useState<PublicationFormat>("feed");
   const [importVideoUrl, setImportVideoUrl] = useState("");
@@ -1474,13 +1472,13 @@ export default function SocialFeedCreator({ posts, onBack }: Props) {
     if ((format !== "reel" && format !== "story") || !videoUrl || !video) return;
     let frameId = 0;
     let videoFrameId = 0;
-    let lastFallbackFrame = 0;
-    // Preview is deliberately capped at 24 fps; compositing a 1080x1920
-    // canvas at source 60 fps repeatedly recalculates expensive text effects.
-    const previewInterval = previewFrameIntervalRef.current;
+    // Preview is deliberately capped at 24 fps. A full 1080x1920 composition
+    // at source 60 fps repeatedly recalculates expensive text effects.
+    let lastRenderedAt = 0;
+    const previewInterval = 1000 / 24;
     const draw = (timestamp = 0) => {
       if (!isRecordingRef.current) {
-        if (timestamp - previewLastFrameAtRef.current >= previewInterval) {
+        if (timestamp - lastRenderedAt >= previewInterval) {
           const canvas = canvasRef.current;
           const ctx = canvas?.getContext("2d");
           if (ctx && video.readyState >= 2) {
@@ -1514,9 +1512,8 @@ export default function SocialFeedCreator({ posts, onBack }: Props) {
               showStorySticker,
               format,
             );
-            previewLastFrameAtRef.current = timestamp;
+            lastRenderedAt = timestamp;
           }
-          lastFallbackFrame = timestamp;
         }
       }
       if (typeof (video as any).requestVideoFrameCallback === "function") {
@@ -2102,8 +2099,9 @@ export default function SocialFeedCreator({ posts, onBack }: Props) {
       video.muted = false;
       video.volume = 1;
 
-      // 4. Captura stream do Canvas
-      canvasStream = canvas.captureStream(30);
+      // 4. Captura stream do Canvas. Exporta a 24 fps para manter a composição
+      // do canvas abaixo do custo de renderizar um frame novo a cada 16 ms.
+      canvasStream = canvas.captureStream(24);
       const combinedTracks: MediaStreamTrack[] = [...canvasStream.getVideoTracks()];
       if (audioTrack) {
         combinedTracks.push(audioTrack);

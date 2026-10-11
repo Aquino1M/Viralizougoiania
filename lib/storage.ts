@@ -409,10 +409,17 @@ const getArchivedPostIndexCached = unstable_cache(
       try {
         const encodedQuery = encodeURIComponent(`%${safeQuery}%`);
         const cutoff = encodeURIComponent(new Date(Date.now() - 30 * 24 * 60 * 60 * 1000).toISOString());
-        const rows = await sb(
-          `posts?select=id,slug,title,excerpt,category,city,author,image_url,featured,status,published_at,created_at,updated_at&status=eq.published&published_at=lt.${cutoff}&or=(title.ilike.${encodedQuery},excerpt.ilike.${encodedQuery},category.ilike.${encodedQuery},city.ilike.${encodedQuery})&order=published_at.desc.nullslast&limit=30`
-        );
-        return Array.isArray(rows) ? rows.map((row) => normalizePostCategory(row as Post)) : [];
+        const fields = "select=id,slug,title,excerpt,category,city,author,image_url,featured,status,published_at,created_at,updated_at&status=eq.published";
+        const searchable = `&or=(title.ilike.${encodedQuery},excerpt.ilike.${encodedQuery},category.ilike.${encodedQuery},city.ilike.${encodedQuery})`;
+        const [publishedRows, createdRows] = await Promise.all([
+          sb(`posts?${fields}&published_at=lt.${cutoff}${searchable}&order=published_at.desc.nullslast&limit=30`),
+          sb(`posts?${fields}&published_at=is.null&created_at=lt.${cutoff}${searchable}&order=created_at.desc&limit=30`),
+        ]);
+        const rows = [...(Array.isArray(publishedRows) ? publishedRows : []), ...(Array.isArray(createdRows) ? createdRows : [])];
+        const uniqueRows = [...new Map(rows.map((row: Post) => [row.id, row])).values()]
+          .sort((a: Post, b: Post) => +new Date(b.published_at || b.created_at) - +new Date(a.published_at || a.created_at))
+          .slice(0, 30);
+        return uniqueRows.map((row) => normalizePostCategory(row as Post));
       } catch (error) {
         console.warn("Busca no arquivo de notícias indisponível no Supabase:", error instanceof Error ? error.message : error);
       }
