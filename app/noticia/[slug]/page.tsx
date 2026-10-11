@@ -182,6 +182,11 @@ export default async function Article({
           <h1>{post.title}</h1>
           <p className="lead">{post.excerpt}</p>
 
+          {/* Modo Leitura Ultra Rápida (AMP / Instant News) */}
+          <div className="instantNewsBanner">
+            <span>⚡ Modo Leitura Ultra-Rápida · Carregamento instantâneo otimizado para redes 4G/5G</span>
+          </div>
+
           <div className="articleMeta">
             <div style={{ display: "flex", flexDirection: "column", gap: 3 }}>
               {post.source_author ? (

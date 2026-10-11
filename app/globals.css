@@ -489,3 +489,399 @@ main{min-height:65vh}.heroSection{padding:30px 0 25px}.cityEyebrow{font-size:12p
 .audienceTopPages th{color:#64748b;font-size:10px;text-transform:uppercase;letter-spacing:.04em}
 @media(max-width:900px){.audienceSummaryGrid{grid-template-columns:repeat(2,minmax(0,1fr))}}
 @media(max-width:560px){.audienceSummaryGrid{grid-template-columns:1fr}}
+
+/* ==========================================================================
+   GOIÂNIA EM TEMPO REAL: BARRA HIPERLOCAL (CLIMA, TRÂNSITO & FUTEBOL)
+   ========================================================================== */
+.goianiaLocalBar {
+  background: linear-gradient(180deg, #090e17 0%, #0f172a 100%);
+  border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+  padding: 10px 0 12px;
+  color: #f1f5f9;
+}
+.localBarContainer {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+.localBarTabs {
+  display: flex;
+  gap: 8px;
+  overflow-x: auto;
+  scrollbar-width: none;
+}
+.localBarTabs::-webkit-scrollbar { display: none; }
+.localBarTabBtn {
+  background: rgba(255, 255, 255, 0.06);
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  color: #cbd5e1;
+  border-radius: 999px;
+  padding: 6px 14px;
+  font-size: 12px;
+  font-weight: 700;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  cursor: pointer;
+  white-space: nowrap;
+  transition: all 0.2s ease;
+}
+.localBarTabBtn:hover {
+  background: rgba(255, 255, 255, 0.12);
+  color: #fff;
+}
+.localBarTabBtn.active {
+  background: #ff5a1f;
+  border-color: #ff5a1f;
+  color: #fff;
+  box-shadow: 0 0 14px rgba(255, 90, 31, 0.45);
+}
+.liveDotSmall {
+  width: 7px;
+  height: 7px;
+  background: #22c55e;
+  border-radius: 50%;
+  box-shadow: 0 0 6px #22c55e;
+  display: inline-block;
+  animation: pulseDot 1.8s infinite;
+}
+
+/* Clima & Trânsito Layout */
+.localBarWeatherTraffic {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  flex-wrap: wrap;
+}
+.localWeatherCard {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  background: rgba(255, 255, 255, 0.04);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: 12px;
+  padding: 8px 14px;
+}
+.weatherIcon {
+  font-size: 28px;
+  line-height: 1;
+}
+.weatherTop {
+  display: flex;
+  align-items: baseline;
+  gap: 6px;
+}
+.weatherTemp {
+  font-size: 20px;
+  font-weight: 900;
+  color: #ffcc00;
+}
+.weatherCity {
+  font-size: 12px;
+  font-weight: 700;
+  color: #94a3b8;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+}
+.weatherDetails {
+  display: flex;
+  flex-direction: column;
+  font-size: 11px;
+  color: #cbd5e1;
+}
+.weatherHumidity b {
+  color: #38bdf8;
+}
+.weatherCondition {
+  color: #94a3b8;
+  font-size: 10px;
+}
+
+/* Trânsito Pills */
+.localTrafficRow {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  overflow-x: auto;
+  scrollbar-width: none;
+  flex: 1;
+  justify-content: flex-end;
+}
+.localTrafficRow::-webkit-scrollbar { display: none; }
+.trafficPill {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 11px;
+  border-radius: 8px;
+  font-size: 11px;
+  white-space: nowrap;
+  background: rgba(255, 255, 255, 0.05);
+  border: 1px solid rgba(255, 255, 255, 0.09);
+}
+.trafficDot {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  display: inline-block;
+}
+.trafficPill.normal .trafficDot { background: #22c55e; box-shadow: 0 0 5px #22c55e; }
+.trafficPill.normal .trafficStatus { color: #86efac; font-weight: 700; }
+.trafficPill.moderate .trafficDot { background: #facc15; box-shadow: 0 0 5px #facc15; }
+.trafficPill.moderate .trafficStatus { color: #fde047; font-weight: 700; }
+.trafficPill.warning .trafficDot { background: #ef4444; box-shadow: 0 0 5px #ef4444; animation: pulseDot 1.2s infinite; }
+.trafficPill.warning .trafficStatus { color: #fca5a5; font-weight: 700; }
+.trafficLabel { color: #e2e8f0; font-weight: 600; }
+
+/* Futebol dos Clubes Goianos */
+.localBarFootball {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  overflow-x: auto;
+  scrollbar-width: none;
+}
+.localBarFootball::-webkit-scrollbar { display: none; }
+.teamCard {
+  background: rgba(255, 255, 255, 0.04);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: 12px;
+  padding: 8px 12px;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  min-width: 250px;
+}
+.teamCard.goias { border-left: 4px solid #047857; }
+.teamCard.vilanova { border-left: 4px solid #dc2626; }
+.teamCard.atletico { border-left: 4px solid #b91c1c; }
+.teamHeader {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 3px;
+}
+.teamName {
+  font-size: 11px;
+  font-weight: 800;
+  color: #f1f5f9;
+}
+.teamMatch {
+  display: flex;
+  flex-direction: column;
+}
+.matchStatus {
+  font-size: 9px;
+  font-weight: 800;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+}
+.matchStatus.live { color: #22c55e; }
+.matchStatus.scheduled { color: #38bdf8; }
+.matchScore {
+  font-size: 12px;
+  font-weight: 700;
+  color: #fff;
+}
+.matchScore b { color: #f59e0b; }
+.matchNext {
+  font-size: 10px;
+  color: #94a3b8;
+}
+.teamHubLink {
+  margin-left: auto;
+  white-space: nowrap;
+  font-size: 11px;
+  font-weight: 700;
+  color: #ff7849;
+  text-decoration: none;
+  padding: 6px 12px;
+  background: rgba(255, 90, 31, 0.12);
+  border-radius: 8px;
+  transition: all 0.2s ease;
+}
+.teamHubLink:hover {
+  background: #ff5a1f;
+  color: #fff;
+}
+
+/* ==========================================================================
+   FILTRO RÁPIDO POR BAIRROS DE GOIÂNIA
+   ========================================================================== */
+.goianiaBairrosSection {
+  background: #f8fafc;
+  border-top: 1px solid #e2e8f0;
+  border-bottom: 1px solid #e2e8f0;
+  padding: 32px 0 40px;
+}
+.bairroSubtitle {
+  font-size: 13px;
+  color: #64748b;
+  margin-top: 4px;
+}
+.verMaisBairros {
+  font-size: 13px;
+  font-weight: 700;
+  color: #ff5a1f;
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+}
+.bairrosFilterBar {
+  display: flex;
+  gap: 8px;
+  overflow-x: auto;
+  padding-bottom: 10px;
+  margin: 16px 0 20px;
+  scrollbar-width: thin;
+}
+.bairroPillBtn {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  background: #ffffff;
+  border: 1px solid #cbd5e1;
+  color: #334155;
+  border-radius: 999px;
+  padding: 8px 16px;
+  font-size: 13px;
+  font-weight: 700;
+  cursor: pointer;
+  white-space: nowrap;
+  box-shadow: 0 1px 2px rgba(0,0,0,0.04);
+  transition: all 0.2s ease;
+}
+.bairroPillBtn:hover {
+  border-color: #ff5a1f;
+  color: #ff5a1f;
+  transform: translateY(-1px);
+}
+.bairroPillBtn.active {
+  background: #ff5a1f;
+  border-color: #ff5a1f;
+  color: #ffffff;
+  box-shadow: 0 4px 12px rgba(255, 90, 31, 0.35);
+}
+.bairroIcon {
+  font-size: 14px;
+}
+.activeFilterNotice {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  background: #fff7ed;
+  border: 1px solid #fed7aa;
+  color: #9a3412;
+  border-radius: 8px;
+  padding: 8px 14px;
+  font-size: 12px;
+  margin-bottom: 18px;
+}
+.activeFilterNotice button {
+  background: none;
+  border: none;
+  color: #c2410c;
+  font-weight: 700;
+  cursor: pointer;
+}
+
+/* ==========================================================================
+   SELOS VISUAIS: GOIÂNIA URGENTE & LEITURA INSTANTÂNEA
+   ========================================================================== */
+.cardBadgesRow {
+  position: absolute;
+  top: 10px;
+  left: 10px;
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+  z-index: 2;
+  align-items: flex-start;
+}
+.cardCategoryBadge {
+  background: rgba(15, 23, 42, 0.88);
+  color: #fff;
+  font-size: 11px;
+  font-weight: 800;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  padding: 3px 8px;
+  border-radius: 4px;
+  backdrop-filter: blur(4px);
+}
+.localUrgentBadge {
+  font-size: 10px;
+  font-weight: 900;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  padding: 3px 8px;
+  border-radius: 4px;
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.3);
+}
+.localUrgentBadge.urgentGlow {
+  background: #dc2626;
+  color: #ffffff;
+  animation: urgentPulse 2s infinite ease-in-out;
+}
+.localUrgentBadge.localPill {
+  background: #0284c7;
+  color: #ffffff;
+}
+.instantReadBadge {
+  position: absolute;
+  top: 10px;
+  right: 10px;
+  background: rgba(16, 185, 129, 0.92);
+  color: #ffffff;
+  font-size: 10px;
+  font-weight: 800;
+  letter-spacing: 0.03em;
+  padding: 3px 7px;
+  border-radius: 999px;
+  z-index: 2;
+  box-shadow: 0 2px 6px rgba(16, 185, 129, 0.4);
+  backdrop-filter: blur(4px);
+}
+
+@keyframes urgentPulse {
+  0%, 100% {
+    box-shadow: 0 0 0 0 rgba(220, 38, 38, 0.7);
+  }
+  50% {
+    box-shadow: 0 0 0 6px rgba(220, 38, 38, 0);
+  }
+}
+@keyframes pulseDot {
+  0%, 100% { opacity: 1; transform: scale(1); }
+  50% { opacity: 0.4; transform: scale(0.85); }
+}
+
+@media(max-width: 768px) {
+  .localBarWeatherTraffic {
+    flex-direction: column;
+    align-items: stretch;
+  }
+  .localTrafficRow {
+    justify-content: flex-start;
+  }
+}
+
+.instantNewsBanner {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  background: #f0fdf4;
+  border: 1px solid #bbf7d0;
+  color: #166534;
+  border-radius: 8px;
+  padding: 6px 14px;
+  font-size: 12px;
+  font-weight: 700;
+  margin: 12px 0 16px;
+}
+
+

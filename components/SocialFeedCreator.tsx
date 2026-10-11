@@ -80,9 +80,9 @@ function drawCover(ctx: CanvasRenderingContext2D, img: HTMLImageElement | HTMLVi
   ctx.drawImage(img, sx, sy, sw, sh, x, y, w, h);
 }
 
-function getLogoSize(logo: HTMLImageElement, format: "feed" | "reel", multiplier = 1) {
-  const maxWidth = format === "reel" ? 600 : 430;
-  const maxHeight = format === "reel" ? 145 : 105;
+function getLogoSize(logo: HTMLImageElement, format: "feed" | "reel" | "story", multiplier = 1) {
+  const maxWidth = format === "reel" || format === "story" ? 600 : 430;
+  const maxHeight = format === "reel" || format === "story" ? 145 : 105;
   const scale = Math.min(maxWidth / logo.naturalWidth, maxHeight / logo.naturalHeight, 1) * multiplier;
   return { width: logo.naturalWidth * scale, height: logo.naturalHeight * scale };
 }
@@ -780,7 +780,9 @@ export default function SocialFeedCreator({ posts, onBack }: Props) {
   const audioSourceRef = useRef<MediaElementAudioSourceNode | null>(null);
   const isRecordingRef = useRef<boolean>(false);
 
-  const [format, setFormat] = useState<"feed" | "reel">("feed");
+  const [format, setFormat] = useState<"feed" | "reel" | "story">("feed");
+  const [importVideoUrl, setImportVideoUrl] = useState("");
+  const [importingVideo, setImportingVideo] = useState(false);
   const [videoUrl, setVideoUrl] = useState("");
   const [videoFileName, setVideoFileName] = useState("");
   const [videoReady, setVideoReady] = useState(false);
@@ -906,9 +908,114 @@ export default function SocialFeedCreator({ posts, onBack }: Props) {
     setRendering(true);
     try {
       canvas.width = W;
-      canvas.height = format === "reel" ? REEL_H : H;
+      canvas.height = format === "feed" ? H : REEL_H;
 
-      if (format === "reel") {
+      if (format === "story" && (!videoPreviewRef.current || !videoReady)) {
+        await document.fonts?.ready;
+        ctx.save();
+        ctx.imageSmoothingEnabled = true;
+        ctx.imageSmoothingQuality = "high";
+        ctx.fillStyle = "#050505";
+        ctx.fillRect(0, 0, W, REEL_H);
+
+        if (selectedPost?.image_url) {
+          const src = `/api/admin/feed-image?slug=${encodeURIComponent(selectedPost.slug)}&v=${encodeURIComponent(selectedPost.updated_at || selectedPost.created_at || "")}`;
+          const img = articleImageRef.current?.src === src ? articleImageRef.current.image : await loadImage(src);
+          articleImageRef.current = { src, image: img };
+          drawCover(ctx, img, 0, 0, W, REEL_H, imagePosition);
+        } else {
+          const gradient = ctx.createLinearGradient(0, 0, W, REEL_H);
+          gradient.addColorStop(0, "#0f172a");
+          gradient.addColorStop(1, "#1e293b");
+          ctx.fillStyle = gradient;
+          ctx.fillRect(0, 0, W, REEL_H);
+        }
+
+        const shade = ctx.createLinearGradient(0, 600, 0, REEL_H);
+        shade.addColorStop(0, "rgba(0,0,0,0.1)");
+        shade.addColorStop(0.4, "rgba(0,0,0,0.7)");
+        shade.addColorStop(1, "rgba(0,0,0,0.96)");
+        ctx.fillStyle = shade;
+        ctx.fillRect(0, 500, W, REEL_H - 500);
+
+        if (logoData) {
+          try {
+            if (!logoImageRef.current || logoImageRef.current.src !== logoData) logoImageRef.current = await loadImage(logoData);
+            if (logoImageRef.current) {
+              const { width, height } = getLogoSize(logoImageRef.current, "story", logoScale / 100);
+              ctx.drawImage(logoImageRef.current, logoPositionRef.current.x * W - width / 2, logoPositionRef.current.y * REEL_H - height / 2, width, height);
+            }
+          } catch { logoImageRef.current = null; }
+        } else {
+          ctx.textAlign = "center";
+          ctx.fillStyle = "#ffffff";
+          ctx.font = "900 57px Arial, sans-serif";
+          ctx.fillText("VIRALIZOU", W / 2 - 22, 1050);
+          ctx.fillStyle = "#ff5a1f";
+          ctx.font = "900 35px Arial, sans-serif";
+          ctx.fillText("GOIÂNIA", W / 2 + 214, 1050);
+        }
+
+        drawReelHeadline(
+          ctx,
+          title || selectedPost?.title || "Título da Notícia",
+          selectedPost?.category || "GOIÂNIA",
+          reelFontFamily,
+          reelFontWeight,
+          reelTextStyle,
+          reelTextAlign,
+          reelTextCase,
+          reelFontSize,
+          "static",
+          titlePositionRef.current,
+          10,
+          10,
+          REEL_H,
+          860
+        );
+
+        // Guia / área para figurinha de link ou enquete do Instagram Stories
+        ctx.save();
+        ctx.strokeStyle = "rgba(255, 255, 255, 0.85)";
+        ctx.lineWidth = 3;
+        ctx.setLineDash([12, 8]);
+        ctx.fillStyle = "rgba(255, 255, 255, 0.14)";
+        const stkW = 580;
+        const stkH = 110;
+        const stkX = (W - stkW) / 2;
+        const stkY = 1440;
+        if (typeof ctx.roundRect === "function") {
+          ctx.beginPath();
+          ctx.roundRect(stkX, stkY, stkW, stkH, 24);
+          ctx.stroke();
+          ctx.fill();
+        } else {
+          ctx.strokeRect(stkX, stkY, stkW, stkH);
+          ctx.fillRect(stkX, stkY, stkW, stkH);
+        }
+        ctx.setLineDash([]);
+        ctx.fillStyle = "#ffffff";
+        ctx.font = '800 26px "Inter", sans-serif';
+        ctx.textAlign = "center";
+        ctx.textBaseline = "middle";
+        ctx.fillText("🔗 ÁREA DA FIGURINHA DE LINK / ENQUETE 👆", W / 2, stkY + stkH / 2);
+        ctx.restore();
+
+        if (handle && handle.trim()) {
+          ctx.save();
+          ctx.font = `800 ${handleFontSize}px "Montserrat", sans-serif`;
+          ctx.fillStyle = "#ffffff";
+          ctx.textAlign = "center";
+          ctx.fillText(handle.trim(), W / 2, tagPositionY || 1670);
+          ctx.restore();
+        }
+
+        ctx.restore();
+        setMessage("");
+        return;
+      }
+
+      if (format === "reel" || format === "story") {
         await document.fonts?.ready;
         if (logoData) {
           try {
@@ -1199,6 +1306,67 @@ export default function SocialFeedCreator({ posts, onBack }: Props) {
     setVideoExport(null);
     setFormat("reel");
     setMessage("Carregando o vídeo para a prévia...");
+  }
+
+  function centerTitleAndBox() {
+    chooseReelTextAlign("center");
+    const defaultReelPos = { x: 0.5, y: DEFAULT_TITLE_POSITION.y };
+    titlePositionRef.current = defaultReelPos;
+    setTitlePosition(defaultReelPos);
+    try { localStorage.setItem("viralizou_reel_title_position", JSON.stringify(defaultReelPos)); } catch {}
+
+    const defaultFeedPos = { x: 0.5, y: DEFAULT_FEED_TITLE_POSITION.y };
+    feedTitlePositionRef.current = defaultFeedPos;
+    setFeedTitlePosition(defaultFeedPos);
+    setFeedTitleOffsetY(0);
+    try { localStorage.setItem("viralizou_feed_title_position", JSON.stringify(defaultFeedPos)); } catch {}
+    try { localStorage.setItem("viralizou_feed_title_offset_y", "0"); } catch {}
+
+    renderCard();
+    setMessage("🎯 Título, layout e caixa centralizados!");
+  }
+
+  async function handleImportVideoFromUrl() {
+    const raw = importVideoUrl.trim();
+    if (!raw) {
+      setMessage("Por favor, cole um link de vídeo do TikTok, Instagram Reels ou Twitter/X.");
+      return;
+    }
+    setImportingVideo(true);
+    setMessage("Conectando e localizando vídeo na rede social...");
+    try {
+      const res = await fetch("/api/video-downloader/resolve", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ url: raw }),
+      });
+      const data = await res.json();
+      if (!res.ok) {
+        throw new Error(data.error || "Não foi possível resolver o vídeo. Certifique-se de que a publicação é pública.");
+      }
+
+      setMessage(`Baixando vídeo do ${data.platform?.toUpperCase() || "vídeo"} via proxy para a memória temporária...`);
+      const mediaRes = await fetch(data.downloadUrl);
+      if (!mediaRes.ok) {
+        throw new Error("Erro ao baixar o fluxo do vídeo via proxy.");
+      }
+
+      const blob = await mediaRes.blob();
+      if (videoUrl) {
+        URL.revokeObjectURL(videoUrl);
+      }
+      const objectUrl = URL.createObjectURL(blob);
+      setVideoUrl(objectUrl);
+      setVideoFileName(`viralizou-${data.platform || "social"}.mp4`);
+      setVideoExport(null);
+      setFormat("reel");
+      setImportVideoUrl("");
+      setMessage("✅ Vídeo carregado com sucesso na memória! Não fica salvo no servidor e será limpo ao sair da página.");
+    } catch (err: any) {
+      setMessage(err?.message || "Falha ao importar o vídeo do link informado.");
+    } finally {
+      setImportingVideo(false);
+    }
   }
 
   async function removeLogo() {
@@ -1704,6 +1872,7 @@ export default function SocialFeedCreator({ posts, onBack }: Props) {
             <div className="adminFeedActions">
               <button type="button" className={format === "feed" ? "btn" : "btn secondary"} onClick={() => setFormat("feed")}>Feed 4:5 · PNG</button>
               <button type="button" className={format === "reel" ? "btn" : "btn secondary"} onClick={() => setFormat("reel")}>Reel 9:16 · Vídeo</button>
+              <button type="button" className={format === "story" ? "btn" : "btn secondary"} onClick={() => setFormat("story")}>Story 9:16 · Link / Enquete</button>
             </div>
           </div>
 
@@ -1723,18 +1892,59 @@ export default function SocialFeedCreator({ posts, onBack }: Props) {
             </div>
           </div>
 
-          {format === "reel" && (
+          {(format === "reel" || format === "story") && (
+            <div className="field" style={{ background: "#f8fafc", border: "1.5px dashed #4f46e5", borderRadius: 10, padding: "12px 14px" }}>
+              <label style={{ color: "#312e81", fontWeight: 700, fontSize: 13, display: "flex", alignItems: "center", gap: 6 }}>
+                <span>📥 Baixar vídeo direto de link (TikTok, Instagram, Twitter/X)</span>
+              </label>
+              <div style={{ display: "flex", gap: 8, marginTop: 6 }}>
+                <input
+                  type="url"
+                  placeholder="Cole o link do TikTok, Reels ou Twitter/X..."
+                  value={importVideoUrl}
+                  onChange={(e) => setImportVideoUrl(e.target.value)}
+                  onKeyDown={(e) => { if (e.key === "Enter") { e.preventDefault(); handleImportVideoFromUrl(); } }}
+                  style={{ flex: 1 }}
+                />
+                <button
+                  type="button"
+                  className="btn"
+                  onClick={handleImportVideoFromUrl}
+                  disabled={importingVideo}
+                  style={{ background: "#4f46e5", whiteSpace: "nowrap" }}
+                >
+                  {importingVideo ? "Importando..." : "Importar Vídeo"}
+                </button>
+              </div>
+              <small style={{ color: "#64748b", marginTop: 4, display: "block" }}>
+                🔒 O vídeo é baixado temporariamente em proxy diretamente na memória do navegador e é apagado ao fechar a página.
+              </small>
+            </div>
+          )}
+
+          {(format === "reel" || format === "story") && (
             <div className="field">
-              <label>🎬 Vídeo para o Reel</label>
+              <label>🎬 Vídeo para o Reel ou Story</label>
               <input type="file" accept="video/*" onChange={onVideoChange} />
-              <small>{videoFileName ? `${videoFileName}${videoReady ? " · pronto para prévia" : " · carregando"}` : "Escolha um vídeo de até 250 MB. O áudio original será mantido com sincronia perfeita."}</small>
+              <small>{videoFileName ? `${videoFileName}${videoReady ? " · pronto para prévia" : " · carregando"}` : "Escolha um vídeo de até 250 MB ou cole o link da rede social acima."}</small>
             </div>
           )}
 
           <div className="captionStudioBox">
             <div className="captionHeaderTitle">
-              <h3>🔤 Tipografia & Estilo da Legenda</h3>
-              <span>{format === "feed" ? "Feed 4:5" : "Reel 9:16"}</span>
+              <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+                <h3>🔤 Tipografia & Estilo da Legenda</h3>
+                <button
+                  type="button"
+                  className="btn secondary"
+                  onClick={centerTitleAndBox}
+                  style={{ fontSize: 11, padding: "4px 8px", background: "#f8fafc", borderColor: "#cbd5e1" }}
+                  title="Centraliza o alinhamento e a posição do título e caixa de legenda"
+                >
+                  🎯 Centralizar Título e Caixa
+                </button>
+              </div>
+              <span>{format === "feed" ? "Feed 4:5" : format === "story" ? "Story 9:16" : "Reel 9:16"}</span>
             </div>
 
             <div className="captionStudioField">
@@ -2184,14 +2394,29 @@ export default function SocialFeedCreator({ posts, onBack }: Props) {
           )}
 
           <div className="adminFeedActions">
-            {format === "feed" && <button type="button" className="btn secondary" disabled={rendering} onClick={renderCard}>
-              {rendering ? "Gerando..." : "🔄 Atualizar prévia"}
-            </button>}
-            {format === "feed" ? (
+            {(format === "feed" || format === "story") && (
+              <button type="button" className="btn secondary" disabled={rendering} onClick={renderCard}>
+                {rendering ? "Gerando..." : "🔄 Atualizar prévia"}
+              </button>
+            )}
+            {format === "feed" && (
               <button type="button" className="btn" disabled={!selectedPost || rendering} onClick={downloadPng}>
                 ⬇️ Baixar PNG 1080×1350
               </button>
-            ) : (
+            )}
+            {format === "story" && (
+              <>
+                <button type="button" className="btn" disabled={(!selectedPost && !title) || rendering} onClick={downloadPng}>
+                  ⬇️ Baixar Story PNG 1080×1920
+                </button>
+                {videoReady && (
+                  <button type="button" className="btn" disabled={recording || rendering} onClick={createReel}>
+                    {recording ? `Gravando ${recordingProgress}%...` : "🎥 Gerar Story Vídeo"}
+                  </button>
+                )}
+              </>
+            )}
+            {format === "reel" && (
               <button type="button" className="btn" disabled={!videoReady || recording || rendering} onClick={createReel}>
                 {recording ? `Gravando ${recordingProgress}%...` : "🎥 Gerar Reel"}
               </button>
@@ -2210,10 +2435,10 @@ export default function SocialFeedCreator({ posts, onBack }: Props) {
               onPointerMove={onPreviewPointerMove}
               onPointerUp={onPreviewPointerUp}
               onPointerCancel={onPreviewPointerUp}
-              style={{ cursor: logoData || format === "reel" || Boolean(title || selectedPost) ? (draggingLogo ? "grabbing" : "grab") : "default", touchAction: "none" }}
+              style={{ cursor: logoData || format === "reel" || format === "story" || Boolean(title || selectedPost) ? (draggingLogo ? "grabbing" : "grab") : "default", touchAction: "none" }}
             />
           </div>
-          <small>{format === "feed" ? "Formato 4:5 · 1080×1350" : "Formato vertical 9:16 · 1080×1920"}</small>
+          <small>{format === "feed" ? "Formato Feed 4:5 · 1080×1350" : format === "story" ? "Formato Story 9:16 · 1080×1920 (Área de Link)" : "Formato Reel Vertical 9:16 · 1080×1920"}</small>
           {videoExport && (
             <div className="adminFeedVideoResult">
               <video src={videoExport.url} controls playsInline />

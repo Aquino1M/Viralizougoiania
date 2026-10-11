@@ -2,6 +2,7 @@ import Link from "next/link";
 import BrandLogo from "@/components/BrandLogo";
 import NavBar from "@/components/NavBar";
 import HeaderSearch from "@/components/HeaderSearch";
+import GoianiaLocalBar from "@/components/GoianiaLocalBar";
 import { getCategories } from "@/lib/storage";
 import { unstable_cache } from "next/cache";
 
@@ -27,7 +28,7 @@ export default async function Header({ breakingTitle }: { breakingTitle?: string
       <div className="utilityBar">
         <div className="container utilityRow">
           <span>📍 Goiânia, Goiás • {formattedDate}</span>
-          <span>Portal de notícias rápidas da capital e região</span>
+          <span>Portal de notícias rápidas da capital e região metropolitana</span>
         </div>
       </div>
 
@@ -50,6 +51,9 @@ export default async function Header({ breakingTitle }: { breakingTitle?: string
       </header>
 
       <NavBar categories={categories} />
+
+      {/* Widget Goiano: Trânsito, Clima e Futebol dos Clubes Goianos */}
+      <GoianiaLocalBar />
 
       {breakingTitle && (
         <div className="breaking">
