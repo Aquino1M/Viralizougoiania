@@ -884,4 +884,35 @@ main{min-height:65vh}.heroSection{padding:30px 0 25px}.cityEyebrow{font-size:12p
   margin: 12px 0 16px;
 }
 
+/* Estilos de Cor da Logo: Letras Brancas e Letras Pretas */
+.logoColorStyleGroup {
+  display: inline-flex;
+  gap: 3px;
+  background: #f1f5f9;
+  border: 1px solid #e2e8f0;
+  padding: 3px;
+  border-radius: 8px;
+}
+.logoColorStyleBtn {
+  background: transparent;
+  border: none;
+  padding: 4px 10px;
+  border-radius: 6px;
+  font-size: 11px;
+  font-weight: 700;
+  color: #64748b;
+  cursor: pointer;
+  white-space: nowrap;
+  transition: all 0.15s ease;
+}
+.logoColorStyleBtn:hover {
+  color: #0f172a;
+}
+.logoColorStyleBtn.active {
+  background: #ffffff;
+  color: #0f172a;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.12);
+}
+
+
 

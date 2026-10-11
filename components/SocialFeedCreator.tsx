@@ -36,6 +36,7 @@ type ReelTextAlign = "left" | "center" | "right";
 type ReelTextCase = "uppercase" | "lowercase" | "original";
 type ReelTagColor = "red" | "white" | "yellow" | "orange";
 type ReelTextAnimation = "typewriter" | "pop" | "slide" | "fade" | "static";
+type LogoColorStyle = "white" | "dark" | "original";
 
 function slugFromInput(value: string) {
   const raw = value.trim();
@@ -80,11 +81,79 @@ function drawCover(ctx: CanvasRenderingContext2D, img: HTMLImageElement | HTMLVi
   ctx.drawImage(img, sx, sy, sw, sh, x, y, w, h);
 }
 
-function getLogoSize(logo: HTMLImageElement, format: "feed" | "reel" | "story", multiplier = 1) {
+const logoProcessCache = new Map<string, HTMLCanvasElement>();
+
+function getRenderableLogo(
+  logo: HTMLImageElement | null,
+  colorStyle: LogoColorStyle
+): HTMLCanvasElement | HTMLImageElement | null {
+  if (!logo || !logo.complete || !logo.naturalWidth) return null;
+  if (colorStyle === "original") return logo;
+
+  const key = `${logo.src.slice(0, 100)}_${logo.naturalWidth}x${logo.naturalHeight}_${colorStyle}`;
+  const existing = logoProcessCache.get(key);
+  if (existing) return existing;
+
+  try {
+    const canvas = document.createElement("canvas");
+    canvas.width = logo.naturalWidth;
+    canvas.height = logo.naturalHeight;
+    const ctx = canvas.getContext("2d", { willReadFrequently: true });
+    if (!ctx) return logo;
+
+    ctx.drawImage(logo, 0, 0);
+    const imgData = ctx.getImageData(0, 0, canvas.width, canvas.height);
+    const d = imgData.data;
+
+    for (let i = 0; i < d.length; i += 4) {
+      const a = d[i + 3];
+      if (a < 15) continue; // pixel transparente
+
+      const r = d[i];
+      const g = d[i + 1];
+      const b = d[i + 2];
+
+      // Preserva o símbolo "VG" que é vermelho vibrante
+      const isRed = r > 110 && r > g * 1.35 && r > b * 1.35;
+      if (isRed) continue;
+
+      const lum = r * 0.299 + g * 0.587 + b * 0.114;
+      if (colorStyle === "white") {
+        // Converte letras escuras/pretas/cinzas em branco puro e luminoso
+        if (lum < 195) {
+          d[i] = 255;
+          d[i + 1] = 255;
+          d[i + 2] = 255;
+        }
+      } else if (colorStyle === "dark") {
+        // Converte letras brancas/claras em preto/grafite escuro
+        if (lum > 115) {
+          d[i] = 18;
+          d[i + 1] = 18;
+          d[i + 2] = 18;
+        }
+      }
+    }
+
+    ctx.putImageData(imgData, 0, 0);
+    logoProcessCache.set(key, canvas);
+    return canvas;
+  } catch {
+    return logo;
+  }
+}
+
+function getLogoSize(
+  logo: HTMLImageElement | HTMLCanvasElement,
+  format: "feed" | "reel" | "story",
+  multiplier = 1
+) {
+  const w = "naturalWidth" in logo && logo.naturalWidth ? logo.naturalWidth : logo.width;
+  const h = "naturalHeight" in logo && logo.naturalHeight ? logo.naturalHeight : logo.height;
   const maxWidth = format === "reel" || format === "story" ? 600 : 430;
   const maxHeight = format === "reel" || format === "story" ? 145 : 105;
-  const scale = Math.min(maxWidth / logo.naturalWidth, maxHeight / logo.naturalHeight, 1) * multiplier;
-  return { width: logo.naturalWidth * scale, height: logo.naturalHeight * scale };
+  const scale = Math.min(maxWidth / (w || 1), maxHeight / (h || 1), 1) * multiplier;
+  return { width: (w || 1) * scale, height: (h || 1) * scale };
 }
 
 function wrapText(ctx: CanvasRenderingContext2D, text: string, maxWidth: number) {
@@ -657,6 +726,7 @@ function drawReelFrame(
   tagColor: ReelTagColor,
   tagPositionY: number,
   showSafeZone: boolean = false,
+  logoColorStyle: LogoColorStyle = "white",
 ) {
   ctx.save();
   ctx.imageSmoothingEnabled = true;
@@ -684,12 +754,13 @@ function drawReelFrame(
     ctx.fillText("AVISO: CENAS FORTES", W / 2, 95);
   }
 
-  if (logo && logo.complete && logo.naturalWidth) {
-    const { width, height } = getLogoSize(logo, "reel", logoScale / 100);
-    ctx.drawImage(logo, logoPosition.x * W - width / 2, logoPosition.y * REEL_H - height / 2, width, height);
+  const renderLogo = getRenderableLogo(logo, logoColorStyle);
+  if (renderLogo) {
+    const { width, height } = getLogoSize(renderLogo, "reel", logoScale / 100);
+    ctx.drawImage(renderLogo, logoPosition.x * W - width / 2, logoPosition.y * REEL_H - height / 2, width, height);
   } else {
     ctx.textAlign = "center";
-    ctx.fillStyle = "#ffffff";
+    ctx.fillStyle = logoColorStyle === "dark" ? "#111111" : "#ffffff";
     ctx.font = "900 57px Arial, sans-serif";
     ctx.fillText("VIRALIZOU", W / 2 - 22, 1200);
     ctx.fillStyle = "#ff5a1f";
@@ -795,6 +866,7 @@ export default function SocialFeedCreator({ posts, onBack }: Props) {
   const [loadingArticle, setLoadingArticle] = useState(false);
   const [handle, setHandle] = useState("@viralizougoiania");
   const [logoData, setLogoData] = useState("");
+  const [logoColorStyle, setLogoColorStyle] = useState<LogoColorStyle>("white");
   const [logoPosition, setLogoPosition] = useState<LogoPosition>(DEFAULT_LOGO_POSITION);
   const [titlePosition, setTitlePosition] = useState<LogoPosition>(DEFAULT_TITLE_POSITION);
   const [logoScale, setLogoScale] = useState(100);
@@ -827,6 +899,8 @@ export default function SocialFeedCreator({ posts, onBack }: Props) {
   useEffect(() => {
     try {
       const savedLogo = localStorage.getItem("viralizou_feed_logo") || "";
+      const savedLogoStyle = (localStorage.getItem("viralizou_feed_logo_color_style") as LogoColorStyle) || "white";
+      if (savedLogoStyle) setLogoColorStyle(savedLogoStyle);
       const savedHandle = localStorage.getItem("viralizou_feed_handle") || "";
       const savedPosition = JSON.parse(localStorage.getItem("viralizou_feed_logo_position") || "null");
       const savedTitlePosition = JSON.parse(localStorage.getItem("viralizou_reel_title_position") || "null");
@@ -941,14 +1015,15 @@ export default function SocialFeedCreator({ posts, onBack }: Props) {
         if (logoData) {
           try {
             if (!logoImageRef.current || logoImageRef.current.src !== logoData) logoImageRef.current = await loadImage(logoData);
-            if (logoImageRef.current) {
-              const { width, height } = getLogoSize(logoImageRef.current, "story", logoScale / 100);
-              ctx.drawImage(logoImageRef.current, logoPositionRef.current.x * W - width / 2, logoPositionRef.current.y * REEL_H - height / 2, width, height);
+            const renderLogo = getRenderableLogo(logoImageRef.current, logoColorStyle);
+            if (renderLogo) {
+              const { width, height } = getLogoSize(renderLogo, "story", logoScale / 100);
+              ctx.drawImage(renderLogo, logoPositionRef.current.x * W - width / 2, logoPositionRef.current.y * REEL_H - height / 2, width, height);
             }
           } catch { logoImageRef.current = null; }
         } else {
           ctx.textAlign = "center";
-          ctx.fillStyle = "#ffffff";
+          ctx.fillStyle = logoColorStyle === "dark" ? "#111111" : "#ffffff";
           ctx.font = "900 57px Arial, sans-serif";
           ctx.fillText("VIRALIZOU", W / 2 - 22, 1050);
           ctx.fillStyle = "#ff5a1f";
@@ -1047,6 +1122,7 @@ export default function SocialFeedCreator({ posts, onBack }: Props) {
           tagColor,
           tagPositionY,
           showSafeZone,
+          logoColorStyle,
         );
         setMessage("");
         return;
@@ -1096,15 +1172,18 @@ export default function SocialFeedCreator({ posts, onBack }: Props) {
         try {
           if (!logoImageRef.current || logoImageRef.current.src !== logoData) logoImageRef.current = await loadImage(logoData);
           const logo = logoImageRef.current;
-          const { width, height } = getLogoSize(logo, "feed", logoScale / 100);
-          ctx.drawImage(logo, logoPosition.x * W - width / 2, logoPosition.y * H - height / 2, width, height);
+          const renderLogo = getRenderableLogo(logo, logoColorStyle);
+          if (renderLogo) {
+            const { width, height } = getLogoSize(renderLogo, "feed", logoScale / 100);
+            ctx.drawImage(renderLogo, logoPosition.x * W - width / 2, logoPosition.y * H - height / 2, width, height);
+          }
         } catch {
           logoImageRef.current = null;
           setLogoData("");
         }
       } else {
         ctx.textAlign = "center";
-        ctx.fillStyle = "#ffffff";
+        ctx.fillStyle = logoColorStyle === "dark" ? "#111111" : "#ffffff";
         ctx.font = "900 57px Arial, sans-serif";
         ctx.fillText("VIRALIZOU", W / 2 - 22, 838);
         ctx.fillStyle = "#ff5a1f";
@@ -1367,6 +1446,12 @@ export default function SocialFeedCreator({ posts, onBack }: Props) {
     } finally {
       setImportingVideo(false);
     }
+  }
+
+  function chooseLogoColorStyle(style: LogoColorStyle) {
+    setLogoColorStyle(style);
+    try { localStorage.setItem("viralizou_feed_logo_color_style", style); } catch {}
+    renderCard();
   }
 
   async function removeLogo() {
@@ -1751,6 +1836,7 @@ export default function SocialFeedCreator({ posts, onBack }: Props) {
             tagColor,
             tagPositionY,
             false,
+            logoColorStyle,
           );
         }
         if ("requestVideoFrameCallback" in video) {
@@ -2364,16 +2450,96 @@ export default function SocialFeedCreator({ posts, onBack }: Props) {
           </div>
 
           <div className="field">
-            <label>🏢 Logo do jornal</label>
+            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 6, flexWrap: "wrap", gap: 6 }}>
+              <label style={{ margin: 0 }}>🏢 Logo do jornal</label>
+              <div className="logoColorStyleGroup" role="group" aria-label="Estilo da cor das letras da logo">
+                <button
+                  type="button"
+                  className={`logoColorStyleBtn ${logoColorStyle === "white" ? "active" : ""}`}
+                  onClick={() => chooseLogoColorStyle("white")}
+                  title="Logo com letras brancas (Ideal para vídeos, Reels, Stories e fundos escuros)"
+                >
+                  ⚪ Letras Brancas
+                </button>
+                <button
+                  type="button"
+                  className={`logoColorStyleBtn ${logoColorStyle === "dark" ? "active" : ""}`}
+                  onClick={() => chooseLogoColorStyle("dark")}
+                  title="Logo com letras pretas (Ideal para posts com fundo claro)"
+                >
+                  ⚫ Letras Pretas
+                </button>
+                <button
+                  type="button"
+                  className={`logoColorStyleBtn ${logoColorStyle === "original" ? "active" : ""}`}
+                  onClick={() => chooseLogoColorStyle("original")}
+                  title="Manter cores originais da imagem enviada"
+                >
+                  Original
+                </button>
+              </div>
+            </div>
+
             <input type="file" accept="image/png,image/jpeg,image/webp,image/svg+xml" onChange={onLogoChange} />
-            <small>A logo é salva automaticamente no <b>Supabase</b> e neste navegador. PNG com fundo transparente funciona melhor.</small>
+            <small>
+              Alterne acima entre <b>Letras Brancas ⚪</b> (ideal p/ Reels/Vídeos) e <b>Letras Pretas ⚫</b> (ideal p/ Fundo Claro).
+            </small>
+
             {logoData && (
               <>
-                <div className="adminFeedLogoSaved">
-                  <img src={logoData} alt="Logo escolhida" />
-                  <button type="button" className="btn secondary" onClick={removeLogo}>Remover logo</button>
+                <div
+                  className="adminFeedLogoSaved"
+                  style={{
+                    background: logoColorStyle === "white" ? "#0f172a" : "#f8fafc",
+                    border: "1px solid #cbd5e1",
+                    padding: "10px 14px",
+                    borderRadius: 10,
+                    display: "flex",
+                    alignItems: "center",
+                    justifyContent: "space-between",
+                    marginTop: 8,
+                  }}
+                >
+                  <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+                    <div
+                      style={{
+                        background: logoColorStyle === "white" ? "transparent" : "#f1f5f9",
+                        padding: "4px 8px",
+                        borderRadius: 6,
+                      }}
+                    >
+                      <img
+                        src={logoData}
+                        alt="Logo escolhida"
+                        style={{
+                          maxHeight: 34,
+                          display: "block",
+                          filter:
+                            logoColorStyle === "white"
+                              ? "drop-shadow(0 0 1px #fff) invert(1) hue-rotate(180deg)"
+                              : undefined,
+                        }}
+                      />
+                    </div>
+                    <span
+                      style={{
+                        fontSize: 11,
+                        fontWeight: 700,
+                        color: logoColorStyle === "white" ? "#f8fafc" : "#0f172a",
+                      }}
+                    >
+                      {logoColorStyle === "white"
+                        ? "⚪ Letras Brancas (Fundo Escuro)"
+                        : logoColorStyle === "dark"
+                        ? "⚫ Letras Pretas (Fundo Claro)"
+                        : "Cores Originais"}
+                    </span>
+                  </div>
+                  <button type="button" className="btn secondary" onClick={removeLogo} style={{ fontSize: 11, padding: "3px 8px" }}>
+                    Remover
+                  </button>
                 </div>
-                <div className="adminFeedActions">
+                <div className="adminFeedActions" style={{ marginTop: 8 }}>
                   <button type="button" className="btn secondary" onClick={centerLogo}>🎯 Centralizar logo</button>
                   <small>Arraste a logo na prévia. A posição fica salva no painel.</small>
                 </div>
