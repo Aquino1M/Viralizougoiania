@@ -27,9 +27,10 @@ export function detectPlatform(rawUrl: string): DownloadPlatform {
   try {
     const url = new URL(rawUrl.trim());
     const host = url.hostname.toLowerCase().replace(/^www\./, "");
-    if (host.includes("tiktok.com") || host.includes("douyin.com")) return "tiktok";
-    if (host.includes("instagram.com")) return "instagram";
-    if (host.includes("twitter.com") || host.includes("x.com")) return "twitter";
+    const isDomain = (domain: string) => host === domain || host.endsWith(`.${domain}`);
+    if (isDomain("tiktok.com") || isDomain("douyin.com")) return "tiktok";
+    if (isDomain("instagram.com")) return "instagram";
+    if (isDomain("twitter.com") || isDomain("x.com")) return "twitter";
   } catch {}
   return "generic";
 }
@@ -191,6 +192,12 @@ export async function resolveUniversalVideo(rawUrl: string): Promise<ResolvedMed
   const url = rawUrl.trim();
   if (!url) throw new Error("Informe a URL do vídeo.");
 
+  let parsed: URL;
+  try { parsed = new URL(url); } catch { throw new Error("O link informado não é uma URL válida."); }
+  if (parsed.protocol !== "https:" || parsed.username || parsed.password) {
+    throw new Error("Use um link público HTTPS do Instagram, TikTok ou Twitter/X.");
+  }
+
   const platform = detectPlatform(url);
 
   if (platform === "tiktok") {
@@ -205,14 +212,5 @@ export async function resolveUniversalVideo(rawUrl: string): Promise<ResolvedMed
     return await resolveInstagram(url);
   }
 
-  // Se a plataforma não for óbvia, tenta cascata automática
-  try {
-    return await resolveTikTok(url);
-  } catch {
-    try {
-      return await resolveInstagram(url);
-    } catch {
-      return await resolveTwitter(url);
-    }
-  }
+  throw new Error("Plataforma não suportada. Cole um link público do Instagram, TikTok ou Twitter/X.");
 }

@@ -19,8 +19,22 @@ const DEFAULT_FEED_TITLE_POSITION = { x: 0.5, y: 0.79 };
 
 type LogoPosition = { x: number; y: number };
 type ReelTitleLayout = { lines: string[]; fontSize: number; lineHeight: number; width: number; height: number };
-type ReelTextStyle = "standard" | "highlight" | "highlight-dark" | "highlight-yellow";
-type ReelFontFamily = "anton" | "bebas" | "montserrat" | "poppins" | "impact" | "georgia";
+type ReelTextStyle =
+  | "standard"
+  | "box-banner"
+  | "category-badge"
+  | "left-border"
+  | "editorial-serif"
+  | "highlight"
+  | "highlight-dark"
+  | "highlight-yellow"
+  | "highlight-red"
+  | "stroke-strong";
+type ReelFontFamily = "montserrat" | "anton" | "bebas" | "poppins" | "inter" | "roboto" | "impact" | "georgia";
+type ReelFontWeight = "900" | "800" | "700" | "600" | "400" | "italic";
+type ReelTextAlign = "left" | "center" | "right";
+type ReelTextCase = "uppercase" | "lowercase" | "original";
+type ReelTagColor = "red" | "white" | "yellow" | "orange";
 type ReelTextAnimation = "typewriter" | "pop" | "slide" | "fade" | "static";
 
 function slugFromInput(value: string) {
@@ -42,6 +56,15 @@ function loadImage(src: string) {
     img.onerror = () => reject(new Error("Não foi possível carregar a imagem."));
     img.src = src;
   });
+}
+
+async function ensureFontReady(fontString: string) {
+  if (typeof document !== "undefined" && document.fonts && document.fonts.load) {
+    try {
+      await document.fonts.load(fontString);
+      await document.fonts.ready;
+    } catch {}
+  }
 }
 
 function drawCover(ctx: CanvasRenderingContext2D, img: HTMLImageElement | HTMLVideoElement, x: number, y: number, w: number, h: number, vertical = 0) {
@@ -81,9 +104,41 @@ function wrapText(ctx: CanvasRenderingContext2D, text: string, maxWidth: number)
   return lines;
 }
 
+function applyTextCase(text: string, textCase: ReelTextCase): string {
+  if (textCase === "uppercase") return text.toLocaleUpperCase("pt-BR");
+  if (textCase === "lowercase") return text.toLocaleLowerCase("pt-BR");
+  return text;
+}
+
+function getReelFont(font: ReelFontFamily, size: number, weight: ReelFontWeight = "900"): string {
+  const isItalic = weight === "italic";
+  const numWeight = isItalic ? "700" : weight;
+  const stylePrefix = isItalic ? "italic " : "";
+
+  switch (font) {
+    case "montserrat":
+      return `${stylePrefix}${numWeight} ${size}px "Montserrat", -apple-system, sans-serif`;
+    case "poppins":
+      return `${stylePrefix}${numWeight} ${size}px "Poppins", -apple-system, sans-serif`;
+    case "inter":
+      return `${stylePrefix}${numWeight} ${size}px "Inter", -apple-system, sans-serif`;
+    case "roboto":
+      return `${stylePrefix}${numWeight} ${size}px "Roboto", -apple-system, sans-serif`;
+    case "anton":
+      // Anton no Google Fonts só tem suporte a normal (400), com desenho naturalmente ultra pesado
+      return `${stylePrefix}normal ${size}px "Anton", Impact, sans-serif`;
+    case "bebas":
+      // Bebas Neue no Google Fonts só tem suporte a normal (400)
+      return `${stylePrefix}normal ${Math.round(size * 1.12)}px "Bebas Neue", Impact, sans-serif`;
+    case "georgia":
+      return `${stylePrefix}${numWeight === "900" || numWeight === "800" ? "bold" : numWeight === "400" ? "normal" : "bold"} ${size}px "Merriweather", Georgia, "Times New Roman", serif`;
+    case "impact":
+    default:
+      return `${stylePrefix}bold ${size}px Impact, "Arial Narrow", sans-serif`;
+  }
+}
+
 function fitHeadline(ctx: CanvasRenderingContext2D, text: string, maxWidth: number, manualSize = 0, fontFamily: ReelFontFamily = "georgia") {
-  // O tamanho escolhido é uma preferência, não pode fazer a manchete ser cortada.
-  // Se não couber, reduz até caber mantendo todas as palavras e linhas.
   const preferredSize = manualSize > 0 ? manualSize : 68;
   for (let size = preferredSize; size >= 18; size -= 2) {
     ctx.font = getReelFont(fontFamily, size);
@@ -91,65 +146,49 @@ function fitHeadline(ctx: CanvasRenderingContext2D, text: string, maxWidth: numb
     const lineHeight = size * (fontFamily === "bebas" ? 1.08 : fontFamily === "anton" ? 1.12 : 1.1);
     if (lines.length * lineHeight <= 330) return { size, lines };
   }
-
-  // Último recurso para manchetes excepcionalmente longas: preserva o texto inteiro.
   ctx.font = getReelFont(fontFamily, 18);
   return { size: 18, lines: wrapText(ctx, text, maxWidth) };
-}
-
-function getReelFont(font: ReelFontFamily, size: number): string {
-  switch (font) {
-    case "anton":
-      return `900 ${size}px "Anton", Impact, sans-serif`;
-    case "bebas":
-      return `800 ${Math.round(size * 1.15)}px "Bebas Neue", Impact, sans-serif`;
-    case "montserrat":
-      return `900 ${size}px "Montserrat", -apple-system, sans-serif`;
-    case "poppins":
-      return `800 ${size}px "Poppins", -apple-system, sans-serif`;
-    case "georgia":
-      return `800 ${size}px Georgia, "Times New Roman", serif`;
-    case "impact":
-    default:
-      return `700 ${size}px Impact, "Arial Narrow", sans-serif`;
-  }
 }
 
 function getReelTitleLayout(
   ctx: CanvasRenderingContext2D,
   headline: string,
   fontFamily: ReelFontFamily,
-  textStyle: ReelTextStyle,
+  fontWeight: ReelFontWeight = "900",
+  textCase: ReelTextCase = "uppercase",
+  manualSize: number = 72,
+  maxWidth: number = 820,
 ): ReelTitleLayout {
-  const text = headline.trim().toLocaleUpperCase("pt-BR") || "NOVO REEL";
-  const maxWidth = 940;
-  let maxLines = 3;
-  let startSize = fontFamily === "bebas" ? 92 : fontFamily === "anton" ? 82 : 74;
-  if (textStyle === "standard" && fontFamily === "georgia") {
-    maxLines = 4;
-    startSize = 72;
-  }
+  const raw = headline.trim() || "NOVO REEL";
+  const text = applyTextCase(raw, textCase);
+  let maxLines = 4;
+  let startSize = manualSize > 0 ? manualSize : (fontFamily === "bebas" ? 88 : fontFamily === "anton" ? 78 : 72);
 
   let chosenSize = startSize;
   let chosenLines: string[] = [];
 
-  for (let s = startSize; s >= 18; s -= 2) {
-    ctx.font = getReelFont(fontFamily, s);
-    const lines = wrapText(ctx, text, maxWidth);
-    const lineHeight = s * (fontFamily === "bebas" ? 1.08 : fontFamily === "anton" ? 1.12 : 1.18);
-    if (lines.length <= maxLines && lines.length * lineHeight <= 560) {
-      chosenSize = s;
-      chosenLines = lines;
-      break;
-    }
-    if (s === 18) {
-      // Nunca usar slice(maxLines): isso removia o final de títulos compridos.
-      chosenSize = 18;
-      chosenLines = lines;
+  if (manualSize > 0) {
+    ctx.font = getReelFont(fontFamily, manualSize, fontWeight);
+    chosenLines = wrapText(ctx, text, maxWidth);
+    chosenSize = manualSize;
+  } else {
+    for (let s = startSize; s >= 24; s -= 2) {
+      ctx.font = getReelFont(fontFamily, s, fontWeight);
+      const lines = wrapText(ctx, text, maxWidth);
+      const lineHeight = s * (fontFamily === "bebas" ? 1.08 : fontFamily === "anton" ? 1.12 : 1.18);
+      if (lines.length <= maxLines && lines.length * lineHeight <= 540) {
+        chosenSize = s;
+        chosenLines = lines;
+        break;
+      }
+      if (s <= 24) {
+        chosenSize = 24;
+        chosenLines = lines;
+      }
     }
   }
 
-  ctx.font = getReelFont(fontFamily, chosenSize);
+  ctx.font = getReelFont(fontFamily, chosenSize, fontWeight);
   const lineHeight = chosenSize * (fontFamily === "bebas" ? 1.08 : fontFamily === "anton" ? 1.12 : 1.18);
   const lineWidths = chosenLines.map((line) => ctx.measureText(line).width);
   const width = Math.max(...lineWidths, 0);
@@ -158,17 +197,62 @@ function getReelTitleLayout(
   return { lines: chosenLines, fontSize: chosenSize, lineHeight, width, height };
 }
 
+function drawInstagramSafeZone(ctx: CanvasRenderingContext2D) {
+  ctx.save();
+  // Header do Instagram (topo)
+  ctx.fillStyle = "rgba(10, 15, 26, 0.45)";
+  ctx.fillRect(0, 0, W, 200);
+
+  // Barra de ações laterais (Like, Comentários, Compartilhar, Áudio)
+  ctx.fillRect(910, 850, 170, 850);
+
+  // Rodapé do Instagram (Perfil, Seguir, Legenda)
+  ctx.fillRect(0, 1680, W, 240);
+
+  // Linhas-guia pontilhadas da área segura ideal
+  ctx.strokeStyle = "rgba(168, 85, 247, 0.85)";
+  ctx.lineWidth = 3;
+  ctx.setLineDash([10, 6]);
+  ctx.strokeRect(120, 220, 790, 1440);
+
+  // Textos informativos na sobreposição
+  ctx.setLineDash([]);
+  ctx.fillStyle = "#ffffff";
+  ctx.font = '700 24px "Inter", sans-serif';
+  ctx.textAlign = "center";
+  ctx.fillText("🛡️ ÁREA SEGURA DO INSTAGRAM REELS", W / 2, 260);
+
+  ctx.font = '600 20px "Inter", sans-serif';
+  ctx.fillStyle = "#fca5a5";
+  ctx.fillText("⚠️ Área do botão Seguir e perfil do Instagram", W / 2, 1820);
+
+  ctx.save();
+  ctx.translate(995, 1280);
+  ctx.rotate(-Math.PI / 2);
+  ctx.fillText("⚠️ Ícones Reels (Like, Comentários, Share)", 0, 0);
+  ctx.restore();
+
+  ctx.restore();
+}
+
 function drawReelHeadline(
   ctx: CanvasRenderingContext2D,
   headline: string,
+  category: string,
   fontFamily: ReelFontFamily,
+  fontWeight: ReelFontWeight,
   textStyle: ReelTextStyle,
+  textAlign: ReelTextAlign,
+  textCase: ReelTextCase,
+  fontSize: number,
   animation: ReelTextAnimation,
   position: LogoPosition,
   currentTime: number,
   duration: number,
+  canvasHeight: number = REEL_H,
+  maxWidth: number = 820,
 ) {
-  const layout = getReelTitleLayout(ctx, headline, fontFamily, textStyle);
+  const layout = getReelTitleLayout(ctx, headline, fontFamily, fontWeight, textCase, fontSize, maxWidth);
   if (!layout.lines.length) return;
 
   const animDuration = Math.min(2.5, Math.max(0.6, duration > 0 ? duration * 0.25 : 2.0));
@@ -180,7 +264,7 @@ function drawReelHeadline(
   (ctx as any).textRendering = "geometricPrecision";
 
   const centerX = position.x * W;
-  const centerY = position.y * REEL_H;
+  const centerY = position.y * canvasHeight;
 
   let animAlpha = 1;
   let animScale = 1;
@@ -221,9 +305,222 @@ function drawReelHeadline(
     return line.slice(0, count);
   });
 
+  const blockLeft = centerX - layout.width / 2;
+  const blockRight = centerX + layout.width / 2;
+  const fontString = getReelFont(fontFamily, layout.fontSize, fontWeight);
+
+  // 1. ESTILO CAIXA NOTICIOSA (Estilo O Grito - Foto 3 do jornalista)
+  if (textStyle === "box-banner") {
+    const padX = Math.round(layout.fontSize * 0.45);
+    const padY = Math.round(layout.fontSize * 0.35);
+    const boxW = Math.min(layout.width + padX * 2, maxWidth + padX);
+    const boxH = layout.height + padY * 2;
+    let boxX = centerX - boxW / 2;
+    if (textAlign === "left") boxX = blockLeft - padX / 2;
+    else if (textAlign === "right") boxX = blockRight - boxW + padX / 2;
+    const boxY = centerY - boxH / 2;
+
+    ctx.save();
+    ctx.shadowColor = "rgba(0, 0, 0, 0.85)";
+    ctx.shadowBlur = 22;
+    ctx.shadowOffsetY = 6;
+    ctx.fillStyle = "rgba(10, 10, 12, 0.96)";
+
+    const radius = Math.min(18, Math.max(8, Math.round(boxH * 0.1)));
+    if (typeof ctx.roundRect === "function") {
+      ctx.beginPath();
+      ctx.roundRect(boxX, boxY, boxW, boxH, radius);
+      ctx.fill();
+    } else {
+      ctx.fillRect(boxX, boxY, boxW, boxH);
+    }
+    ctx.restore();
+
+    ctx.save();
+    ctx.fillStyle = "#ffffff";
+    ctx.textBaseline = "middle";
+    let curY = centerY - layout.height / 2 + layout.lineHeight * 0.5;
+    for (const line of linesToDraw) {
+      if (line) {
+        ctx.font = fontString;
+        let drawX = centerX;
+        if (textAlign === "left") {
+          ctx.textAlign = "left";
+          drawX = boxX + padX;
+        } else if (textAlign === "right") {
+          ctx.textAlign = "right";
+          drawX = boxX + boxW - padX;
+        } else {
+          ctx.textAlign = "center";
+          drawX = centerX;
+        }
+        ctx.fillText(line, drawX, curY);
+      }
+      curY += layout.lineHeight;
+    }
+    ctx.restore();
+    ctx.restore();
+    return;
+  }
+
+  // 2. ESTILO SELO DE CATEGORIA (Estilo Jornal Opção - Foto 2 do jornalista)
+  if (textStyle === "category-badge") {
+    const badgeText = (category || "NOTÍCIA").trim().toUpperCase();
+    const badgeFontSize = Math.max(22, Math.round(layout.fontSize * 0.36));
+    ctx.font = `800 ${badgeFontSize}px "Montserrat", -apple-system, sans-serif`;
+    const badgeMetrics = ctx.measureText(badgeText);
+    const badgePadX = 18;
+    const badgePadY = 8;
+    const badgeW = badgeMetrics.width + badgePadX * 2;
+    const badgeH = badgeFontSize + badgePadY * 2;
+
+    const gap = 16;
+    const totalBlockH = badgeH + gap + layout.height;
+    const startY = centerY - totalBlockH / 2;
+
+    let badgeX = blockLeft;
+    if (textAlign === "center") badgeX = centerX - badgeW / 2;
+    else if (textAlign === "right") badgeX = blockRight - badgeW;
+
+    ctx.save();
+    ctx.fillStyle = "#b91c1c";
+    ctx.shadowColor = "rgba(0, 0, 0, 0.65)";
+    ctx.shadowBlur = 10;
+    ctx.shadowOffsetY = 3;
+    if (typeof ctx.roundRect === "function") {
+      ctx.beginPath();
+      ctx.roundRect(badgeX, startY, badgeW, badgeH, 6);
+      ctx.fill();
+    } else {
+      ctx.fillRect(badgeX, startY, badgeW, badgeH);
+    }
+    ctx.restore();
+
+    ctx.save();
+    ctx.fillStyle = "#ffffff";
+    ctx.textAlign = "center";
+    ctx.textBaseline = "middle";
+    ctx.font = `800 ${badgeFontSize}px "Montserrat", -apple-system, sans-serif`;
+    ctx.fillText(badgeText, badgeX + badgeW / 2, startY + badgeH / 2);
+    ctx.restore();
+
+    let curY = startY + badgeH + gap + layout.lineHeight * 0.5;
+    for (const line of linesToDraw) {
+      if (line) {
+        ctx.font = fontString;
+        ctx.save();
+        ctx.shadowColor = "rgba(0, 0, 0, 0.95)";
+        ctx.shadowBlur = 18;
+        ctx.shadowOffsetY = 4;
+        ctx.fillStyle = "#ffffff";
+        ctx.textBaseline = "middle";
+        ctx.textAlign = textAlign;
+        let drawX = centerX;
+        if (textAlign === "left") drawX = blockLeft;
+        else if (textAlign === "right") drawX = blockRight;
+        ctx.fillText(line, drawX, curY);
+        ctx.restore();
+      }
+      curY += layout.lineHeight;
+    }
+
+    ctx.save();
+    ctx.fillStyle = "#b91c1c";
+    ctx.fillRect(0, canvasHeight - 12, W, 12);
+    ctx.restore();
+
+    ctx.restore();
+    return;
+  }
+
+  // 3. ESTILO BARRA LATERAL VERMELHA (Estilo Destaque / Foto 5 do jornalista)
+  if (textStyle === "left-border") {
+    const barW = 10;
+    const barGap = 20;
+    const blockH = layout.height;
+    const startY = centerY - blockH / 2;
+    const barX = textAlign === "right" ? blockRight + 12 : blockLeft - barW - barGap;
+
+    ctx.save();
+    ctx.fillStyle = "#e11d48";
+    ctx.shadowColor = "rgba(0, 0, 0, 0.6)";
+    ctx.shadowBlur = 10;
+    if (typeof ctx.roundRect === "function") {
+      ctx.beginPath();
+      ctx.roundRect(barX, startY, barW, blockH, 5);
+      ctx.fill();
+    } else {
+      ctx.fillRect(barX, startY, barW, blockH);
+    }
+    ctx.restore();
+
+    let curY = startY + layout.lineHeight * 0.5;
+    for (const line of linesToDraw) {
+      if (line) {
+        ctx.font = fontString;
+        ctx.save();
+        ctx.shadowColor = "rgba(0, 0, 0, 0.95)";
+        ctx.shadowBlur = 16;
+        ctx.shadowOffsetY = 4;
+        ctx.fillStyle = "#ffffff";
+        ctx.textBaseline = "middle";
+        ctx.textAlign = textAlign;
+        let drawX = blockLeft;
+        if (textAlign === "center") drawX = centerX;
+        else if (textAlign === "right") drawX = blockRight;
+        ctx.fillText(line, drawX, curY);
+        ctx.restore();
+      }
+      curY += layout.lineHeight;
+    }
+    ctx.restore();
+    return;
+  }
+
+  // 4. ESTILO EDITORIAL SERIFADO (Estilo Metrópoles - Foto 4 do jornalista)
+  if (textStyle === "editorial-serif") {
+    const serifFont = getReelFont("georgia", layout.fontSize, fontWeight);
+    const tagEyebrow = (category || "REPORTAGEM").trim().toUpperCase();
+    const eyebrowSize = Math.max(18, Math.round(layout.fontSize * 0.32));
+    const gap = 18;
+    const totalH = eyebrowSize + gap + layout.height;
+    const startY = centerY - totalH / 2;
+
+    ctx.save();
+    ctx.font = `900 ${eyebrowSize}px "Inter", sans-serif`;
+    ctx.textAlign = "center";
+    ctx.textBaseline = "middle";
+    ctx.fillStyle = "#ef4444";
+    ctx.shadowColor = "rgba(0,0,0,0.8)";
+    ctx.shadowBlur = 10;
+    ctx.fillText(`• ${tagEyebrow} •`, centerX, startY + eyebrowSize / 2);
+    ctx.restore();
+
+    let curY = startY + eyebrowSize + gap + layout.lineHeight * 0.5;
+    for (const line of linesToDraw) {
+      if (line) {
+        ctx.font = serifFont;
+        ctx.save();
+        ctx.shadowColor = "rgba(0, 0, 0, 0.95)";
+        ctx.shadowBlur = 18;
+        ctx.shadowOffsetY = 4;
+        ctx.fillStyle = "#ffffff";
+        ctx.textBaseline = "middle";
+        ctx.textAlign = textAlign;
+        let drawX = centerX;
+        if (textAlign === "left") drawX = blockLeft;
+        else if (textAlign === "right") drawX = blockRight;
+        ctx.fillText(line, drawX, curY);
+        ctx.restore();
+      }
+      curY += layout.lineHeight;
+    }
+    ctx.restore();
+    return;
+  }
+
+  // 5. ESTILOS FAIXA / HIGHLIGHT / STROKE / STANDARD (Linha por linha ajustada sem sobreposição)
   let currentY = centerY - layout.height / 2 + layout.lineHeight * 0.5;
-  ctx.textAlign = "center";
-  ctx.textBaseline = "middle";
 
   for (let i = 0; i < linesToDraw.length; i++) {
     const line = linesToDraw[i];
@@ -232,27 +529,57 @@ function drawReelHeadline(
       continue;
     }
 
-    ctx.font = getReelFont(fontFamily, layout.fontSize);
+    ctx.font = fontString;
     const lineWidth = ctx.measureText(line).width;
 
+    const padX = Math.round(layout.fontSize * 0.3);
+    const padY = Math.round(layout.fontSize * 0.14);
+    const boxW = lineWidth + padX * 2;
+    const boxH = layout.fontSize + padY * 2;
+
+    let boxX = centerX - boxW / 2;
+    let drawX = centerX;
+
+    if (textAlign === "left") {
+      boxX = blockLeft;
+      drawX = blockLeft + padX;
+      ctx.textAlign = "left";
+    } else if (textAlign === "right") {
+      boxX = blockRight - boxW;
+      drawX = blockRight - padX;
+      ctx.textAlign = "right";
+    } else {
+      boxX = centerX - boxW / 2;
+      drawX = centerX;
+      ctx.textAlign = "center";
+    }
+
+    ctx.textBaseline = "middle";
+
     if (textStyle.startsWith("highlight")) {
-      const padX = 22;
-      const padY = 12;
-      const boxW = lineWidth + padX * 2;
-      const boxH = layout.fontSize + padY * 2;
-      const boxX = centerX - boxW / 2;
       const boxY = currentY - boxH / 2;
 
       ctx.save();
+      ctx.shadowColor = "rgba(0, 0, 0, 0.55)";
+      ctx.shadowBlur = 14;
+      ctx.shadowOffsetY = 4;
+
+      let boxBg = "#ffffff";
+      let textFg = "#111111";
+
       if (textStyle === "highlight-dark") {
-        ctx.fillStyle = "rgba(12, 12, 12, 0.96)";
+        boxBg = "rgba(12, 12, 14, 0.96)";
+        textFg = "#ffffff";
       } else if (textStyle === "highlight-yellow") {
-        ctx.fillStyle = "#ffcc00";
-      } else {
-        ctx.fillStyle = "#ffffff";
+        boxBg = "#ffcc00";
+        textFg = "#111111";
+      } else if (textStyle === "highlight-red") {
+        boxBg = "#e11d48";
+        textFg = "#ffffff";
       }
 
-      const radius = Math.min(12, boxH / 4);
+      ctx.fillStyle = boxBg;
+      const radius = Math.min(12, Math.max(6, Math.round(boxH * 0.16)));
       if (typeof ctx.roundRect === "function") {
         ctx.beginPath();
         ctx.roundRect(boxX, boxY, boxW, boxH, radius);
@@ -262,22 +589,43 @@ function drawReelHeadline(
       }
       ctx.restore();
 
-      if (textStyle === "highlight-dark") {
-        ctx.fillStyle = "#ffffff";
-      } else {
-        ctx.fillStyle = "#111111";
-      }
-      ctx.fillText(line, centerX, currentY);
-    } else {
       ctx.save();
-      ctx.lineWidth = 9;
-      ctx.strokeStyle = "rgba(0, 0, 0, 0.88)";
+      ctx.fillStyle = textFg;
+      ctx.fillText(line, drawX, currentY);
+      ctx.restore();
+    } else if (textStyle === "stroke-strong") {
+      ctx.save();
+      ctx.shadowColor = "rgba(0, 0, 0, 0.95)";
+      ctx.shadowBlur = 18;
+      ctx.shadowOffsetY = 5;
+
+      const strokeW = Math.max(8, Math.round(layout.fontSize * 0.14));
+      ctx.lineWidth = strokeW;
+      ctx.strokeStyle = "#000000";
       ctx.lineJoin = "round";
       ctx.miterLimit = 2;
-      ctx.strokeText(line, centerX, currentY);
+      ctx.strokeText(line, drawX, currentY);
 
       ctx.fillStyle = "#ffffff";
-      ctx.fillText(line, centerX, currentY);
+      ctx.fillText(line, drawX, currentY);
+      ctx.restore();
+    } else {
+      // standard: "Só a letra (sem fundo)"
+      ctx.save();
+      ctx.shadowColor = "rgba(0, 0, 0, 0.95)";
+      ctx.shadowBlur = 16;
+      ctx.shadowOffsetX = 0;
+      ctx.shadowOffsetY = 4;
+
+      const strokeW = Math.max(4, Math.round(layout.fontSize * 0.08));
+      ctx.lineWidth = strokeW;
+      ctx.strokeStyle = "rgba(0, 0, 0, 0.94)";
+      ctx.lineJoin = "round";
+      ctx.miterLimit = 2;
+      ctx.strokeText(line, drawX, currentY);
+
+      ctx.fillStyle = "#ffffff";
+      ctx.fillText(line, drawX, currentY);
       ctx.restore();
     }
 
@@ -292,15 +640,23 @@ function drawReelFrame(
   video: HTMLVideoElement | null,
   logo: HTMLImageElement | null,
   headline: string,
+  category: string,
   handle: string,
   logoPosition: LogoPosition,
   titlePosition: LogoPosition,
   textStyle: ReelTextStyle,
   fontFamily: ReelFontFamily,
+  fontWeight: ReelFontWeight,
+  textAlign: ReelTextAlign,
+  textCase: ReelTextCase,
+  fontSize: number,
   textAnimation: ReelTextAnimation,
   showStrongSceneWarning: boolean,
   logoScale: number,
   handleFontSize: number,
+  tagColor: ReelTagColor,
+  tagPositionY: number,
+  showSafeZone: boolean = false,
 ) {
   ctx.save();
   ctx.imageSmoothingEnabled = true;
@@ -343,13 +699,69 @@ function drawReelFrame(
 
   const currentTime = video ? video.currentTime : 10;
   const duration = video && Number.isFinite(video.duration) ? video.duration : 10;
-  drawReelHeadline(ctx, headline, fontFamily, textStyle, textAnimation, titlePosition, currentTime, duration);
+  drawReelHeadline(
+    ctx,
+    headline,
+    category,
+    fontFamily,
+    fontWeight,
+    textStyle,
+    textAlign,
+    textCase,
+    fontSize,
+    textAnimation,
+    titlePosition,
+    currentTime,
+    duration,
+    REEL_H,
+    820,
+  );
 
-  ctx.textAlign = "center";
-  ctx.textBaseline = "alphabetic";
-  ctx.fillStyle = "rgba(255,255,255,.94)";
-  ctx.font = `600 ${handleFontSize}px Arial, sans-serif`;
-  ctx.fillText(handle.trim() || "@viralizougoiania", W / 2, 1810);
+  // Assinatura / Tag Inferior (posicionada em altura segura para não ser tapada pelo perfil do Instagram)
+  if (handle && handle.trim()) {
+    const tagText = handle.trim();
+    const tagY = tagPositionY || 1670;
+
+    ctx.save();
+    ctx.textAlign = "center";
+    ctx.textBaseline = "middle";
+    ctx.font = `800 ${handleFontSize}px "Montserrat", -apple-system, sans-serif`;
+
+    let textColor = "#ffffff";
+    if (tagColor === "red") textColor = "#ff3b30";
+    else if (tagColor === "yellow") textColor = "#ffcc00";
+    else if (tagColor === "orange") textColor = "#ff5a1f";
+
+    const metrics = ctx.measureText(tagText);
+    const padX = 20;
+    const padY = 10;
+    const boxW = metrics.width + padX * 2;
+    const boxH = handleFontSize + padY * 2;
+    const boxX = W / 2 - boxW / 2;
+    const boxY = tagY - boxH / 2;
+
+    ctx.fillStyle = "rgba(10, 10, 12, 0.72)";
+    ctx.shadowColor = "rgba(0, 0, 0, 0.6)";
+    ctx.shadowBlur = 10;
+    ctx.shadowOffsetY = 2;
+    if (typeof ctx.roundRect === "function") {
+      ctx.beginPath();
+      ctx.roundRect(boxX, boxY, boxW, boxH, boxH / 2);
+      ctx.fill();
+    } else {
+      ctx.fillRect(boxX, boxY, boxW, boxH);
+    }
+
+    ctx.shadowColor = "transparent";
+    ctx.fillStyle = textColor;
+    ctx.fillText(tagText, W / 2, tagY);
+    ctx.restore();
+  }
+
+  // Guia opcional de área segura do Instagram
+  if (showSafeZone) {
+    drawInstagramSafeZone(ctx);
+  }
 
   ctx.restore();
 }
@@ -386,8 +798,15 @@ export default function SocialFeedCreator({ posts, onBack }: Props) {
   const [logoScale, setLogoScale] = useState(100);
   const [handleFontSize, setHandleFontSize] = useState(33);
   const [draggingLogo, setDraggingLogo] = useState(false);
-  const [reelTextStyle, setReelTextStyle] = useState<ReelTextStyle>("highlight");
-  const [reelFontFamily, setReelFontFamily] = useState<ReelFontFamily>("anton");
+  const [reelTextStyle, setReelTextStyle] = useState<ReelTextStyle>("standard");
+  const [reelFontFamily, setReelFontFamily] = useState<ReelFontFamily>("montserrat");
+  const [reelFontWeight, setReelFontWeight] = useState<ReelFontWeight>("900");
+  const [reelTextAlign, setReelTextAlign] = useState<ReelTextAlign>("center");
+  const [reelTextCase, setReelTextCase] = useState<ReelTextCase>("uppercase");
+  const [reelFontSize, setReelFontSize] = useState<number>(72);
+  const [tagColor, setTagColor] = useState<ReelTagColor>("red");
+  const [tagPositionY, setTagPositionY] = useState<number>(1670);
+  const [showSafeZone, setShowSafeZone] = useState<boolean>(true);
   const [reelTextAnimation, setReelTextAnimation] = useState<ReelTextAnimation>("typewriter");
   const [showStrongSceneWarning, setShowStrongSceneWarning] = useState(false);
   const [imagePosition, setImagePosition] = useState(0);
@@ -411,6 +830,13 @@ export default function SocialFeedCreator({ posts, onBack }: Props) {
       const savedTitlePosition = JSON.parse(localStorage.getItem("viralizou_reel_title_position") || "null");
       const savedTextStyle = localStorage.getItem("viralizou_reel_text_style") as ReelTextStyle | null;
       const savedFontFamily = localStorage.getItem("viralizou_reel_font_family") as ReelFontFamily | null;
+      const savedFontWeight = localStorage.getItem("viralizou_reel_font_weight") as ReelFontWeight | null;
+      const savedTextAlign = localStorage.getItem("viralizou_reel_text_align") as ReelTextAlign | null;
+      const savedTextCase = localStorage.getItem("viralizou_reel_text_case") as ReelTextCase | null;
+      const savedFontSize = Number(localStorage.getItem("viralizou_reel_font_size"));
+      const savedTagColor = localStorage.getItem("viralizou_reel_tag_color") as ReelTagColor | null;
+      const savedTagPosY = Number(localStorage.getItem("viralizou_reel_tag_position_y"));
+      const savedSafeZone = localStorage.getItem("viralizou_reel_safe_zone");
       const savedTextAnim = localStorage.getItem("viralizou_reel_text_animation") as ReelTextAnimation | null;
       const savedWarning = localStorage.getItem("viralizou_reel_strong_scene_warning");
       const savedLogoScale = Number(localStorage.getItem("viralizou_reel_logo_scale"));
@@ -424,6 +850,13 @@ export default function SocialFeedCreator({ posts, onBack }: Props) {
       if (savedHandle) setHandle(savedHandle);
       if (savedTextStyle) setReelTextStyle(savedTextStyle);
       if (savedFontFamily) setReelFontFamily(savedFontFamily);
+      if (savedFontWeight) setReelFontWeight(savedFontWeight);
+      if (savedTextAlign) setReelTextAlign(savedTextAlign);
+      if (savedTextCase) setReelTextCase(savedTextCase);
+      if (Number.isFinite(savedFontSize) && savedFontSize >= 24 && savedFontSize <= 120) setReelFontSize(savedFontSize);
+      if (savedTagColor) setTagColor(savedTagColor);
+      if (Number.isFinite(savedTagPosY) && savedTagPosY >= 1400 && savedTagPosY <= 1860) setTagPositionY(savedTagPosY);
+      if (savedSafeZone !== null) setShowSafeZone(savedSafeZone === "true");
       if (savedTextAnim) setReelTextAnimation(savedTextAnim);
       if (savedWarning === "true") setShowStrongSceneWarning(true);
       if (Number.isFinite(savedLogoScale) && savedLogoScale >= 50 && savedLogoScale <= 150) setLogoScale(savedLogoScale);
@@ -476,6 +909,7 @@ export default function SocialFeedCreator({ posts, onBack }: Props) {
       canvas.height = format === "reel" ? REEL_H : H;
 
       if (format === "reel") {
+        await document.fonts?.ready;
         if (logoData) {
           try {
             if (!logoImageRef.current || logoImageRef.current.src !== logoData) logoImageRef.current = await loadImage(logoData);
@@ -489,19 +923,31 @@ export default function SocialFeedCreator({ posts, onBack }: Props) {
           videoPreviewRef.current,
           logoImageRef.current,
           title || selectedPost?.title || "",
+          selectedPost?.category || "",
           handle,
           logoPositionRef.current,
           titlePositionRef.current,
           reelTextStyle,
           reelFontFamily,
+          reelFontWeight,
+          reelTextAlign,
+          reelTextCase,
+          reelFontSize,
           reelTextAnimation,
           showStrongSceneWarning,
           logoScale,
           handleFontSize,
+          tagColor,
+          tagPositionY,
+          showSafeZone,
         );
         setMessage("");
         return;
       }
+
+      await document.fonts?.ready;
+      const fontStr = getReelFont(reelFontFamily, feedTitleFontSize > 0 ? feedTitleFontSize : reelFontSize, reelFontWeight);
+      await ensureFontReady(fontStr);
 
       ctx.save();
       ctx.imageSmoothingEnabled = true;
@@ -528,25 +974,9 @@ export default function SocialFeedCreator({ posts, onBack }: Props) {
         ctx.fillText("Selecione uma notícia do portal", W / 2, 465);
       }
 
-      const headline = (title || selectedPost?.title || "Título da notícia").trim();
-      ctx.textAlign = "center";
-      ctx.textBaseline = "alphabetic";
-      ctx.fillStyle = "#ffffff";
-      const fitted = fitHeadline(ctx, headline, 920, feedTitleFontSize, feedFontFamily);
-      ctx.font = getReelFont(feedFontFamily, fitted.size);
-
-      const lineHeight = fitted.size * 1.1;
-      const totalHeight = fitted.lines.length * lineHeight;
-
-      // Base Y centralizada no terço inferior, respeitando margens de segurança
-      let startY = feedTitlePosition.y * H - (totalHeight / 2) + feedTitleOffsetY;
-
-      // Garante que a última linha nunca ultrapasse 1235 (o handle @ fica em 1300)
-      const maxStartY = 1235 - ((fitted.lines.length - 1) * lineHeight);
-      startY = Math.min(maxStartY, Math.max(870, startY));
-
-      // Overlay escuro proporcional à altura do texto para contraste perfeito
-      const overlayTop = Math.max(480, startY - 150);
+      // Base Y centralizada no terço inferior
+      const effectiveSize = feedTitleFontSize > 0 ? feedTitleFontSize : reelFontSize;
+      const overlayTop = Math.max(380, feedTitlePosition.y * H - 280 + feedTitleOffsetY);
       const overlay = ctx.createLinearGradient(0, overlayTop, 0, 1140);
       overlay.addColorStop(0, "rgba(0,0,0,0)");
       overlay.addColorStop(0.32, "rgba(0,0,0,.82)");
@@ -559,7 +989,7 @@ export default function SocialFeedCreator({ posts, onBack }: Props) {
         try {
           if (!logoImageRef.current || logoImageRef.current.src !== logoData) logoImageRef.current = await loadImage(logoData);
           const logo = logoImageRef.current;
-          const { width, height } = getLogoSize(logo, "feed");
+          const { width, height } = getLogoSize(logo, "feed", logoScale / 100);
           ctx.drawImage(logo, logoPosition.x * W - width / 2, logoPosition.y * H - height / 2, width, height);
         } catch {
           logoImageRef.current = null;
@@ -575,19 +1005,47 @@ export default function SocialFeedCreator({ posts, onBack }: Props) {
         ctx.fillText("GOIÂNIA", W / 2 + 214, 838);
       }
 
+      const headline = (title || selectedPost?.title || "Título da notícia").trim();
+      const targetPos = {
+        x: feedTitlePosition.x,
+        y: Math.min(0.92, Math.max(0.55, feedTitlePosition.y + feedTitleOffsetY / H)),
+      };
+
+      drawReelHeadline(
+        ctx,
+        headline,
+        selectedPost?.category || "",
+        reelFontFamily,
+        reelFontWeight,
+        reelTextStyle,
+        reelTextAlign,
+        reelTextCase,
+        effectiveSize,
+        "static",
+        targetPos,
+        10,
+        10,
+        H,
+        920,
+      );
+
+      // Assinatura do rodapé
+      ctx.save();
       ctx.textAlign = "center";
-      ctx.fillStyle = "#ffffff";
-      ctx.font = getReelFont(feedFontFamily, fitted.size);
+      ctx.textBaseline = "middle";
+      ctx.font = `800 ${handleFontSize}px "Montserrat", -apple-system, sans-serif`;
 
-      let lineY = startY;
-      for (const line of fitted.lines) {
-        ctx.fillText(line, feedTitlePosition.x * W, lineY);
-        lineY += lineHeight;
-      }
+      let handleColor = "rgba(255,255,255,.94)";
+      if (tagColor === "red") handleColor = "#ff3b30";
+      else if (tagColor === "yellow") handleColor = "#ffcc00";
+      else if (tagColor === "orange") handleColor = "#ff5a1f";
 
-      ctx.fillStyle = "rgba(255,255,255,.94)";
-      ctx.font = "600 33px Arial, sans-serif";
+      ctx.fillStyle = handleColor;
+      ctx.shadowColor = "rgba(0,0,0,0.6)";
+      ctx.shadowBlur = 8;
       ctx.fillText(handle.trim() || "@viralizougoiania", W / 2, 1300);
+      ctx.restore();
+
       ctx.restore();
       setMessage("");
     } catch (err) {
@@ -600,7 +1058,7 @@ export default function SocialFeedCreator({ posts, onBack }: Props) {
   useEffect(() => {
     renderCard();
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [selectedPost?.slug, selectedPost?.updated_at, title, logoData, handle, imagePosition, feedTitleFontSize, feedFontFamily, feedTitlePosition.x, feedTitlePosition.y, feedTitleOffsetY, format, logoPosition.x, logoPosition.y, titlePosition.x, titlePosition.y, reelTextStyle, reelFontFamily, reelTextAnimation, showStrongSceneWarning, logoScale, handleFontSize]);
+  }, [selectedPost?.slug, selectedPost?.updated_at, title, logoData, handle, imagePosition, feedTitleFontSize, feedFontFamily, feedTitlePosition.x, feedTitlePosition.y, feedTitleOffsetY, format, logoPosition.x, logoPosition.y, titlePosition.x, titlePosition.y, reelTextStyle, reelFontFamily, reelFontWeight, reelTextAlign, reelTextCase, reelFontSize, tagColor, tagPositionY, showSafeZone, reelTextAnimation, showStrongSceneWarning, logoScale, handleFontSize]);
 
   // Loop de pré-visualização interativa do Reel
   useEffect(() => {
@@ -617,15 +1075,23 @@ export default function SocialFeedCreator({ posts, onBack }: Props) {
             video,
             logoImageRef.current,
             title || selectedPost?.title || "",
+            selectedPost?.category || "",
             handle,
             logoPositionRef.current,
             titlePositionRef.current,
             reelTextStyle,
             reelFontFamily,
+            reelFontWeight,
+            reelTextAlign,
+            reelTextCase,
+            reelFontSize,
             reelTextAnimation,
             showStrongSceneWarning,
             logoScale,
             handleFontSize,
+            tagColor,
+            tagPositionY,
+            showSafeZone,
           );
         }
       }
@@ -636,7 +1102,7 @@ export default function SocialFeedCreator({ posts, onBack }: Props) {
     video.play().catch(() => {});
     frameId = requestAnimationFrame(draw);
     return () => cancelAnimationFrame(frameId);
-  }, [format, videoUrl, title, handle, logoData, selectedPost?.title, reelTextStyle, reelFontFamily, reelTextAnimation, showStrongSceneWarning, logoScale, handleFontSize]);
+  }, [format, videoUrl, title, handle, logoData, selectedPost?.title, reelTextStyle, reelFontFamily, reelFontWeight, reelTextAlign, reelTextCase, reelFontSize, tagColor, tagPositionY, showSafeZone, reelTextAnimation, showStrongSceneWarning, logoScale, handleFontSize]);
 
   async function loadArticle() {
     const slug = slugFromInput(articleUrl);
@@ -791,6 +1257,41 @@ export default function SocialFeedCreator({ posts, onBack }: Props) {
     try { localStorage.setItem("viralizou_reel_font_family", font); } catch {}
   }
 
+  function chooseReelFontWeight(weight: ReelFontWeight) {
+    setReelFontWeight(weight);
+    try { localStorage.setItem("viralizou_reel_font_weight", weight); } catch {}
+  }
+
+  function chooseReelTextAlign(align: ReelTextAlign) {
+    setReelTextAlign(align);
+    try { localStorage.setItem("viralizou_reel_text_align", align); } catch {}
+  }
+
+  function chooseReelTextCase(textCase: ReelTextCase) {
+    setReelTextCase(textCase);
+    try { localStorage.setItem("viralizou_reel_text_case", textCase); } catch {}
+  }
+
+  function chooseReelFontSize(size: number) {
+    setReelFontSize(size);
+    try { localStorage.setItem("viralizou_reel_font_size", String(size)); } catch {}
+  }
+
+  function chooseTagColor(color: ReelTagColor) {
+    setTagColor(color);
+    try { localStorage.setItem("viralizou_reel_tag_color", color); } catch {}
+  }
+
+  function chooseTagPositionY(pos: number) {
+    setTagPositionY(pos);
+    try { localStorage.setItem("viralizou_reel_tag_position_y", String(pos)); } catch {}
+  }
+
+  function toggleSafeZone(enabled: boolean) {
+    setShowSafeZone(enabled);
+    try { localStorage.setItem("viralizou_reel_show_safe_zone", String(enabled)); } catch {}
+  }
+
   function chooseReelTextAnimation(anim: ReelTextAnimation) {
     setReelTextAnimation(anim);
     try { localStorage.setItem("viralizou_reel_text_animation", anim); } catch {}
@@ -826,7 +1327,7 @@ export default function SocialFeedCreator({ posts, onBack }: Props) {
     if (format === "reel") {
       const ctx = event.currentTarget.getContext("2d");
       if (ctx) {
-        const layout = getReelTitleLayout(ctx, title || selectedPost?.title || "", reelFontFamily, reelTextStyle);
+        const layout = getReelTitleLayout(ctx, title || selectedPost?.title || "", reelFontFamily, reelFontWeight, reelTextCase, reelFontSize);
         const rect = event.currentTarget.getBoundingClientRect();
         const x = ((event.clientX - rect.left) / rect.width) * W;
         const y = ((event.clientY - rect.top) / rect.height) * REEL_H;
@@ -888,7 +1389,7 @@ export default function SocialFeedCreator({ posts, onBack }: Props) {
       const ctx = event.currentTarget.getContext("2d");
       const rect = event.currentTarget.getBoundingClientRect();
       if (format === "reel") {
-        const layout = ctx ? getReelTitleLayout(ctx, title || selectedPost?.title || "", reelFontFamily, reelTextStyle) : { width: 0, height: 0 };
+        const layout = ctx ? getReelTitleLayout(ctx, title || selectedPost?.title || "", reelFontFamily, reelFontWeight, reelTextCase, reelFontSize) : { width: 0, height: 0 };
         const position = {
           x: Math.min(1 - layout.width / (2 * W), Math.max(layout.width / (2 * W), (event.clientX - rect.left) / rect.width - titleDrag.offsetX)),
           y: Math.min(1 - layout.height / (2 * REEL_H), Math.max(layout.height / (2 * REEL_H), (event.clientY - rect.top) / rect.height - titleDrag.offsetY)),
@@ -1050,7 +1551,7 @@ export default function SocialFeedCreator({ posts, onBack }: Props) {
 
       recorder = new MediaRecorder(combinedStream, {
         mimeType,
-        videoBitsPerSecond: 6_000_000,
+        videoBitsPerSecond: 14_000_000,
         audioBitsPerSecond: 192_000,
       });
       const activeRecorder = recorder;
@@ -1065,15 +1566,23 @@ export default function SocialFeedCreator({ posts, onBack }: Props) {
             video,
             logoImageRef.current,
             title || selectedPost?.title || "",
+            selectedPost?.category || "",
             handle,
             logoPositionRef.current,
             titlePositionRef.current,
             reelTextStyle,
             reelFontFamily,
+            reelFontWeight,
+            reelTextAlign,
+            reelTextCase,
+            reelFontSize,
             reelTextAnimation,
             showStrongSceneWarning,
             logoScale,
             handleFontSize,
+            tagColor,
+            tagPositionY,
+            false,
           );
         }
         if ("requestVideoFrameCallback" in video) {
@@ -1219,40 +1728,324 @@ export default function SocialFeedCreator({ posts, onBack }: Props) {
               <label>🎬 Vídeo para o Reel</label>
               <input type="file" accept="video/*" onChange={onVideoChange} />
               <small>{videoFileName ? `${videoFileName}${videoReady ? " · pronto para prévia" : " · carregando"}` : "Escolha um vídeo de até 250 MB. O áudio original será mantido com sincronia perfeita."}</small>
-
-              <label style={{ marginTop: 12 }}>🔤 Fonte do título</label>
-              <div className="adminFeedActions" role="group" aria-label="Fonte do título do Reel">
-                <button type="button" className={reelFontFamily === "anton" ? "btn" : "btn secondary"} onClick={() => chooseReelFontFamily("anton")}>Anton (Viral)</button>
-                <button type="button" className={reelFontFamily === "bebas" ? "btn" : "btn secondary"} onClick={() => chooseReelFontFamily("bebas")}>Bebas Neue</button>
-                <button type="button" className={reelFontFamily === "montserrat" ? "btn" : "btn secondary"} onClick={() => chooseReelFontFamily("montserrat")}>Montserrat</button>
-                <button type="button" className={reelFontFamily === "poppins" ? "btn" : "btn secondary"} onClick={() => chooseReelFontFamily("poppins")}>Poppins</button>
-                <button type="button" className={reelFontFamily === "impact" ? "btn" : "btn secondary"} onClick={() => chooseReelFontFamily("impact")}>Impact</button>
-                <button type="button" className={reelFontFamily === "georgia" ? "btn" : "btn secondary"} onClick={() => chooseReelFontFamily("georgia")}>Georgia</button>
-              </div>
-
-              <label style={{ marginTop: 12 }}>✨ Estilo visual do título</label>
-              <div className="adminFeedActions" role="group" aria-label="Estilo do título do Reel">
-                <button type="button" className={reelTextStyle === "highlight" ? "btn" : "btn secondary"} aria-pressed={reelTextStyle === "highlight"} onClick={() => chooseReelTextStyle("highlight")}>Faixa branca</button>
-                <button type="button" className={reelTextStyle === "highlight-dark" ? "btn" : "btn secondary"} aria-pressed={reelTextStyle === "highlight-dark"} onClick={() => chooseReelTextStyle("highlight-dark")}>Faixa preta</button>
-                <button type="button" className={reelTextStyle === "highlight-yellow" ? "btn" : "btn secondary"} aria-pressed={reelTextStyle === "highlight-yellow"} onClick={() => chooseReelTextStyle("highlight-yellow")}>Faixa amarela</button>
-                <button type="button" className={reelTextStyle === "standard" ? "btn" : "btn secondary"} aria-pressed={reelTextStyle === "standard"} onClick={() => chooseReelTextStyle("standard")}>Texto c/ contorno</button>
-              </div>
-
-              <label style={{ marginTop: 12 }}>🎥 Animação do título</label>
-              <div className="adminFeedActions" role="group" aria-label="Animação do título do Reel">
-                <button type="button" className={reelTextAnimation === "typewriter" ? "btn" : "btn secondary"} onClick={() => chooseReelTextAnimation("typewriter")}>⌨️ Digitando</button>
-                <button type="button" className={reelTextAnimation === "pop" ? "btn" : "btn secondary"} onClick={() => chooseReelTextAnimation("pop")}>💥 Impacto (Pop)</button>
-                <button type="button" className={reelTextAnimation === "slide" ? "btn" : "btn secondary"} onClick={() => chooseReelTextAnimation("slide")}>⬆️ Deslizar</button>
-                <button type="button" className={reelTextAnimation === "fade" ? "btn" : "btn secondary"} onClick={() => chooseReelTextAnimation("fade")}>✨ Surgir (Fade)</button>
-                <button type="button" className={reelTextAnimation === "static" ? "btn" : "btn secondary"} onClick={() => chooseReelTextAnimation("static")}>📌 Fixo</button>
-              </div>
-
-              <label className="adminFeedWarningOption" style={{ marginTop: 10 }}>
-                <input type="checkbox" checked={showStrongSceneWarning} onChange={(event) => toggleStrongSceneWarning(event.target.checked)} />
-                Exibir aviso “Cenas fortes” no Reel
-              </label>
             </div>
           )}
+
+          <div className="captionStudioBox">
+            <div className="captionHeaderTitle">
+              <h3>🔤 Tipografia & Estilo da Legenda</h3>
+              <span>{format === "feed" ? "Feed 4:5" : "Reel 9:16"}</span>
+            </div>
+
+            <div className="captionStudioField">
+              <label>Fonte</label>
+              <select
+                className="captionStudioSelect"
+                value={reelFontFamily}
+                onChange={(e) => chooseReelFontFamily(e.target.value as ReelFontFamily)}
+              >
+                <option value="montserrat">Montserrat (Recomendado)</option>
+                <option value="anton">Anton (Viral / Impacto)</option>
+                <option value="bebas">Bebas Neue (Condensada)</option>
+                <option value="poppins">Poppins (Moderna)</option>
+                <option value="inter">Inter (Nítida)</option>
+                <option value="roboto">Roboto (Editorial)</option>
+                <option value="georgia">Georgia / Merriweather (Jornalística · Metrópoles)</option>
+                <option value="impact">Impact (Clássica)</option>
+              </select>
+            </div>
+
+            <div className="captionStudioField">
+              <label>Estilo da Fonte</label>
+              <select
+                className="captionStudioSelect"
+                value={reelFontWeight}
+                onChange={(e) => chooseReelFontWeight(e.target.value as ReelFontWeight)}
+              >
+                <option value="900">Black (Ultra Pesada)</option>
+                <option value="800">Extra Bold</option>
+                <option value="700">Bold (Negrito)</option>
+                <option value="600">Semi Bold</option>
+                <option value="400">Regular</option>
+                <option value="italic">Itálico (Inclinada)</option>
+              </select>
+            </div>
+
+            <div className="captionStudioField">
+              <label>Alinhamento</label>
+              <div className="captionSegmentGroup" role="group" aria-label="Alinhamento da Legenda">
+                <button
+                  type="button"
+                  className={`captionSegmentBtn ${reelTextAlign === "left" ? "active" : ""}`}
+                  onClick={() => chooseReelTextAlign("left")}
+                  title="Alinhar à Esquerda"
+                >
+                  ◀
+                </button>
+                <button
+                  type="button"
+                  className={`captionSegmentBtn ${reelTextAlign === "center" ? "active" : ""}`}
+                  onClick={() => chooseReelTextAlign("center")}
+                  title="Centralizado"
+                >
+                  <span className="captionDotIndicator" />
+                </button>
+                <button
+                  type="button"
+                  className={`captionSegmentBtn ${reelTextAlign === "right" ? "active" : ""}`}
+                  onClick={() => chooseReelTextAlign("right")}
+                  title="Alinhar à Direita"
+                >
+                  ▶
+                </button>
+              </div>
+            </div>
+
+            <div className="captionStudioField">
+              <label>Caixa de Texto</label>
+              <div className="captionSegmentGroup" role="group" aria-label="Caixa do texto">
+                <button
+                  type="button"
+                  className={`captionSegmentBtn ${reelTextCase === "lowercase" ? "active" : ""}`}
+                  onClick={() => chooseReelTextCase("lowercase")}
+                >
+                  minúsculas
+                </button>
+                <button
+                  type="button"
+                  className={`captionSegmentBtn ${reelTextCase === "uppercase" ? "active" : ""}`}
+                  onClick={() => chooseReelTextCase("uppercase")}
+                >
+                  MAIÚSCULAS
+                </button>
+                <button
+                  type="button"
+                  className={`captionSegmentBtn ${reelTextCase === "original" ? "active" : ""}`}
+                  onClick={() => chooseReelTextCase("original")}
+                >
+                  Original
+                </button>
+              </div>
+            </div>
+
+            <div className="captionStudioField">
+              <label>
+                <span>Tamanho da Fonte da Manchete</span>
+                <span className="captionSizeBadge">{reelFontSize}px</span>
+              </label>
+              <div className="captionSizeRow">
+                <input
+                  type="range"
+                  min="28"
+                  max="110"
+                  step="2"
+                  value={reelFontSize}
+                  onChange={(e) => {
+                    const val = Number(e.target.value);
+                    chooseReelFontSize(val);
+                    saveFeedTitleSize(val);
+                  }}
+                  style={{ flex: 1 }}
+                />
+                <button
+                  type="button"
+                  className="captionTagBadge"
+                  onClick={() => {
+                    chooseReelFontSize(72);
+                    saveFeedTitleSize(0);
+                  }}
+                  title="Restaurar tamanho padrão"
+                >
+                  Reset (72px)
+                </button>
+              </div>
+            </div>
+
+            <div className="captionStudioField">
+              <label>Estilo do Layout & Caixa da Legenda</label>
+              <div className="captionStyleGrid">
+                <button
+                  type="button"
+                  className={`captionStyleBtn ${reelTextStyle === "standard" ? "active" : ""}`}
+                  onClick={() => chooseReelTextStyle("standard")}
+                  title="Texto branco com sombra nítida sobre o vídeo/foto"
+                >
+                  ✨ Só a letra (Sem fundo)
+                </button>
+                <button
+                  type="button"
+                  className={`captionStyleBtn ${reelTextStyle === "box-banner" ? "active" : ""}`}
+                  onClick={() => chooseReelTextStyle("box-banner")}
+                  title="Caixa sólida retangular com cantos arredondados (Estilo O Grito)"
+                >
+                  ⬛ Caixa Noticiosa (O Grito)
+                </button>
+                <button
+                  type="button"
+                  className={`captionStyleBtn ${reelTextStyle === "category-badge" ? "active" : ""}`}
+                  onClick={() => chooseReelTextStyle("category-badge")}
+                  title="Tag vermelha de categoria no topo + manchete à esquerda (Estilo Jornal Opção)"
+                >
+                  🏷️ Selo de Categoria (Jornal Opção)
+                </button>
+                <button
+                  type="button"
+                  className={`captionStyleBtn ${reelTextStyle === "left-border" ? "active" : ""}`}
+                  onClick={() => chooseReelTextStyle("left-border")}
+                  title="Barra lateral vertical vermelha em destaque (Estilo Aspas / Destaque)"
+                >
+                  🟥 Barra Lateral Vermelha (Destaque)
+                </button>
+                <button
+                  type="button"
+                  className={`captionStyleBtn ${reelTextStyle === "editorial-serif" ? "active" : ""}`}
+                  onClick={() => chooseReelTextStyle("editorial-serif")}
+                  title="Tipografia serifada nobre com linha editorial (Estilo Metrópoles / Na Mira)"
+                >
+                  🏛️ Editorial Metrópoles
+                </button>
+                <button
+                  type="button"
+                  className={`captionStyleBtn ${reelTextStyle === "highlight" ? "active" : ""}`}
+                  onClick={() => chooseReelTextStyle("highlight")}
+                >
+                  ⬜ Faixa branca
+                </button>
+                <button
+                  type="button"
+                  className={`captionStyleBtn ${reelTextStyle === "highlight-dark" ? "active" : ""}`}
+                  onClick={() => chooseReelTextStyle("highlight-dark")}
+                >
+                  ⬛ Faixa preta
+                </button>
+                <button
+                  type="button"
+                  className={`captionStyleBtn ${reelTextStyle === "highlight-yellow" ? "active" : ""}`}
+                  onClick={() => chooseReelTextStyle("highlight-yellow")}
+                >
+                  🟨 Faixa amarela
+                </button>
+                <button
+                  type="button"
+                  className={`captionStyleBtn ${reelTextStyle === "highlight-red" ? "active" : ""}`}
+                  onClick={() => chooseReelTextStyle("highlight-red")}
+                >
+                  🟥 Faixa vermelha
+                </button>
+                <button
+                  type="button"
+                  className={`captionStyleBtn ${reelTextStyle === "stroke-strong" ? "active" : ""}`}
+                  onClick={() => chooseReelTextStyle("stroke-strong")}
+                >
+                  🔲 Contorno forte
+                </button>
+              </div>
+            </div>
+
+            {format === "reel" && (
+              <>
+                <div className="captionStudioField">
+                  <label>Animação</label>
+                  <div className="captionTagShortcuts">
+                    <button
+                      type="button"
+                      className={`captionColorPill ${reelTextAnimation === "typewriter" ? "active" : ""}`}
+                      onClick={() => chooseReelTextAnimation("typewriter")}
+                    >
+                      ⌨️ Digitando
+                    </button>
+                    <button
+                      type="button"
+                      className={`captionColorPill ${reelTextAnimation === "pop" ? "active" : ""}`}
+                      onClick={() => chooseReelTextAnimation("pop")}
+                    >
+                      💥 Impacto
+                    </button>
+                    <button
+                      type="button"
+                      className={`captionColorPill ${reelTextAnimation === "slide" ? "active" : ""}`}
+                      onClick={() => chooseReelTextAnimation("slide")}
+                    >
+                      ⬆️ Deslizar
+                    </button>
+                    <button
+                      type="button"
+                      className={`captionColorPill ${reelTextAnimation === "fade" ? "active" : ""}`}
+                      onClick={() => chooseReelTextAnimation("fade")}
+                    >
+                      ✨ Surgir
+                    </button>
+                    <button
+                      type="button"
+                      className={`captionColorPill ${reelTextAnimation === "static" ? "active" : ""}`}
+                      onClick={() => chooseReelTextAnimation("static")}
+                    >
+                      📌 Fixo
+                    </button>
+                  </div>
+                </div>
+
+                <label className="captionSafeZoneToggle">
+                  <span>📐 Mostrar Área Segura do Instagram (Safe Zone)</span>
+                  <input
+                    type="checkbox"
+                    checked={showSafeZone}
+                    onChange={(e) => toggleSafeZone(e.target.checked)}
+                  />
+                </label>
+
+                <label className="adminFeedWarningOption" style={{ marginTop: 4 }}>
+                  <input type="checkbox" checked={showStrongSceneWarning} onChange={(event) => toggleStrongSceneWarning(event.target.checked)} />
+                  Exibir aviso “Cenas fortes” no Reel
+                </label>
+              </>
+            )}
+
+            {format === "feed" && (
+              <>
+                <div className="captionStudioField">
+                  <label>
+                    <span>↕️ Posição vertical da legenda</span>
+                    <b style={{ color: "#c084fc" }}>{feedTitleOffsetY > 0 ? `+${feedTitleOffsetY}px` : `${feedTitleOffsetY}px`}</b>
+                  </label>
+                  <div style={{ display: "flex", gap: "8px", alignItems: "center" }}>
+                    <input
+                      type="range"
+                      min="-150"
+                      max="150"
+                      step="5"
+                      value={feedTitleOffsetY}
+                      onChange={(e) => saveFeedTitleOffsetY(Number(e.target.value))}
+                      style={{ flex: 1 }}
+                    />
+                    {feedTitleOffsetY !== 0 && (
+                      <button
+                        type="button"
+                        className="captionTagBadge"
+                        onClick={() => saveFeedTitleOffsetY(0)}
+                      >
+                        Reset
+                      </button>
+                    )}
+                  </div>
+                </div>
+
+                <div className="captionStudioField">
+                  <label>
+                    <span>↕️ Ajuste vertical da foto</span>
+                    <b style={{ color: "#c084fc" }}>{imagePosition}%</b>
+                  </label>
+                  <input
+                    type="range"
+                    min="-100"
+                    max="100"
+                    value={imagePosition}
+                    onChange={(e) => setImagePosition(Number(e.target.value))}
+                  />
+                </div>
+              </>
+            )}
+          </div>
 
           <div className="field">
             <label>📰 Título na arte</label>
@@ -1262,12 +2055,102 @@ export default function SocialFeedCreator({ posts, onBack }: Props) {
               onChange={(e) => setTitle(e.target.value)}
               placeholder="O título da notícia aparece automaticamente e você pode ajustar antes de baixar."
             />
-            {format === "reel" && <small>Arraste o título na prévia para escolher onde ele aparece.</small>}
+            <small>Arraste o título na prévia para escolher onde ele aparece{format === "feed" ? "; a posição é salva neste navegador." : "."}</small>
           </div>
 
           <div className="field">
-            <label>🏷️ Perfil / assinatura</label>
-            <input value={handle} onChange={(e) => saveHandle(e.target.value)} placeholder="@viralizougoiania" />
+            <label>🏷️ Tag / Assinatura do Conteúdo</label>
+            <input value={handle} onChange={(e) => saveHandle(e.target.value)} placeholder="@viralizougoiania, FUTEBOL, POLÍTICA, CELEBRIDADES..." />
+            <div className="captionTagShortcuts">
+              <span style={{ fontSize: 11, color: "#94a3b8", alignSelf: "center" }}>Tags rápidas:</span>
+              <button type="button" className="captionTagBadge" onClick={() => saveHandle("@viralizougoiania")}>@viralizougoiania</button>
+              <button type="button" className="captionTagBadge" onClick={() => saveHandle("FUTEBOL")}>⚽ FUTEBOL</button>
+              <button type="button" className="captionTagBadge" onClick={() => saveHandle("POLÍTICA")}>🏛️ POLÍTICA</button>
+              <button type="button" className="captionTagBadge" onClick={() => saveHandle("CELEBRIDADES")}>⭐ CELEBRIDADES</button>
+              <button type="button" className="captionTagBadge" onClick={() => saveHandle("GOIÁS")}>📍 GOIÁS</button>
+              <button type="button" className="captionTagBadge" onClick={() => saveHandle("URGENTE")}>🚨 URGENTE</button>
+            </div>
+
+            <div style={{ marginTop: 10, display: "flex", flexDirection: "column", gap: 10 }}>
+              <div>
+                <small style={{ display: "block", marginBottom: 6, fontWeight: 700 }}>Cor da Legenda / Tag:</small>
+                <div className="captionColorGroup">
+                  <button
+                    type="button"
+                    className={`captionColorPill ${tagColor === "red" ? "active" : ""}`}
+                    onClick={() => chooseTagColor("red")}
+                  >
+                    <span className="captionColorCircle" style={{ background: "#ff3b30" }} />
+                    🔴 Vermelho (Destaque)
+                  </button>
+                  <button
+                    type="button"
+                    className={`captionColorPill ${tagColor === "white" ? "active" : ""}`}
+                    onClick={() => chooseTagColor("white")}
+                  >
+                    <span className="captionColorCircle" style={{ background: "#ffffff" }} />
+                    ⚪ Branco
+                  </button>
+                  <button
+                    type="button"
+                    className={`captionColorPill ${tagColor === "yellow" ? "active" : ""}`}
+                    onClick={() => chooseTagColor("yellow")}
+                  >
+                    <span className="captionColorCircle" style={{ background: "#ffcc00" }} />
+                    🟡 Amarelo
+                  </button>
+                  <button
+                    type="button"
+                    className={`captionColorPill ${tagColor === "orange" ? "active" : ""}`}
+                    onClick={() => chooseTagColor("orange")}
+                  >
+                    <span className="captionColorCircle" style={{ background: "#ff5a1f" }} />
+                    🟠 Laranja
+                  </button>
+                </div>
+              </div>
+
+              <div>
+                <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+                  <small style={{ fontWeight: 700 }}>Tamanho da fonte do @ / Tag: <b>{handleFontSize}px</b></small>
+                </div>
+                <input
+                  type="range"
+                  min="18"
+                  max="72"
+                  value={handleFontSize}
+                  onChange={(e) => saveReelHandleSize(Number(e.target.value))}
+                />
+              </div>
+
+              {format === "reel" && (
+                <div>
+                  <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+                    <small style={{ fontWeight: 700 }}>↕️ Altura da Tag: <b>{tagPositionY}px</b> {tagPositionY === 1670 ? "(Posição Segura Instagram)" : ""}</small>
+                    {tagPositionY !== 1670 && (
+                      <button
+                        type="button"
+                        className="captionTagBadge"
+                        onClick={() => chooseTagPositionY(1670)}
+                      >
+                        Reset Segura (1670px)
+                      </button>
+                    )}
+                  </div>
+                  <input
+                    type="range"
+                    min="1400"
+                    max="1850"
+                    step="10"
+                    value={tagPositionY}
+                    onChange={(e) => chooseTagPositionY(Number(e.target.value))}
+                  />
+                  <small style={{ color: "#64748b" }}>
+                    Posição 1670px evita sobreposição com o botão Seguir e o nome do perfil do Instagram.
+                  </small>
+                </div>
+              )}
+            </div>
           </div>
 
           <div className="field">
@@ -1284,112 +2167,14 @@ export default function SocialFeedCreator({ posts, onBack }: Props) {
                   <button type="button" className="btn secondary" onClick={centerLogo}>🎯 Centralizar logo</button>
                   <small>Arraste a logo na prévia. A posição fica salva no painel.</small>
                 </div>
+                <div style={{ marginTop: 8 }}>
+                  <label style={{ fontSize: 11, fontWeight: 700 }}>🔎 Tamanho da logo · {logoScale}%</label>
+                  <input type="range" min="50" max="150" step="5" value={logoScale} onChange={(e) => saveReelLogoScale(Number(e.target.value))} />
+                </div>
               </>
             )}
           </div>
 
-          {format === "feed" ? (
-            <>
-              <div className="field">
-                <label>↕️ Ajuste vertical da foto</label>
-                <input
-                  type="range"
-                  min="-100"
-                  max="100"
-                  value={imagePosition}
-                  onChange={(e) => setImagePosition(Number(e.target.value))}
-                />
-              </div>
-
-              <div className="field">
-                <label style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-                  <span>🔤 Tamanho da legenda / título</span>
-                  <b>{feedTitleFontSize === 0 ? "Automático" : `${feedTitleFontSize}px`}</b>
-                </label>
-                <div style={{ display: "flex", gap: "8px", alignItems: "center" }}>
-                  <input
-                    type="range"
-                    min="0"
-                    max="68"
-                    step="2"
-                    value={feedTitleFontSize}
-                    onChange={(e) => saveFeedTitleSize(Number(e.target.value))}
-                    style={{ flex: 1 }}
-                  />
-                  {feedTitleFontSize !== 0 && (
-                    <button
-                      type="button"
-                      className="btn secondary"
-                      style={{ padding: "4px 8px", fontSize: "11px", whiteSpace: "nowrap" }}
-                      onClick={() => saveFeedTitleSize(0)}
-                    >
-                      Resetar Auto
-                    </button>
-                  )}
-                </div>
-                <small>Evita cortar o texto da manchete no rodapé. Em automático, o tamanho se ajusta sozinho.</small>
-              </div>
-
-              <div className="field">
-                <label>🔠 Fonte da manchete</label>
-                <select
-                  value={feedFontFamily}
-                  onChange={(event) => {
-                    const next = event.target.value as ReelFontFamily;
-                    setFeedFontFamily(next);
-                    try { localStorage.setItem("viralizou_feed_font_family", next); } catch {}
-                  }}
-                >
-                  <option value="georgia">Georgia · Editorial</option>
-                  <option value="anton">Anton · Viral</option>
-                  <option value="bebas">Bebas Neue</option>
-                  <option value="montserrat">Montserrat</option>
-                  <option value="poppins">Poppins</option>
-                  <option value="impact">Impact</option>
-                </select>
-              </div>
-
-              <div className="field">
-                <label style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-                  <span>↕️ Posição vertical da legenda</span>
-                  <b>{feedTitleOffsetY > 0 ? `+${feedTitleOffsetY}px` : `${feedTitleOffsetY}px`}</b>
-                </label>
-                <div style={{ display: "flex", gap: "8px", alignItems: "center" }}>
-                  <input
-                    type="range"
-                    min="-150"
-                    max="150"
-                    step="5"
-                    value={feedTitleOffsetY}
-                    onChange={(e) => saveFeedTitleOffsetY(Number(e.target.value))}
-                    style={{ flex: 1 }}
-                  />
-                  {feedTitleOffsetY !== 0 && (
-                    <button
-                      type="button"
-                      className="btn secondary"
-                      style={{ padding: "4px 8px", fontSize: "11px", whiteSpace: "nowrap" }}
-                      onClick={() => saveFeedTitleOffsetY(0)}
-                    >
-                      Resetar
-                    </button>
-                  )}
-                </div>
-                <small>Ajusta a altura da legenda para cima ou para baixo.</small>
-              </div>
-            </>
-          ) : (
-            <>
-              <div className="field">
-                <label>🔎 Tamanho da logo · {logoScale}%</label>
-                <input type="range" min="50" max="150" step="5" value={logoScale} disabled={!logoData} onChange={(e) => saveReelLogoScale(Number(e.target.value))} />
-              </div>
-              <div className="field">
-                <label>🔠 Tamanho do texto do @ · {handleFontSize}px</label>
-                <input type="range" min="18" max="72" value={handleFontSize} onChange={(e) => saveReelHandleSize(Number(e.target.value))} />
-              </div>
-            </>
-          )}
 
           {selectedPost && (
             <div className="adminFeedSelected">
@@ -1425,7 +2210,7 @@ export default function SocialFeedCreator({ posts, onBack }: Props) {
               onPointerMove={onPreviewPointerMove}
               onPointerUp={onPreviewPointerUp}
               onPointerCancel={onPreviewPointerUp}
-              style={{ cursor: logoData || format === "reel" ? (draggingLogo ? "grabbing" : "grab") : "default", touchAction: "none" }}
+              style={{ cursor: logoData || format === "reel" || Boolean(title || selectedPost) ? (draggingLogo ? "grabbing" : "grab") : "default", touchAction: "none" }}
             />
           </div>
           <small>{format === "feed" ? "Formato 4:5 · 1080×1350" : "Formato vertical 9:16 · 1080×1920"}</small>

@@ -1,4 +1,4 @@
-@import url('https://fonts.googleapis.com/css2?family=Anton&family=Bebas+Neue&family=Inter:wght@700;800;900&family=Montserrat:wght@700;800;900&family=Poppins:wght@700;800;900&display=swap');
+@import url('https://fonts.googleapis.com/css2?family=Anton&family=Bebas+Neue&family=Inter:ital,wght@0,400;0,600;0,700;0,800;0,900;1,700;1,900&family=Merriweather:ital,wght@0,400;0,700;0,900;1,400;1,700;1,900&family=Montserrat:ital,wght@0,400;0,600;0,700;0,800;0,900;1,700;1,900&family=Poppins:ital,wght@0,400;0,600;0,700;0,800;0,900;1,700;1,900&family=Roboto:ital,wght@0,400;0,500;0,700;0,900;1,700;1,900&display=swap');
 
 :root{
   --ink:#111827;--ink2:#243042;--muted:#667085;--line:#e7e9ee;--paper:#fff;--soft:#f6f7f9;
@@ -419,6 +419,39 @@ main{min-height:65vh}.heroSection{padding:30px 0 25px}.cityEyebrow{font-size:12p
 .adminFeedWarningOption{display:flex;align-items:center;gap:8px;cursor:pointer}
 .adminFeedWarningOption input{width:auto;margin:0}
 .adminFeedCreator input[type="range"]{width:100%}
+
+/* Painel Dark de Customização de Legenda (Estilo Foto 1) */
+.captionStudioBox{background:#0e1017;border:1px solid #1e2230;border-radius:14px;padding:16px;display:flex;flex-direction:column;gap:13px;color:#f1f5f9;box-shadow:0 10px 25px rgba(0,0,0,.35)}
+.captionStudioBox .captionHeaderTitle{display:flex;align-items:center;justify-content:space-between;padding-bottom:10px;border-bottom:1px solid #1f2438}
+.captionStudioBox .captionHeaderTitle h3{margin:0;font-size:14px;font-weight:800;color:#fff;display:flex;align-items:center;gap:8px}
+.captionStudioBox .captionHeaderTitle span{font-size:10px;text-transform:uppercase;letter-spacing:.08em;font-weight:800;color:#c084fc;background:rgba(192,132,252,.12);padding:3px 8px;border-radius:6px;border:1px solid rgba(192,132,252,.25)}
+.captionStudioField{display:flex;flex-direction:column;gap:6px}
+.captionStudioField label{font-size:12px;font-weight:750;letter-spacing:.02em;color:#e2e8f0;display:flex;justify-content:space-between;align-items:center}
+.captionStudioSelect{width:100%;background:#161922;color:#fff;border:1px solid #2a3044;border-radius:9px;padding:10px 12px;font-size:13px;font-weight:600;outline:none;cursor:pointer;transition:border-color .15s}
+.captionStudioSelect:focus{border-color:#a855f7;box-shadow:0 0 0 3px rgba(168,85,247,.22)}
+.captionStudioSelect option{background:#161922;color:#fff}
+.captionSegmentGroup{display:grid;grid-template-columns:repeat(3,1fr);gap:8px}
+.captionSegmentBtn{background:#161922;border:1px solid #2a3044;border-radius:9px;color:#94a3b8;padding:10px 12px;font-size:13px;font-weight:700;cursor:pointer;display:flex;align-items:center;justify-content:center;gap:6px;transition:all .15s}
+.captionSegmentBtn:hover{background:#1d2230;color:#fff}
+.captionSegmentBtn.active{background:#221338;border-color:#a855f7;color:#d8b4fe;box-shadow:0 0 12px rgba(168,85,247,.28)}
+.captionDotIndicator{width:7px;height:7px;border-radius:50%;background:#a855f7;box-shadow:0 0 6px #c084fc}
+.captionSizeRow{display:flex;align-items:center;gap:12px}
+.captionSizeBadge{font-size:13px;font-weight:900;color:#c084fc;font-family:monospace}
+.captionStyleGrid{display:grid;grid-template-columns:repeat(2,1fr);gap:7px}
+.captionStyleBtn{background:#161922;border:1px solid #2a3044;border-radius:8px;color:#94a3b8;padding:8px 10px;font-size:11px;font-weight:750;cursor:pointer;text-align:center;transition:all .15s}
+.captionStyleBtn:hover{background:#1d2230;color:#fff}
+.captionStyleBtn.active{background:#221338;border-color:#a855f7;color:#d8b4fe}
+.captionTagShortcuts{display:flex;gap:6px;flex-wrap:wrap;margin-top:6px}
+.captionTagBadge{background:#161922;border:1px solid #2a3044;border-radius:6px;color:#cbd5e1;padding:4px 8px;font-size:10px;font-weight:750;cursor:pointer;transition:background .15s}
+.captionTagBadge:hover{background:#222838;color:#fff;border-color:#a855f7}
+.captionColorGroup{display:flex;gap:7px;flex-wrap:wrap}
+.captionColorPill{background:#161922;border:1px solid #2a3044;border-radius:8px;color:#94a3b8;padding:6px 10px;font-size:11px;font-weight:700;cursor:pointer;display:inline-flex;align-items:center;gap:6px;transition:all .15s}
+.captionColorPill:hover{background:#1d2230;color:#fff}
+.captionColorPill.active{background:#221338;border-color:#a855f7;color:#fff}
+.captionColorCircle{width:10px;height:10px;border-radius:50%;display:inline-block}
+.captionSafeZoneToggle{display:flex;align-items:center;justify-content:space-between;background:#151824;border:1px solid #262c3e;border-radius:10px;padding:10px 12px;cursor:pointer;user-select:none}
+.captionSafeZoneToggle input{width:auto;margin:0;cursor:pointer}
+.captionSafeZoneToggle span{font-size:11px;font-weight:750;color:#e2e8f0;display:flex;align-items:center;gap:6px}
 
 .adminIgForm{margin-top:10px}
 .adminIgHelp{margin-top:14px;padding:12px 14px;border:1px solid #e2e8f0;border-radius:10px;background:#f8fafc;color:#64748b;font-size:12px;line-height:1.5}

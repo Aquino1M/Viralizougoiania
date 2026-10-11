@@ -92,6 +92,12 @@ export default function InstagramVideoDownloader({ onBack }: Props) {
       return;
     }
 
+    const platformForUrl = detectPlatform(targetUrl);
+    if (selectedPlatform !== "auto" && platformForUrl !== selectedPlatform) {
+      setMessage("O link não corresponde à plataforma selecionada. Troque para Auto-detectar ou cole um link da rede escolhida.");
+      return;
+    }
+
     setLoading(true);
     try {
       // 1. Tenta o motor universal de alta velocidade (TikTok sem marca, Twitter/X, Instagram)
