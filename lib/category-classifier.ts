@@ -112,9 +112,6 @@ export function isGoiasOrigin(input: CategoryInput): boolean {
   const sourceName = input.source_name || "";
   const sourceUrl = input.source_url || "";
   if (GOIAS_SOURCES_REGEX.test(sourceName) || GOIAS_SOURCES_REGEX.test(sourceUrl)) {
-    if (category === "fofocas" || category === "futebol") {
-      return false;
-    }
     return true;
   }
 

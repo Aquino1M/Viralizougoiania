@@ -237,7 +237,7 @@ export async function runServerRadarAutomation(options:{force?:boolean}={}):Prom
   await saveAutomationState({running_until:new Date(Date.now()+8*60000).toISOString(),last_run_at:startedAt,last_error:""});
   const errors:string[]=[];let found=0,newItems=0,added=0,published=0,resetPublished=0,reclassified=0;const sourceCounts:Record<string,number>={goias:0,brasil:0,futebol:0,fofocas:0};let football=emptyFootball;let audience:null|{updatedAt:string;pageviewsToday:number;articleViewsToday:number}=null;
   try{
-    const recat=await reclassifyExternalPosts();reclassified=recat.changed; try{ await archiveOldExternalPosts(7); }catch{}
+    const recat=await reclassifyExternalPosts();reclassified=recat.changed; try{ await archiveOldExternalPosts(7, { allOlderThanDays: true }); }catch{}
 
     // Publica toda a fila antiga uma única vez para começar do zero.
     if(Number(state.queue_reset_version||0)<1){
@@ -263,17 +263,26 @@ export async function runServerRadarAutomation(options:{force?:boolean}={}):Prom
     }catch(e){
       errors.push("Audiência: "+(e instanceof Error?e.message:"falha ao atualizar"));
     }
+
+    const activeSources = SOURCES.filter((src) => {
+      if (state.scope_mode === "goias_priority") {
+        // Modo Foco Goiânia & Goiás: todas de Goiás + Futebol + Fofocas + Política
+        return src.group === "goias" || src.group === "futebol" || src.group === "fofocas" || src.name === "G1 Política";
+      }
+      return true; // Modo Geral: todas as fontes de Goiás e do Brasil
+    });
+
     const [posts,postIdentityIndex,categories,sourceResults,footballResult]=await Promise.all([
       getPosts({includeDrafts:true}),
       getPostIdentityIndex(),
       getCategories({includeInactive:false}),
-      Promise.allSettled(SOURCES.map(fetchSource)),
+      Promise.allSettled(activeSources.map(fetchSource)),
       syncBrasileiraoData().then(data=>({ok:true as const,data})).catch(error=>({ok:false as const,error}))
     ]);
     const all:ImportedNews[]=[];
     const radarSnapshotItems:RadarSnapshotItem[]=[];
     sourceResults.forEach((result,index)=>{
-      const src=SOURCES[index];
+      const src=activeSources[index];
       if(result.status==="fulfilled"){
         all.push(...result.value);
         sourceCounts[src.group]=(sourceCounts[src.group]||0)+result.value.length;

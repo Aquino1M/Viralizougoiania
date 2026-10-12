@@ -767,7 +767,10 @@ export async function reclassifyExternalPosts(): Promise<{ checked: number; chan
   return { checked: rawPosts.length, changed: changes.length, byCategory };
 }
 
-export async function archiveOldExternalPosts(days = 7): Promise<{
+export async function archiveOldExternalPosts(
+  days = 7,
+  options: { nonGoiasOnly?: boolean; allOlderThanDays?: boolean } = {}
+): Promise<{
   checked: number;
   archived: number;
   totalArchived?: number;
@@ -782,40 +785,34 @@ export async function archiveOldExternalPosts(days = 7): Promise<{
     try {
       const pageSize = 1000;
       const idsToArchive: string[] = [];
+      const isCleanNonGoias = days <= 0 || options.nonGoiasOnly;
 
       for (let offset = 0; offset < 50000; offset += pageSize) {
-        const rows = await sb(
-          `posts?select=id,title,excerpt,city,category,published_at,created_at&status=eq.published&published_at=lt.${encodeURIComponent(
-            cutoffIso
-          )}&order=published_at.asc&limit=${pageSize}&offset=${offset}`
-        );
+        let query = `posts?select=id,title,excerpt,city,category,published_at,created_at&status=eq.published&order=published_at.asc.nullsfirst,created_at.asc&limit=${pageSize}&offset=${offset}`;
+        if (!isCleanNonGoias) {
+          query = `posts?select=id,title,excerpt,city,category,published_at,created_at&status=eq.published&or=(published_at.lt.${encodeURIComponent(cutoffIso)},and(published_at.is.null,created_at.lt.${encodeURIComponent(cutoffIso)}))&order=published_at.asc&limit=${pageSize}&offset=${offset}`;
+        }
 
+        const rows = await sb(query);
         if (!Array.isArray(rows) || rows.length === 0) break;
         checkedCount += rows.length;
 
         for (const post of rows as Post[]) {
-          if (!isGoiasOrigin(post)) {
+          if (isCleanNonGoias) {
+            if (!isGoiasOrigin(post)) {
+              idsToArchive.push(post.id);
+            }
+          } else if (options.allOlderThanDays) {
             idsToArchive.push(post.id);
+          } else {
+            if (!isGoiasOrigin(post)) {
+              idsToArchive.push(post.id);
+            }
           }
         }
 
         if (rows.length < pageSize) break;
       }
-
-      try {
-        const nullPubRows = await sb(
-          `posts?select=id,title,excerpt,city,category,published_at,created_at&status=eq.published&published_at=is.null&created_at=lt.${encodeURIComponent(
-            cutoffIso
-          )}&limit=1000`
-        );
-        if (Array.isArray(nullPubRows)) {
-          for (const post of nullPubRows as Post[]) {
-            if (!isGoiasOrigin(post) && !idsToArchive.includes(post.id)) {
-              idsToArchive.push(post.id);
-            }
-          }
-        }
-      } catch {}
 
       const updatedAt = new Date().toISOString();
       for (let i = 0; i < idsToArchive.length; i += 75) {

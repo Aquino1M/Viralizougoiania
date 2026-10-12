@@ -33,20 +33,25 @@ export async function POST(req: Request) {
 
   try {
     let days = 7;
+    let nonGoiasOnly = false;
+    let allOlderThanDays = true;
     try {
       const body = await req.json();
-      if (typeof body?.days === "number" && body.days > 0) {
-        days = body.days;
-      }
+      if (typeof body?.days === "number") days = body.days;
+      if (typeof body?.nonGoiasOnly === "boolean") nonGoiasOnly = body.nonGoiasOnly;
+      if (typeof body?.allOlderThanDays === "boolean") allOlderThanDays = body.allOlderThanDays;
     } catch {}
 
-    const result = await archiveOldExternalPosts(days);
+    const result = await archiveOldExternalPosts(days, { nonGoiasOnly, allOlderThanDays });
     const stats = await getPostStats();
+    const msg = nonGoiasOnly
+      ? `${result.archived} matérias fora de Goiás foram arquivadas no Supabase.`
+      : `${result.archived} matérias com mais de ${days} dias foram arquivadas no Supabase.`;
     return NextResponse.json({
       ok: true,
       result,
       stats,
-      message: `${result.archived} matérias fora de Goiás com mais de ${days} dias foram arquivadas no Supabase.`,
+      message: msg,
     });
   } catch (error: any) {
     return NextResponse.json(

@@ -12,16 +12,17 @@ export const revalidate = 60;
 
 const getHomePosts = unstable_cache(
   async (): Promise<Post[]> => {
-    const posts = await getPosts({ limit: 80, summaryOnly: true });
-    const cutoff = Date.now() - 60 * 24 * 60 * 60 * 1000;
-    const recent = posts.filter((post: Post) => {
-      const t = new Date(post.published_at || post.created_at).getTime();
-      return !Number.isNaN(t) && t >= cutoff;
-    });
-    return (recent.length > 0 ? recent : posts) as Post[];
+    const [goiasList, recentList] = await Promise.all([
+      getPosts({ category: "Goiânia", limit: 60, summaryOnly: true }),
+      getPosts({ limit: 120, summaryOnly: true }),
+    ]);
+    const map = new Map<string, Post>();
+    for (const p of goiasList) map.set(p.id, p);
+    for (const p of recentList) if (!map.has(p.id)) map.set(p.id, p);
+    return Array.from(map.values());
   },
-  ["public-home-posts-v7"],
-  { revalidate: 60, tags: ["public-home-posts", "public-home-posts-v7"] }
+  ["public-home-posts-v8"],
+  { revalidate: 60, tags: ["public-home-posts", "public-home-posts-v8"] }
 );
 
 const getHomeCategories = unstable_cache(
@@ -45,39 +46,46 @@ export default async function Home() {
   const goiasPosts = posts.filter((p) => isGoiasOrigin(p));
   const otherPosts = posts.filter((p) => !goiasPosts.some((gp) => gp.id === p.id));
 
-  // Pipeline inteligente: prioriza pautas locais; se a lista for curta ou vazia, complementa com as demais publicadas
-  // Isso garante que o portal NUNCA fique em branco ou com seções vazias.
-  const displayPosts = goiasPosts.length >= 6 ? goiasPosts : [...goiasPosts, ...otherPosts];
+  // A lista mestra SEMPRE inclui as de Goiás na frente e NUNCA descarta as outras!
+  // Preenche a página inteira com todas as notícias disponíveis para NUNCA ficar vazia.
+  const displayPosts = [...goiasPosts, ...otherPosts];
 
-  // Destaque principal do Hero: prioriza o destaque marcado ou primeira matéria disponível
+  // Destaque principal do Hero: prioriza o destaque marcado ou matéria de Goiás
   const featured =
     goiasPosts.find((p) => p.featured) ||
     displayPosts.find((p) => p.featured) ||
     goiasPosts[0] ||
     displayPosts[0];
 
-  // Secundárias do Hero
+  // Secundárias do Hero: 2 matérias
   const secondary = displayPosts.filter((p) => p.id !== featured?.id).slice(0, 2);
   const heroIds = new Set([featured?.id, ...secondary.map((s) => s.id)].filter(Boolean));
 
-  // Goiânia Agora: pautas dinâmicas
+  // Goiânia Agora: 4 matérias dinâmicas (prioriza Goiás, preenche com as demais)
   const agoraCandidates = goiasPosts.filter((p) => !heroIds.has(p.id));
-  const agora = (agoraCandidates.length > 0 ? agoraCandidates : displayPosts.filter((p) => !heroIds.has(p.id))).slice(0, 4);
-
-  // Últimas notícias: matérias recentes da capital e do estado
-  const latestCandidates = displayPosts.filter((p) => !heroIds.has(p.id));
-  const latest = (latestCandidates.length > 0 ? latestCandidates : displayPosts).slice(0, 7);
-  const trending = displayPosts.slice(0, 6);
+  const agora = (
+    agoraCandidates.length >= 4
+      ? agoraCandidates
+      : [...agoraCandidates, ...otherPosts.filter((p) => !heroIds.has(p.id))]
+  ).slice(0, 4);
 
   // Cidade em pauta: O assunto que movimenta Goiânia (política local, segurança, bairros)
   const cityCandidates = displayPosts.filter(
-    (p) => !heroIds.has(p.id) && ["Goiânia", "Política", "Segurança", "Bairros"].includes(p.category)
+    (p) => !heroIds.has(p.id) && (isGoiasOrigin(p) || ["Goiânia", "Política", "Segurança", "Bairros"].includes(p.category))
   );
   const cityPosts = (
     cityCandidates.length >= 3
       ? cityCandidates
       : displayPosts.filter((p) => !heroIds.has(p.id))
   ).slice(0, 3);
+
+  // Últimas notícias: 7 matérias
+  const usedForTop = new Set([...heroIds, ...agora.map((a) => a.id), ...cityPosts.map((c) => c.id)]);
+  const latestCandidates = displayPosts.filter((p) => !usedForTop.has(p.id));
+  const latest = (latestCandidates.length >= 7 ? latestCandidates : displayPosts.filter((p) => !heroIds.has(p.id))).slice(0, 7);
+
+  // Mais lidas: 6 matérias
+  const trending = displayPosts.slice(0, 6);
 
   return (
     <>

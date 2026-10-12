@@ -213,6 +213,8 @@ export default function AdminApp() {
   const [automationConfigured, setAutomationConfigured] = useState<boolean>(false);
   const [automationLastRun, setAutomationLastRun] = useState<string>("");
   const [deduplicatingQueue, setDeduplicatingQueue] = useState<boolean>(false);
+  const [autoPilotScope, setAutoPilotScope] = useState<"goias_priority" | "all_news">("goias_priority");
+  const [postSortOrder, setPostSortOrder] = useState<"asc" | "desc">("asc");
 
   useEffect(() => {
     if (typeof window !== "undefined") {
@@ -353,23 +355,29 @@ export default function AdminApp() {
     setLoading(false);
   }
 
-  async function triggerArchiveOldPosts() {
-    if (!confirm("Deseja arquivar agora todas as matérias com mais de 7 dias que não sejam de Goiânia ou do Estado de Goiás?\n\nElas sairão da página inicial e do portal para deixar o site ultrarrápido, e continuarão acessíveis quando alguém pesquisar na aba de busca.")) {
-      return;
-    }
+  async function triggerArchiveOldPosts(options: { days?: number; nonGoiasOnly?: boolean; allOlderThanDays?: boolean } = {}) {
+    const isNonGoias = Boolean(options.nonGoiasOnly);
+    const confirmMsg = isNonGoias
+      ? "Deseja arquivar agora todas as matérias que NÃO são de Goiânia ou Goiás?\n\nElas sairão do portal para deixar o site 100% focado no estado de Goiás, e continuarão acessíveis na busca."
+      : "Deseja arquivar agora todas as matérias com mais de 7 dias?\n\nElas sairão da página inicial para deixar o portal leve e rápido.";
+    if (!confirm(confirmMsg)) return;
     setArchiving(true);
     setMessage("");
     try {
       const res = await fetch("/api/admin/archive-posts", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ days: 7 }),
+        body: JSON.stringify({
+          days: options.days ?? (isNonGoias ? 0 : 7),
+          nonGoiasOnly: isNonGoias,
+          allOlderThanDays: options.allOlderThanDays ?? !isNonGoias,
+        }),
       });
       const data = await res.json();
       if (!res.ok) {
         setMessage(`Erro ao arquivar: ${data.error || "Falha na comunicação."}`);
       } else {
-        setMessage(`📦 Sucesso! ${data.result?.archived || 0} matérias fora de Goiás foram arquivadas. O site agora está muito mais leve e rápido!`);
+        setMessage(`📦 Sucesso! ${data.result?.archived || 0} matérias arquivadas. O site agora está muito mais leve e rápido!`);
         if (data.stats) setPostStats(data.stats);
         await load();
       }
@@ -378,6 +386,10 @@ export default function AdminApp() {
     } finally {
       setArchiving(false);
     }
+
+
+
+
   }
 
   useEffect(() => {
@@ -426,8 +438,15 @@ export default function AdminApp() {
   }, [archiveLoopActive]);
 
   const filtered = useMemo(
-    () => posts.filter((p) => (statusFilter === "all" ? true : p.status === statusFilter)).filter((p) => (p.title + p.category + p.city).toLowerCase().includes(search.toLowerCase())),
-    [posts, search, statusFilter],
+    () => {
+      const list = posts.filter((p) => (statusFilter === "all" ? true : p.status === statusFilter)).filter((p) => (p.title + p.category + p.city).toLowerCase().includes(search.toLowerCase()));
+      return list.sort((a, b) => {
+        const timeA = new Date(a.published_at || a.created_at || 0).getTime();
+        const timeB = new Date(b.published_at || b.created_at || 0).getTime();
+        return postSortOrder === "asc" ? timeA - timeB : timeB - timeA;
+      });
+    },
+    [posts, search, statusFilter, postSortOrder],
   );
 
   const orderedCategories = useMemo(
@@ -829,6 +848,7 @@ export default function AdminApp() {
       const state = data.state || {};
       setAutomationConfigured(Boolean(data.configured));
       setAutoPilot(Boolean(state.enabled));
+      if (state.scope_mode) setAutoPilotScope(state.scope_mode);
       const serverMode = state.queue_mode as QueueScheduleMode | undefined;
       if (serverMode && ["1_per_10m","2_per_10m","3_per_10m","50_per_10m","50_per_1m","300_per_10m","1_per_category","3_per_category"].includes(serverMode)) {
         const normalizedMode = serverMode === "50_per_10m" || serverMode === "50_per_1m" ? "300_per_10m" : serverMode;
@@ -902,7 +922,76 @@ export default function AdminApp() {
     }
   }
 
+  async function setAutoPilotWithScope(scope: "goias_priority" | "all_news", enabled = true) {
+    try {
+      const res = await fetch("/api/automation/status", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ enabled, scope_mode: scope, interval_minutes: 10 }),
+      });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) throw new Error(data.error || "Não foi possível alterar o Piloto.");
+      setAutoPilot(Boolean(data.state?.enabled));
+      setAutoPilotScope(data.state?.scope_mode || scope);
+      setAutoPilotCountdown(600);
+      setImportMessage(
+        enabled
+          ? (scope === "goias_priority"
+            ? "🟢 Piloto Automático ATIVO: Foco Goiânia & Goiás (+ Futebol, Fofocas & Política). Varrendo a cada 10 minutos."
+            : "🌐 Piloto Automático ATIVO: Geral Completo (Goiás + Brasil + Futebol + Fofocas + Política). Varrendo a cada 10 minutos.")
+          : "⏸️ Piloto Automático pausado no servidor."
+      );
+      if (enabled) await runAutoPilotCycle();
+    } catch (err: any) {
+      setImportMessage("Erro ao alterar Piloto 24/7: " + err.message);
+    }
+  }
+
+  async function toggleArchivePost(p: Post, nextStatus: "published" | "archived") {
+    try {
+      const res = await fetch(`/api/posts/${p.id}`, {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ status: nextStatus }),
+      });
+      if (!res.ok) throw new Error("Falha ao atualizar status");
+      setMessage(nextStatus === "archived" ? `📦 Matéria "${p.title.slice(0, 35)}..." arquivada!` : `🟢 Matéria "${p.title.slice(0, 35)}..." publicada!`);
+      await load();
+    } catch (e: any) {
+      setMessage(`Erro ao atualizar matéria: ${e.message}`);
+    }
+  }
+
   async function toggleAutoPilot() {
+    await setAutoPilotWithScope(autoPilotScope, !autoPilot);
+  }
+
+  async function _dupSetAutoPilotWithScope(enabled: boolean, scope: "goias_priority" | "all_news" = "goias_priority") {
+    try {
+      const res = await fetch("/api/automation/status", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ enabled, interval_minutes: 10, scope_mode: scope }),
+      });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) throw new Error(data.error || "Não foi possível alterar o Piloto.");
+      setAutoPilot(Boolean(data.state?.enabled));
+      if (data.state?.scope_mode) {
+        setAutoPilotScope(data.state.scope_mode);
+      } else {
+        setAutoPilotScope(scope);
+      }
+      setAutoPilotCountdown(600);
+      setImportMessage(enabled
+        ? `🟢 Piloto Automático 24/7 ligado (${scope === "goias_priority" ? "Foco Goiânia & Goiás + Futebol, Fofocas e Política" : "Geral: Goiás + Nacional + Futebol, Fofocas e Política"}). Próximo ciclo em 10 min.`
+        : "⏸️ Piloto Automático 24/7 pausado no servidor.");
+      if (enabled) await runAutoPilotCycle();
+    } catch (err: any) {
+      setImportMessage("Erro ao alterar Piloto 24/7: " + err.message);
+    }
+  }
+
+  async function oldToggleAutoPilot() {
     try {
       const nextEnabled = !autoPilot;
       const res = await fetch("/api/automation/status", {
@@ -1770,12 +1859,51 @@ export default function AdminApp() {
                   </div>
                   <button className="btn" onClick={create}>+ Nova notícia</button>
                 </div>
-                <input
+                <div style={{ display: "flex", gap: 10, alignItems: "center", marginBottom: 14, flexWrap: "wrap" }}>
+                  <input
                   placeholder="Buscar por título, editoria ou região..."
                   value={search}
                   onChange={(e) => setSearch(e.target.value)}
-                  style={{ width: "100%", padding: 11, border: "1px solid #d9e0de", borderRadius: 9, marginBottom: 14 }}
+                  style={{ flex: "1 1 300px", padding: 11, border: "1px solid #d9e0de", borderRadius: 9 }}
                 />
+                <div style={{ display: "flex", gap: 6, alignItems: "center" }}>
+                  <span style={{ fontSize: 12, color: "#64748b", fontWeight: 700 }}>Ordem:</span>
+                  <button
+                    type="button"
+                    onClick={() => setPostSortOrder("asc")}
+                    style={{
+                      padding: "8px 12px",
+                      fontSize: 12,
+                      fontWeight: 700,
+                      background: postSortOrder === "asc" ? "#0f172a" : "#f1f5f9",
+                      color: postSortOrder === "asc" ? "#fff" : "#475569",
+                      border: "none",
+                      borderRadius: 8,
+                      cursor: "pointer",
+                    }}
+                    title="Matérias mais velhas no topo para inspecionar e arquivar"
+                  >
+                    ⬆️ Mais velhas no topo
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setPostSortOrder("desc")}
+                    style={{
+                      padding: "8px 12px",
+                      fontSize: 12,
+                      fontWeight: 700,
+                      background: postSortOrder === "desc" ? "#0f172a" : "#f1f5f9",
+                      color: postSortOrder === "desc" ? "#fff" : "#475569",
+                      border: "none",
+                      borderRadius: 8,
+                      cursor: "pointer",
+                    }}
+                    title="Matérias mais recentes no topo"
+                  >
+                    ⬇️ Mais recentes no topo
+                  </button>
+                </div>
+              </div>
                 <div
                   style={{
                     background: "#f8fafc",
@@ -1943,7 +2071,7 @@ export default function AdminApp() {
                     type="button"
                     className="btn secondary"
                     disabled={archiving}
-                    onClick={triggerArchiveOldPosts}
+                    onClick={() => triggerArchiveOldPosts({ allOlderThanDays: true, days: 7 })}
                     style={{
                       marginLeft: "auto",
                       padding: "7px 14px",
@@ -1957,14 +2085,33 @@ export default function AdminApp() {
                     }}
                     title="Arquiva no Supabase matérias com mais de 7 dias que não são de Goiás ou Goiânia para deixar o portal leve e rápido"
                   >
-                    {archiving ? "⏳ Arquivando matérias no Supabase..." : "📦 Arquivar matérias fora de GO (+7 dias)"}
+                    {archiving ? "⏳ Arquivando..." : "📦 Arquivar Todas (+7 dias)"}
+                  </button>
+                  <button
+                    type="button"
+                    className="btn secondary"
+                    disabled={archiving}
+                    onClick={() => triggerArchiveOldPosts({ nonGoiasOnly: true, days: 0 })}
+                    style={{
+                      padding: "7px 14px",
+                      fontSize: 11,
+                      fontWeight: 800,
+                      background: "#fef2f2",
+                      border: "1px solid #fecaca",
+                      color: "#991b1b",
+                      borderRadius: 9,
+                      cursor: "pointer",
+                    }}
+                    title="Arquiva matérias que não são de Goiás ou Goiânia para priorizar o estado"
+                  >
+                    📍 Limpar Fora de Goiás
                   </button>
                 </div>
                 {loading ? (
                   <div className="empty">Carregando...</div>
                 ) : (
                   <table className="postTable">
-                    <thead><tr><th>Título</th><th>Editoria</th><th>Status</th><th>Publicação</th><th>Destaque</th><th>Ações</th></tr></thead>
+                    <thead><tr><th>Título</th><th>Editoria</th><th>Status</th><th style={{ cursor: "pointer", userSelect: "none" }} onClick={() => setPostSortOrder(postSortOrder === "asc" ? "desc" : "asc")} title="Clique para alternar ordenação da mais velha ou mais nova">Publicação {postSortOrder === "asc" ? "⬆️ (Mais velhas no topo)" : "⬇️ (Mais novas no topo)"}</th><th>Destaque</th><th>Ações</th></tr></thead>
                     <tbody>
                       {filtered.map((p) => (
                         <tr key={p.id}>
@@ -1986,6 +2133,25 @@ export default function AdminApp() {
                               >
                                 🎨 Social
                               </button>
+                              {p.status === "archived" ? (
+                                <button
+                                  className="btn secondary"
+                                  style={{ padding: "4px 8px", fontSize: 11, background: "#ecfdf5", color: "#065f46", border: "1px solid #a7f3d0" }}
+                                  onClick={() => toggleArchivePost(p, "published")}
+                                  title="Restaurar notícia para pública"
+                                >
+                                  🟢 Publicar
+                                </button>
+                              ) : (
+                                <button
+                                  className="btn secondary"
+                                  style={{ padding: "4px 8px", fontSize: 11, background: "#fffbeb", color: "#92400e", border: "1px solid #fde68a" }}
+                                  onClick={() => toggleArchivePost(p, "archived")}
+                                  title="Arquivar matéria agora"
+                                >
+                                  📦 Arquivar
+                                </button>
+                              )}
                               <button className="btn secondary" onClick={() => edit(p)}>Editar</button>
                               <button className="btn danger" onClick={() => remove(p.id)}>Excluir</button>
                             </div>
@@ -2037,7 +2203,7 @@ export default function AdminApp() {
                   <div className="radarAutoPilotInfo">
                     {autoPilot ? (
                       <span className="radarAutoPilotBadgeActive">
-                        🟢 PILOTO AUTOMÁTICO ATIVO
+                        {autoPilotScope === "goias_priority" ? "🟢 PILOTO 10M: GOIÁS & GOIÂNIA" : "🌐 PILOTO 10M: NOTÍCIAS EM GERAL"}
                       </span>
                     ) : (
                       <span style={{ fontSize: 13, opacity: 0.9 }}>
@@ -2046,7 +2212,7 @@ export default function AdminApp() {
                     )}
                     <span>
                       {autoPilot
-                        ? `Servidor 24/7 ativo: GitHub Actions → 1 comando único no Vercel a cada 10 min atualiza 📍 Goiânia & Goiás + 🇧🇷 Grandes Jornais + ⚽ Futebol & Brasileirão + ✨ Fofocas & Famosos + 🌐 Todos os Canais (Goiás + Nacional + Futebol + Fofocas) + Radar + Fila + Publicações + Classificação + Tabela + Jogos • Próximo ciclo aprox. em ${Math.floor(autoPilotCountdown / 60).toString().padStart(2, "0")}:${(autoPilotCountdown % 60).toString().padStart(2, "0")}${automationLastRun ? " • Última execução: " + new Date(automationLastRun).toLocaleTimeString("pt-BR", { hour: "2-digit", minute: "2-digit" }) : ""}`
+                        ? `Servidor 24/7 ativo: GitHub Actions → Vercel a cada 10 min atualiza ${autoPilotScope === "goias_priority" ? "📍 Foco Goiânia & Goiás (7 jornais) + ⚽ Futebol + ✨ Fofocas + 🏛️ Política + Arquivamento automático (+7 dias)" : "🌐 Geral & Nacional + 📍 Goiás + ⚽ Futebol + ✨ Fofocas + 🏛️ Política + Arquivamento automático (+7 dias)"} • Próximo ciclo aprox. em ${Math.floor(autoPilotCountdown / 60).toString().padStart(2, "0")}:${(autoPilotCountdown % 60).toString().padStart(2, "0")}${automationLastRun ? " • Última execução: " + new Date(automationLastRun).toLocaleTimeString("pt-BR", { hour: "2-digit", minute: "2-digit" }) : ""}`
                         : automationConfigured
                         ? `Piloto 24/7 pausado no servidor. Clique em ligar para voltar a varrer automaticamente.`
                         : `Configure o Supabase para habilitar o Piloto Automático 24/7 no servidor.`}
@@ -2067,11 +2233,50 @@ export default function AdminApp() {
                     )}
                     <button
                       type="button"
-                      className={`btnAutoPilotToggle ${!autoPilot ? "btnAutoPilotOff" : ""}`}
-                      onClick={toggleAutoPilot}
+                      className={`btnAutoPilotToggle ${!(autoPilot && autoPilotScope === "goias_priority") ? "btnAutoPilotOff" : ""}`}
+                      style={{
+                        background: autoPilot && autoPilotScope === "goias_priority" ? "#059669" : undefined,
+                        borderColor: autoPilot && autoPilotScope === "goias_priority" ? "#047857" : undefined,
+                      }}
+                      onClick={() => setAutoPilotWithScope("goias_priority", !(autoPilot && autoPilotScope === "goias_priority"))}
                     >
-                      {autoPilot ? "⏸️ Pausar Piloto Automático" : "🚀 Ligar Piloto Automático (Todos os Sites)"}
+                      {autoPilot && autoPilotScope === "goias_priority"
+                        ? "🟢 1. Piloto Goiás & Goiânia ATIVO"
+                        : "📍 1. Piloto Goiás & Goiânia (+ Futebol, Fofocas & Pol.)"}
                     </button>
+                    <button
+                      type="button"
+                      className={`btnAutoPilotToggle ${!(autoPilot && autoPilotScope === "all_news") ? "btnAutoPilotOff" : ""}`}
+                      style={{
+                        background: autoPilot && autoPilotScope === "all_news" ? "#2563eb" : undefined,
+                        borderColor: autoPilot && autoPilotScope === "all_news" ? "#1d4ed8" : undefined,
+                      }}
+                      onClick={() => setAutoPilotWithScope("all_news", !(autoPilot && autoPilotScope === "all_news"))}
+                      title="Varre automaticamente a cada 10 min todas as matérias em geral do Brasil + Goiás, Futebol, Fofocas e Política"
+                    >
+                      {autoPilot && autoPilotScope === "all_news"
+                        ? "🌐 2. Piloto Geral & Brasil ATIVO"
+                        : "🌐 2. Piloto Geral (+ Goiás, Futebol, Fofocas & Pol.)"}
+                    </button>
+                    {autoPilot && (
+                      <button
+                        type="button"
+                        style={{
+                          padding: "8px 12px",
+                          fontSize: 12,
+                          fontWeight: 700,
+                          borderRadius: 8,
+                          background: "#fee2e2",
+                          border: "1px solid #fca5a5",
+                          color: "#b91c1c",
+                          cursor: "pointer",
+                        }}
+                        onClick={() => setAutoPilotWithScope(autoPilotScope, false)}
+                        title="Pausar o ciclo automático no servidor"
+                      >
+                        ⏸️ Pausar
+                      </button>
+                    )}
                   </div>
                 </div>
 

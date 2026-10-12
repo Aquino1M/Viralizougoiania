@@ -21,6 +21,7 @@ export async function POST(req: Request) {
     const body = await req.json();
     const patch: Record<string, unknown> = {};
     if (typeof body.enabled === "boolean") patch.enabled = body.enabled;
+    if (body.scope_mode === "goias_priority" || body.scope_mode === "all_news") patch.scope_mode = body.scope_mode;
     if (body.interval_minutes !== undefined) patch.interval_minutes = Math.max(10, Number(body.interval_minutes) || 10);
     const allowedQueueModes = new Set(["1_per_10m", "2_per_10m", "3_per_10m", "50_per_10m", "50_per_1m", "300_per_10m", "1_per_category", "3_per_category"]);
     if (typeof body.queue_mode === "string" && allowedQueueModes.has(body.queue_mode)) {

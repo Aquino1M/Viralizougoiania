@@ -1,4 +1,5 @@
 export type AutomationState = {
+  scope_mode?: "goias_priority" | "all_news";
   enabled: boolean;
   interval_minutes: number;
   queue_mode: "1_per_10m" | "2_per_10m" | "3_per_10m" | "50_per_10m" | "50_per_1m" | "300_per_10m" | "1_per_category" | "3_per_category";
@@ -22,6 +23,7 @@ export type AutomationState = {
 };
 
 const DEFAULT_STATE: AutomationState = {
+  scope_mode: "goias_priority",
   enabled: true,
   interval_minutes: 10,
   queue_mode: "300_per_10m",
