@@ -249,33 +249,50 @@ function getReelTitleLayout(
 ): ReelTitleLayout {
   const raw = headline.trim() || "NOVO REEL";
   const text = applyTextCase(raw, textCase);
-  const maxLines = 5;
-  const maxAllowedHeight = 440;
-  const startSize = manualSize > 0 ? manualSize : (fontFamily === "bebas" ? 88 : fontFamily === "anton" ? 78 : 72);
+  const maxLines = 4;
+  const maxAllowedHeight = 420;
+  const startSize = manualSize > 0 ? manualSize : (fontFamily === "bebas" ? 84 : fontFamily === "anton" ? 76 : 70);
+
+  const wrapParagraphs = (fontSize: number) => {
+    ctx.font = getReelFont(fontFamily, fontSize, fontWeight);
+    const paragraphs = text.split("\n");
+    const allLines: string[] = [];
+    for (const p of paragraphs) {
+      const trimmed = p.trim();
+      if (!trimmed) continue;
+      const wrapped = wrapText(ctx, trimmed, maxWidth);
+      allLines.push(...wrapped);
+    }
+    return allLines;
+  };
+
+  const exceedsBounds = (lines: string[], lineHeight: number) => {
+    if (lines.length > maxLines) return true;
+    if (lines.length * lineHeight > maxAllowedHeight) return true;
+    const maxLineW = Math.max(...lines.map((l) => ctx.measureText(l).width), 0);
+    return maxLineW > maxWidth;
+  };
 
   let chosenSize = startSize;
   let chosenLines: string[] = [];
 
   if (manualSize > 0) {
     let s = manualSize;
-    ctx.font = getReelFont(fontFamily, s, fontWeight);
-    let lines = wrapText(ctx, text, maxWidth);
-    let lineHeight = s * (fontFamily === "bebas" ? 1.08 : fontFamily === "anton" ? 1.12 : 1.18);
-    // Para textos longos: ajusta dinamicamente a fonte se passar de 4-5 linhas ou da altura máxima de segurança
-    while ((lines.length > maxLines || lines.length * lineHeight > maxAllowedHeight) && s > 26) {
+    let lines = wrapParagraphs(s);
+    let lineHeight = s * (fontFamily === "bebas" ? 1.08 : fontFamily === "anton" ? 1.12 : 1.16);
+    // Para textos longos: ajusta dinamicamente a fonte se passar de 4 linhas, da altura ou largura máxima de segurança
+    while (exceedsBounds(lines, lineHeight) && s > 24) {
       s -= 2;
-      ctx.font = getReelFont(fontFamily, s, fontWeight);
-      lines = wrapText(ctx, text, maxWidth);
-      lineHeight = s * (fontFamily === "bebas" ? 1.08 : fontFamily === "anton" ? 1.12 : 1.18);
+      lines = wrapParagraphs(s);
+      lineHeight = s * (fontFamily === "bebas" ? 1.08 : fontFamily === "anton" ? 1.12 : 1.16);
     }
     chosenSize = s;
     chosenLines = lines;
   } else {
     for (let s = startSize; s >= 24; s -= 2) {
-      ctx.font = getReelFont(fontFamily, s, fontWeight);
-      const lines = wrapText(ctx, text, maxWidth);
-      const lineHeight = s * (fontFamily === "bebas" ? 1.08 : fontFamily === "anton" ? 1.12 : 1.18);
-      if (lines.length <= maxLines && lines.length * lineHeight <= maxAllowedHeight) {
+      const lines = wrapParagraphs(s);
+      const lineHeight = s * (fontFamily === "bebas" ? 1.08 : fontFamily === "anton" ? 1.12 : 1.16);
+      if (!exceedsBounds(lines, lineHeight)) {
         chosenSize = s;
         chosenLines = lines;
         break;
@@ -288,7 +305,7 @@ function getReelTitleLayout(
   }
 
   ctx.font = getReelFont(fontFamily, chosenSize, fontWeight);
-  const lineHeight = chosenSize * (fontFamily === "bebas" ? 1.08 : fontFamily === "anton" ? 1.12 : 1.18);
+  const lineHeight = chosenSize * (fontFamily === "bebas" ? 1.08 : fontFamily === "anton" ? 1.12 : 1.16);
   const lineWidths = chosenLines.map((line) => ctx.measureText(line).width);
   const width = Math.max(...lineWidths, 0);
   const height = chosenLines.length * lineHeight;
@@ -565,12 +582,20 @@ function renderCaptionStyleToContext(
         ctx.shadowColor = "rgba(0, 0, 0, 0.95)";
         ctx.shadowBlur = 18;
         ctx.shadowOffsetY = 4;
-        ctx.fillStyle = "#ffffff";
         ctx.textBaseline = "middle";
         ctx.textAlign = textAlign;
         let drawX = centerX;
         if (textAlign === "left") drawX = blockLeft;
         else if (textAlign === "right") drawX = blockRight;
+
+        const strokeW = Math.max(4, Math.round(layout.fontSize * 0.08));
+        ctx.lineWidth = strokeW;
+        ctx.strokeStyle = "rgba(0, 0, 0, 0.94)";
+        ctx.lineJoin = "round";
+        ctx.miterLimit = 2;
+        ctx.strokeText(line, drawX, curY);
+
+        ctx.fillStyle = "#ffffff";
         ctx.fillText(line, drawX, curY);
         ctx.restore();
       }
@@ -608,12 +633,20 @@ function renderCaptionStyleToContext(
         ctx.shadowColor = "rgba(0, 0, 0, 0.95)";
         ctx.shadowBlur = 16;
         ctx.shadowOffsetY = 4;
-        ctx.fillStyle = "#ffffff";
         ctx.textBaseline = "middle";
         ctx.textAlign = textAlign;
         let drawX = blockLeft;
         if (textAlign === "center") drawX = centerX;
         else if (textAlign === "right") drawX = blockRight;
+
+        const strokeW = Math.max(4, Math.round(layout.fontSize * 0.08));
+        ctx.lineWidth = strokeW;
+        ctx.strokeStyle = "rgba(0, 0, 0, 0.94)";
+        ctx.lineJoin = "round";
+        ctx.miterLimit = 2;
+        ctx.strokeText(line, drawX, curY);
+
+        ctx.fillStyle = "#ffffff";
         ctx.fillText(line, drawX, curY);
         ctx.restore();
       }
@@ -649,12 +682,20 @@ function renderCaptionStyleToContext(
         ctx.shadowColor = "rgba(0, 0, 0, 0.95)";
         ctx.shadowBlur = 18;
         ctx.shadowOffsetY = 4;
-        ctx.fillStyle = "#ffffff";
         ctx.textBaseline = "middle";
         ctx.textAlign = textAlign;
         let drawX = centerX;
         if (textAlign === "left") drawX = blockLeft;
         else if (textAlign === "right") drawX = blockRight;
+
+        const strokeW = Math.max(4, Math.round(layout.fontSize * 0.08));
+        ctx.lineWidth = strokeW;
+        ctx.strokeStyle = "rgba(0, 0, 0, 0.94)";
+        ctx.lineJoin = "round";
+        ctx.miterLimit = 2;
+        ctx.strokeText(line, drawX, curY);
+
+        ctx.fillStyle = "#ffffff";
         ctx.fillText(line, drawX, curY);
         ctx.restore();
       }
@@ -761,7 +802,7 @@ function renderCaptionStyleToContext(
       ctx.shadowOffsetX = 0;
       ctx.shadowOffsetY = 4;
 
-      const strokeW = Math.max(4, Math.round(layout.fontSize * 0.08));
+      const strokeW = Math.max(5, Math.round(layout.fontSize * 0.09));
       ctx.lineWidth = strokeW;
       ctx.strokeStyle = "rgba(0, 0, 0, 0.94)";
       ctx.lineJoin = "round";
@@ -799,9 +840,8 @@ function getCachedReelCaptionRaster(
   const layout = getCachedReelTitleLayout(ctx, headline, fontFamily, fontWeight, textCase, fontSize, maxWidth);
   if (!layout.lines.length) return null;
 
-  const padX = Math.round(layout.fontSize * 0.8) + 60;
-  const offW = Math.min(W, Math.ceil(Math.max(layout.width, maxWidth) + padX * 2));
-  const offH = Math.min(canvasHeight, Math.ceil(layout.height + 280));
+  const offW = W;
+  const offH = Math.min(canvasHeight, Math.ceil(layout.height + 340));
 
   const offscreen = document.createElement("canvas");
   offscreen.width = offW;
@@ -913,13 +953,30 @@ function drawReelHeadline(
     if (animScale !== 1) ctx.scale(animScale, animScale);
     ctx.drawImage(raster.canvas, -raster.originX, -raster.originY);
   } else if (animation === "typewriter" && rawProgress < 1) {
-    // Revelação progressiva ultra rápida e sem recálculo por recorte da camada rasterizada
+    const totalChars = raster.layout.lines.join("").length;
+    const visibleChars = Math.floor(totalChars * rawProgress);
+    let charsLeft = visibleChars;
     ctx.save();
-    ctx.beginPath();
-    const revealH = raster.height * Math.max(0.08, rawProgress);
-    ctx.rect(drawX, drawY, raster.width, revealH);
-    ctx.clip();
-    ctx.drawImage(raster.canvas, drawX, drawY);
+    renderCaptionStyleToContext(
+      ctx,
+      {
+        ...raster.layout,
+        lines: raster.layout.lines.map((l) => {
+          const count = Math.max(0, Math.min(l.length, charsLeft));
+          charsLeft -= count;
+          return l.slice(0, count);
+        }),
+      },
+      category,
+      fontFamily,
+      fontWeight,
+      textStyle,
+      textAlign,
+      centerX,
+      centerY,
+      maxWidth,
+      canvasHeight,
+    );
     ctx.restore();
   } else {
     // Modo estático ou pós-conclusão da animação (0.05ms)
@@ -994,13 +1051,18 @@ function drawReelFrame(
       const { width, height } = getLogoSize(renderLogo, format, logoScale / 100);
       ctx.drawImage(renderLogo, logoPosition.x * W - width / 2, logoPosition.y * REEL_H - height / 2, width, height);
     } else {
+      const ly = logoPosition.y * REEL_H;
+      const lx = logoPosition.x * W;
+      ctx.save();
       ctx.textAlign = "center";
+      ctx.textBaseline = "middle";
       ctx.fillStyle = logoColorStyle === "dark" ? "#111111" : "#ffffff";
-      ctx.font = "900 57px Arial, sans-serif";
-      ctx.fillText("VIRALIZOU", W / 2 - 22, 1200);
+      ctx.font = "900 48px Arial, sans-serif";
+      ctx.fillText("VIRALIZOU", lx - 82, ly);
       ctx.fillStyle = "#ff5a1f";
-      ctx.font = "900 35px Arial, sans-serif";
-      ctx.fillText("GOIÂNIA", W / 2 + 214, 1200);
+      ctx.font = "900 32px Arial, sans-serif";
+      ctx.fillText("GOIÂNIA", lx + 124, ly);
+      ctx.restore();
     }
   }
 
@@ -2245,15 +2307,9 @@ export default function SocialFeedCreator({ posts, onBack }: Props) {
       video.muted = false;
       video.volume = 1;
 
-      // Captura manual: a saída só recebe quadros após a composição terminar.
-      // Evita amostragem por relógio quando a renderização pesada atrasa.
-      canvasStream = canvas.captureStream(0);
-      const canvasVideoTrack = canvasStream.getVideoTracks()[0] as (MediaStreamTrack & { requestFrame?: () => void }) | undefined;
-      if (!canvasVideoTrack?.requestFrame) {
-        canvasStream.getTracks().forEach((track) => track.stop());
-        canvasStream = null;
-        throw new Error("Este navegador não suporta captura manual de quadros. Atualize o Chrome ou Edge e tente novamente.");
-      }
+      // Captura a 30 FPS contínuos sincronizados diretamente com o relógio do hardware/navegador.
+      // captureStream(30) elimina descompasso de timestamps com o áudio e previne engasgos/congelamentos.
+      canvasStream = canvas.captureStream(30);
       const combinedTracks: MediaStreamTrack[] = [...canvasStream.getVideoTracks()];
       if (audioTrack) {
         combinedTracks.push(audioTrack);
@@ -2302,7 +2358,7 @@ export default function SocialFeedCreator({ posts, onBack }: Props) {
             showStorySticker,
             format,
           );
-          canvasVideoTrack?.requestFrame?.();
+
         }
         if ("requestVideoFrameCallback" in video) {
           frameCallbackId = (video as any).requestVideoFrameCallback(drawFrameSync);
