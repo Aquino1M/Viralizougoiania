@@ -397,6 +397,8 @@ function drawFeedSquareSafeZone(ctx: CanvasRenderingContext2D) {
   ctx.restore();
 }
 
+const reelHeadlineRasterCache = new Map<string, HTMLCanvasElement>();
+
 function drawReelHeadline(
   ctx: CanvasRenderingContext2D,
   headline: string,
@@ -413,12 +415,47 @@ function drawReelHeadline(
   duration: number,
   canvasHeight: number = REEL_H,
   maxWidth: number = 820,
+  useRasterCache = true,
 ) {
-  const layout = getReelTitleLayout(ctx, headline, fontFamily, fontWeight, textCase, fontSize, maxWidth);
-  if (!layout.lines.length) return;
-
   const animDuration = Math.min(2.5, Math.max(0.6, duration > 0 ? duration * 0.25 : 2.0));
   const rawProgress = Math.min(1, Math.max(0, currentTime / animDuration));
+
+  // Headlines with shadows were redrawn line-by-line on every video frame.
+  // Once their animation ends, reuse a transparent raster layer instead.
+  if (useRasterCache && rawProgress >= 1 && typeof document !== "undefined") {
+    const cacheKey = JSON.stringify([
+      headline, category, fontFamily, fontWeight, textStyle, textAlign, textCase,
+      fontSize, animation, position.x, position.y, canvasHeight, maxWidth,
+    ]);
+    const cached = reelHeadlineRasterCache.get(cacheKey);
+    if (cached) {
+      ctx.drawImage(cached, 0, 0);
+      return;
+    }
+
+    const raster = document.createElement("canvas");
+    raster.width = W;
+    raster.height = canvasHeight;
+    const rasterCtx = raster.getContext("2d");
+    if (rasterCtx) {
+      drawReelHeadline(
+        rasterCtx, headline, category, fontFamily, fontWeight, textStyle,
+        textAlign, textCase, fontSize, animation, position, animDuration,
+        duration, canvasHeight, maxWidth, false,
+      );
+      reelHeadlineRasterCache.set(cacheKey, raster);
+      while (reelHeadlineRasterCache.size > 4) {
+        const oldestKey = reelHeadlineRasterCache.keys().next().value;
+        if (oldestKey === undefined) break;
+        reelHeadlineRasterCache.delete(oldestKey);
+      }
+      ctx.drawImage(raster, 0, 0);
+      return;
+    }
+  }
+
+  const layout = getReelTitleLayout(ctx, headline, fontFamily, fontWeight, textCase, fontSize, maxWidth);
+  if (!layout.lines.length) return;
 
   ctx.save();
   ctx.imageSmoothingEnabled = true;
