@@ -9,8 +9,7 @@ function generateFallbackSvg(isWhite: boolean): string {
   return `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 640 180" width="640" height="180">
   <defs>
     <style>
-      @import url('https://fonts.googleapis.com/css2?family=Montserrat:wght@900&amp;display=swap');
-      .vg-brand-text { font-family: 'Montserrat', sans-serif; font-weight: 900; }
+      .vg-brand-text { font-family: 'Montserrat', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; font-weight: 900; }
     </style>
   </defs>
   <!-- Símbolo VG estilizado em Vermelho -->
@@ -24,6 +23,17 @@ function generateFallbackSvg(isWhite: boolean): string {
   <text x="275" y="78" fill="${textColor}" font-size="52" class="vg-brand-text" letter-spacing="3.5">VIRALIZOU</text>
   <text x="275" y="142" fill="${textColor}" font-size="52" class="vg-brand-text" letter-spacing="4.5">GOIÂNIA</text>
 </svg>`;
+}
+
+export async function OPTIONS() {
+  return new Response(null, {
+    status: 204,
+    headers: {
+      "Access-Control-Allow-Origin": "*",
+      "Access-Control-Allow-Methods": "GET, OPTIONS",
+      "Access-Control-Allow-Headers": "Content-Type",
+    },
+  });
 }
 
 export async function GET(
@@ -43,49 +53,39 @@ export async function GET(
       status: 200,
       headers: {
         "Content-Type": "image/png",
+        "Access-Control-Allow-Origin": "*",
         "Cache-Control": "public, max-age=31536000, immutable",
       },
     });
   } catch {
-    const userUploadedDir = "C:\\Users\\Aquino\\.gemini\\antigravity-ide\\brain\\d93440ff-fe58-40ed-94a4-6ff085a0a199\\.user_uploaded";
-    const tempMediaDir = "C:\\Users\\Aquino\\.gemini\\antigravity-ide\\brain\\d93440ff-fe58-40ed-94a4-6ff085a0a199\\.tempmediaStorage";
-
-    const candidatePaths = isWhite
-      ? [
-          path.join(userUploadedDir, "media_1791812215943.png"),
-          path.join(tempMediaDir, "media_1791812661864.png"),
-          path.join(process.cwd(), "public", "logo-viralizou-branca.png"),
-          path.join(process.cwd(), "public", "logos", "logo-viralizou-branca.png"),
-        ]
-      : [
-          path.join(userUploadedDir, "media_1791812270897.png"),
-          path.join(tempMediaDir, "media_1791812668250.png"),
-          path.join(process.cwd(), "public", "logo-viralizou-preta.png"),
-          path.join(process.cwd(), "public", "logos", "logo-viralizou-preta.png"),
-        ];
+    const candidatePaths = [
+      path.join(process.cwd(), "public", fileName),
+      path.join(process.cwd(), "public", "logos", fileName),
+    ];
 
     for (const candidate of candidatePaths) {
       try {
         const buffer = await fs.readFile(candidate);
         await fs.mkdir(publicDir, { recursive: true }).catch(() => {});
         await fs.writeFile(filePath, buffer).catch(() => {});
-        await fs.writeFile(path.join(process.cwd(), "public", fileName), buffer).catch(() => {});
         return new Response(buffer, {
           status: 200,
           headers: {
             "Content-Type": "image/png",
+            "Access-Control-Allow-Origin": "*",
             "Cache-Control": "public, max-age=31536000, immutable",
           },
         });
       } catch {}
     }
 
-    // Se nenhum arquivo PNG foi encontrado em disco, retorna SVG vetorial nítido (nunca quebra)
+    // Se nenhum arquivo PNG foi encontrado em disco, retorna SVG vetorial nítido (sempre funcional e com CORS)
     const svg = generateFallbackSvg(isWhite);
     return new Response(svg, {
       status: 200,
       headers: {
-        "Content-Type": "image/svg+xml",
+        "Content-Type": "image/svg+xml; charset=utf-8",
+        "Access-Control-Allow-Origin": "*",
         "Cache-Control": "public, max-age=86400",
       },
     });

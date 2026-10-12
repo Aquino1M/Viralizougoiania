@@ -71,9 +71,23 @@ function slugFromInput(value: string) {
 
 function loadImage(src: string) {
   return new Promise<HTMLImageElement>((resolve, reject) => {
+    if (!src) return reject(new Error("URL de imagem vazia"));
     const img = new Image();
+    if (!src.startsWith("data:")) {
+      img.crossOrigin = "anonymous";
+    }
     img.onload = () => resolve(img);
-    img.onerror = () => reject(new Error("Não foi possível carregar a imagem."));
+    img.onerror = () => {
+      // Se falhou com crossOrigin anonymous, tenta novamente sem crossOrigin
+      if (img.crossOrigin) {
+        const fallbackImg = new Image();
+        fallbackImg.onload = () => resolve(fallbackImg);
+        fallbackImg.onerror = () => reject(new Error("Não foi possível carregar a imagem."));
+        fallbackImg.src = src;
+      } else {
+        reject(new Error("Não foi possível carregar a imagem."));
+      }
+    };
     img.src = src;
   });
 }
@@ -89,16 +103,20 @@ async function ensureFontReady(fontString: string) {
 
 function isImageDrawable(img: any): boolean {
   if (!img) return false;
-  if ("naturalWidth" in img) {
-    return img.complete && img.naturalWidth > 0 && img.naturalHeight > 0;
+  try {
+    if (img instanceof HTMLImageElement || ("naturalWidth" in img && "complete" in img)) {
+      return Boolean(img.complete && img.naturalWidth > 0 && img.naturalHeight > 0);
+    }
+    if (img instanceof HTMLCanvasElement || ("width" in img && "height" in img && !("videoWidth" in img))) {
+      return Boolean(img.width > 0 && img.height > 0);
+    }
+    if (img instanceof HTMLVideoElement || "videoWidth" in img) {
+      return Boolean(img.readyState >= 2 && img.videoWidth > 0 && img.videoHeight > 0);
+    }
+    return false;
+  } catch {
+    return false;
   }
-  if ("videoWidth" in img) {
-    return img.readyState >= 2 && img.videoWidth > 0;
-  }
-  if ("width" in img) {
-    return img.width > 0 && img.height > 0;
-  }
-  return false;
 }
 
 function safeDrawImage(
@@ -109,7 +127,7 @@ function safeDrawImage(
   dw?: number,
   dh?: number
 ): boolean {
-  if (!isImageDrawable(img)) return false;
+  if (!ctx || !isImageDrawable(img)) return false;
   try {
     if (dw !== undefined && dh !== undefined) {
       ctx.drawImage(img, dx, dy, dw, dh);
@@ -117,7 +135,8 @@ function safeDrawImage(
       ctx.drawImage(img, dx, dy);
     }
     return true;
-  } catch {
+  } catch (err) {
+    console.warn("safeDrawImage caught draw error:", err);
     return false;
   }
 }
@@ -195,72 +214,52 @@ function drawStoryStickerGuide(ctx: CanvasRenderingContext2D, canvasWidth: numbe
   ctx.restore();
 }
 
-const FALLBACK_WHITE_LOGO_SVG = `data:image/svg+xml;utf8,<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 640 180" width="640" height="180"><g transform="translate(10, 15) scale(0.95)"><path d="M 35 30 L 78 135 L 120 30 L 92 30 L 78 100 L 63 30 Z" fill="%23dc2626"/><path d="M 125 75 C 125 40 155 18 195 18 C 235 18 262 42 265 78 L 235 78 C 232 55 215 42 195 42 C 172 42 153 58 153 82 C 153 106 172 122 195 122 C 218 122 232 108 234 94 L 195 94 L 195 72 L 263 72 C 263 125 228 146 195 146 C 155 146 125 120 125 75 Z" fill="%23dc2626"/></g><text x="275" y="78" fill="%23ffffff" font-family="sans-serif" font-weight="900" font-size="52" letter-spacing="3.5">VIRALIZOU</text><text x="275" y="142" fill="%23ffffff" font-family="sans-serif" font-weight="900" font-size="52" letter-spacing="4.5">GOIÂNIA</text></svg>`;
-const FALLBACK_DARK_LOGO_SVG = `data:image/svg+xml;utf8,<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 640 180" width="640" height="180"><g transform="translate(10, 15) scale(0.95)"><path d="M 35 30 L 78 135 L 120 30 L 92 30 L 78 100 L 63 30 Z" fill="%23dc2626"/><path d="M 125 75 C 125 40 155 18 195 18 C 235 18 262 42 265 78 L 235 78 C 232 55 215 42 195 42 C 172 42 153 58 153 82 C 153 106 172 122 195 122 C 218 122 232 108 234 94 L 195 94 L 195 72 L 263 72 C 263 125 228 146 195 146 C 155 146 125 120 125 75 Z" fill="%23dc2626"/></g><text x="275" y="78" fill="%231e293b" font-family="sans-serif" font-weight="900" font-size="52" letter-spacing="3.5">VIRALIZOU</text><text x="275" y="142" fill="%231e293b" font-family="sans-serif" font-weight="900" font-size="52" letter-spacing="4.5">GOIÂNIA</text></svg>`;
+function createSvgDataUri(isWhite: boolean): string {
+  const textColor = isWhite ? "%23ffffff" : "%231e293b";
+  const svg = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 640 180" width="640" height="180"><defs><style>.vg-brand-text{font-family:'Montserrat',-apple-system,BlinkMacSystemFont,sans-serif;font-weight:900;}</style></defs><g transform="translate(10, 15) scale(0.95)"><path d="M 35 30 L 78 135 L 120 30 L 92 30 L 78 100 L 63 30 Z" fill="%23dc2626"/><path d="M 125 75 C 125 40 155 18 195 18 C 235 18 262 42 265 78 L 235 78 C 232 55 215 42 195 42 C 172 42 153 58 153 82 C 153 106 172 122 195 122 C 218 122 232 108 234 94 L 195 94 L 195 72 L 263 72 C 263 125 228 146 195 146 C 155 146 125 120 125 75 Z" fill="%23dc2626"/></g><text x="275" y="78" fill="${textColor}" font-size="52" class="vg-brand-text" letter-spacing="3.5">VIRALIZOU</text><text x="275" y="142" fill="${textColor}" font-size="52" class="vg-brand-text" letter-spacing="4.5">GOIÂNIA</text></svg>`;
+  return `data:image/svg+xml;charset=utf-8,${svg}`;
+}
+
+const FALLBACK_WHITE_LOGO_SVG = createSvgDataUri(true);
+const FALLBACK_DARK_LOGO_SVG = createSvgDataUri(false);
 
 let cachedOfficialWhiteLogo: HTMLImageElement | null = null;
 let cachedOfficialDarkLogo: HTMLImageElement | null = null;
 
 function getOfficialLogo(variant: "white" | "dark"): HTMLImageElement | null {
   if (typeof window === "undefined") return null;
-  if (variant === "white") {
-    if (!cachedOfficialWhiteLogo || (cachedOfficialWhiteLogo.complete && cachedOfficialWhiteLogo.naturalWidth === 0)) {
-      cachedOfficialWhiteLogo = new Image();
-      cachedOfficialWhiteLogo.crossOrigin = "anonymous";
-      cachedOfficialWhiteLogo.onerror = () => {
-        if (cachedOfficialWhiteLogo && cachedOfficialWhiteLogo.src.includes("/api/logos/")) {
-          cachedOfficialWhiteLogo.src = "/logos/logo-viralizou-branca.png";
-          cachedOfficialWhiteLogo.onerror = () => {
-            if (cachedOfficialWhiteLogo) cachedOfficialWhiteLogo.src = FALLBACK_WHITE_LOGO_SVG;
-          };
-        }
-      };
-      cachedOfficialWhiteLogo.src = "/api/logos/white";
-    }
-    return cachedOfficialWhiteLogo;
-  } else {
-    if (!cachedOfficialDarkLogo || (cachedOfficialDarkLogo.complete && cachedOfficialDarkLogo.naturalWidth === 0)) {
-      cachedOfficialDarkLogo = new Image();
-      cachedOfficialDarkLogo.crossOrigin = "anonymous";
-      cachedOfficialDarkLogo.onerror = () => {
-        if (cachedOfficialDarkLogo && cachedOfficialDarkLogo.src.includes("/api/logos/")) {
-          cachedOfficialDarkLogo.src = "/logos/logo-viralizou-preta.png";
-          cachedOfficialDarkLogo.onerror = () => {
-            if (cachedOfficialDarkLogo) cachedOfficialDarkLogo.src = FALLBACK_DARK_LOGO_SVG;
-          };
-        }
-      };
-      cachedOfficialDarkLogo.src = "/api/logos/dark";
-    }
-    return cachedOfficialDarkLogo;
+  const isWhite = variant === "white";
+  let cached = isWhite ? cachedOfficialWhiteLogo : cachedOfficialDarkLogo;
+
+  if (!cached || !isImageDrawable(cached)) {
+    const img = new Image();
+    img.src = isWhite ? FALLBACK_WHITE_LOGO_SVG : FALLBACK_DARK_LOGO_SVG;
+    if (isWhite) cachedOfficialWhiteLogo = img;
+    else cachedOfficialDarkLogo = img;
+    return img;
   }
+  return cached;
 }
 
 function getRenderableLogo(
-  customLogo: HTMLImageElement | null,
+  customLogo: HTMLImageElement | HTMLCanvasElement | null,
   colorStyle: LogoColorStyle,
   defaultVariant: "white" | "dark" = "white"
-): HTMLImageElement | null {
-  // 1. Letras Brancas: utiliza diretamente a logo original com letras brancas já sem fundo
+): HTMLImageElement | HTMLCanvasElement | null {
+  // 1. Prioridade absoluta: Se o usuário enviou/possui uma logo personalizada válida, USA ELA!
+  if (customLogo && isImageDrawable(customLogo)) {
+    return customLogo;
+  }
+
+  // 2. Se não tem logo personalizada, usa a oficial correspondente ao estilo escolhido
   if (colorStyle === "white") {
     const white = getOfficialLogo("white");
     if (isImageDrawable(white)) return white;
-    if (isImageDrawable(customLogo)) return customLogo;
-    return isImageDrawable(white) ? white : null;
-  }
-
-  // 2. Letras Pretas: utiliza diretamente a logo original com letras pretas já sem fundo
-  if (colorStyle === "dark") {
+  } else if (colorStyle === "dark") {
     const dark = getOfficialLogo("dark");
     if (isImageDrawable(dark)) return dark;
-    if (isImageDrawable(customLogo)) return customLogo;
-    return isImageDrawable(dark) ? dark : null;
   }
 
-  // 3. Original: se o usuário enviou uma logo personalizada, usa ela; senão usa a oficial do formato
-  if (isImageDrawable(customLogo)) {
-    return customLogo;
-  }
   const def = getOfficialLogo(defaultVariant);
   return isImageDrawable(def) ? def : null;
 }
@@ -1196,10 +1195,11 @@ function drawReelFrame(
   if (showTitleLayer) {
     const currentTime = video ? video.currentTime : 10;
     const duration = video && Number.isFinite(video.duration) ? video.duration : 10;
+    const effectiveHeadline = (headline || "TÍTULO DA SUA NOTÍCIA").trim();
     drawReelHeadline(
       ctx,
-      headline,
-      category,
+      effectiveHeadline,
+      category || "VIRALIZOU",
       fontFamily,
       fontWeight,
       textStyle,
@@ -1342,10 +1342,11 @@ function buildReelOverlayCanvas(
 
   // 4. Manchete / Legenda
   if (showTitleLayer) {
+    const effectiveHeadline = (headline || "TÍTULO DA SUA NOTÍCIA").trim();
     drawReelHeadline(
       ctx,
-      headline,
-      category,
+      effectiveHeadline,
+      category || "VIRALIZOU",
       fontFamily,
       fontWeight,
       textStyle,
@@ -1650,9 +1651,9 @@ export default function SocialFeedCreator({ posts, onBack }: Props) {
             }
           }
           const renderLogo = getRenderableLogo(customImg, logoColorStyle, "white");
-          if (renderLogo && (renderLogo.naturalWidth || renderLogo.complete)) {
+          if (renderLogo && isImageDrawable(renderLogo)) {
             const { width, height } = getLogoSize(renderLogo, "story", logoScale / 100);
-            ctx.drawImage(renderLogo, logoPositionRef.current.x * currentW - width / 2, logoPositionRef.current.y * currentH - height / 2, width, height);
+            safeDrawImage(ctx, renderLogo, logoPositionRef.current.x * currentW - width / 2, logoPositionRef.current.y * currentH - height / 2, width, height);
           }
         }
 
@@ -1711,8 +1712,8 @@ export default function SocialFeedCreator({ posts, onBack }: Props) {
           ctx,
           videoPreviewRef.current,
           logoImageRef.current,
-          title || selectedPost?.title || "",
-          selectedPost?.category || "",
+          title || selectedPost?.title || "TÍTULO DA SUA NOTÍCIA",
+          selectedPost?.category || "VIRALIZOU",
           handle,
           logoPositionRef.current,
           titlePositionRef.current,
@@ -1892,8 +1893,8 @@ export default function SocialFeedCreator({ posts, onBack }: Props) {
     try {
       const overlayCanvas = buildReelOverlayCanvas(
         logoImageRef.current,
-        title || selectedPost?.title || "",
-        selectedPost?.category || "",
+        title || selectedPost?.title || "TÍTULO DA SUA NOTÍCIA",
+        selectedPost?.category || "VIRALIZOU",
         handle,
         logoPosition,
         titlePosition,
@@ -1929,12 +1930,64 @@ export default function SocialFeedCreator({ posts, onBack }: Props) {
     shadeOpacity, showOverlayLayer, showLogoLayer, showTitleLayer, showHandleLayer, showStorySticker,
   ]);
 
+  // Carrega a logo personalizada no ref sempre que logoData mudar
+  useEffect(() => {
+    let active = true;
+    if (logoData) {
+      loadImage(logoData)
+        .then((img) => {
+          if (!active) return;
+          logoImageRef.current = img;
+          if (typeof document !== "undefined") {
+            try {
+              cachedOverlayCanvasRef.current = buildReelOverlayCanvas(
+                img,
+                title || selectedPost?.title || "TÍTULO DA SUA NOTÍCIA",
+                selectedPost?.category || "VIRALIZOU",
+                handle,
+                logoPosition,
+                titlePosition,
+                reelTextStyle,
+                reelFontFamily,
+                reelFontWeight,
+                reelTextAlign,
+                reelTextCase,
+                reelFontSize,
+                showStrongSceneWarning,
+                logoScale,
+                handleFontSize,
+                tagColor,
+                tagPositionY,
+                logoColorStyle,
+                shadeOpacity,
+                showOverlayLayer,
+                showLogoLayer,
+                showTitleLayer,
+                showHandleLayer,
+                showStorySticker,
+                format,
+              );
+            } catch {}
+          }
+          if (canvasRef.current) renderCard();
+        })
+        .catch(() => {
+          if (!active) return;
+          logoImageRef.current = null;
+          if (canvasRef.current) renderCard();
+        });
+    } else {
+      logoImageRef.current = null;
+      if (canvasRef.current) renderCard();
+    }
+    return () => { active = false; };
+  }, [logoData]);
+
   // Loop de pré-visualização interativa do Reel e Story (máxima suavidade)
   useEffect(() => {
     const video = videoPreviewRef.current;
     if ((format !== "reel" && format !== "story") || !videoUrl || !video || recording) return;
     let frameId = 0;
-    let videoFrameId = 0;
     let lastRenderedAt = 0;
     const previewInterval = 1000 / 24;
     const draw = (timestamp = 0) => {
@@ -1954,8 +2007,8 @@ export default function SocialFeedCreator({ posts, onBack }: Props) {
                 ctx,
                 video,
                 logoImageRef.current,
-                title || selectedPost?.title || "",
-                selectedPost?.category || "",
+                title || selectedPost?.title || "TÍTULO DA SUA NOTÍCIA",
+                selectedPost?.category || "VIRALIZOU",
                 handle,
                 logoPositionRef.current,
                 titlePositionRef.current,
@@ -1997,31 +2050,27 @@ export default function SocialFeedCreator({ posts, onBack }: Props) {
           }
         }
       }
-      if (typeof (video as any).requestVideoFrameCallback === "function") {
-        videoFrameId = (video as any).requestVideoFrameCallback(draw);
-      } else {
-        frameId = requestAnimationFrame(draw);
-      }
+      frameId = requestAnimationFrame(draw);
     };
     video.loop = true;
     video.muted = true;
     video.play().catch(() => {});
-    if (typeof (video as any).requestVideoFrameCallback === "function") {
-      videoFrameId = (video as any).requestVideoFrameCallback(draw);
-    } else {
-      frameId = requestAnimationFrame(draw);
-    }
+    frameId = requestAnimationFrame(draw);
     return () => {
       cancelAnimationFrame(frameId);
-      if (videoFrameId && typeof (video as any).cancelVideoFrameCallback === "function") {
-        (video as any).cancelVideoFrameCallback(videoFrameId);
-      }
     };
   }, [format, videoUrl, title, handle, logoData, selectedPost?.title, reelTextStyle, reelFontFamily, reelFontWeight, reelTextAlign, reelTextCase, reelFontSize, tagColor, tagPositionY, showSafeZone, reelTextAnimation, showStrongSceneWarning, logoScale, handleFontSize, shadeOpacity, showOverlayLayer, showLogoLayer, showTitleLayer, showHandleLayer, showStorySticker, logoColorStyle, recording, videoFramingMode, imagePosition]);
 
   async function loadArticle() {
     const slug = slugFromInput(articleUrl);
     if (!slug) {
+      if (posts && posts.length > 0) {
+        const latestPost = posts[0];
+        setSelectedPost(latestPost);
+        setTitle(latestPost.title);
+        setMessage(`✅ Notícia mais recente carregada: "${latestPost.title}"`);
+        return;
+      }
       setMessage("Cole o link completo de uma notícia do Viralizougoiania.");
       return;
     }
@@ -2215,7 +2264,7 @@ export default function SocialFeedCreator({ posts, onBack }: Props) {
     setLogoScale(value);
     try { localStorage.setItem("viralizou_reel_logo_scale", String(value)); } catch {}
     const logo = logoImageRef.current || getRenderableLogo(null, logoColorStyle);
-    if (!logo || (!logo.naturalWidth && !logo.complete)) return;
+    if (!logo || !isImageDrawable(logo)) return;
     const { width, height } = getLogoSize(logo, "reel", value / 100);
     const position = {
       x: Math.min(1 - width / (2 * W), Math.max(width / (2 * W), logoPositionRef.current.x)),
@@ -2409,7 +2458,7 @@ export default function SocialFeedCreator({ posts, onBack }: Props) {
     }
 
     const logo = logoImageRef.current || getRenderableLogo(null, logoColorStyle);
-    if (!logo || (!logo.naturalWidth && !logo.complete)) return;
+    if (!logo || !isImageDrawable(logo)) return;
 
     const rect = event.currentTarget.getBoundingClientRect();
     const x = ((event.clientX - rect.left) / rect.width) * currentW;
@@ -2538,8 +2587,8 @@ async function fixWebmDuration(blob: Blob, durationSec: number): Promise<Blob> {
     // 1. Gera o canvas do overlay em alta resolução (1080x1920) com as legendas e marcas
     const overlayCanvas = buildReelOverlayCanvas(
       logoImageRef.current,
-      title || selectedPost?.title || "",
-      selectedPost?.category || "",
+      title || selectedPost?.title || "TÍTULO DA SUA NOTÍCIA",
+      selectedPost?.category || "VIRALIZOU",
       handle,
       logoPositionRef.current,
       titlePositionRef.current,
@@ -3705,13 +3754,11 @@ async function fixWebmDuration(blob: Blob, durationSec: number): Promise<Blob> {
                     key={`${logoColorStyle}_${Boolean(logoData)}`}
                     src={
                       logoData ||
-                      (logoColorStyle === "dark" ? "/api/logos/dark" : "/api/logos/white")
+                      (logoColorStyle === "dark" ? "/logos/logo-viralizou-preta.svg" : "/logos/logo-viralizou-branca.svg")
                     }
                     onError={(e) => {
                       const img = e.currentTarget;
-                      if (img.src.includes("/api/logos/")) {
-                        img.src = logoColorStyle === "dark" ? "/logos/logo-viralizou-preta.png" : "/logos/logo-viralizou-branca.png";
-                      }
+                      img.src = logoColorStyle === "dark" ? FALLBACK_DARK_LOGO_SVG : FALLBACK_WHITE_LOGO_SVG;
                     }}
                     alt="Logo ativa"
                     style={{
