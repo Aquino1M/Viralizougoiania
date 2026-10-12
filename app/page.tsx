@@ -3,7 +3,7 @@ import Footer from "@/components/Footer";
 import NewsCard from "@/components/NewsCard";
 
 import { getCategories, getPosts } from "@/lib/storage";
-import { inferLocation, isGoiasOrigin } from "@/lib/category-classifier";
+import { isGoiasOrigin } from "@/lib/category-classifier";
 import Link from "next/link";
 import { unstable_cache } from "next/cache";
 
@@ -45,11 +45,11 @@ export default async function Home(){
 
  const latest = posts.slice(0, 7);
 
- // Goiânia e seus bairros: pautas de bairros, trânsito ou serviços locais de Goiânia. Nunca matérias nacionais!
- const bairroCandidates = goiasPosts.filter(
-   p => p.category === "Bairros" || inferLocation(p).isBairro || ["Trânsito", "Serviços"].includes(p.category)
- );
- const bairroPosts = (bairroCandidates.length >= 3 ? bairroCandidates : goiasPosts).slice(0, 3);
+
+
+
+
+
 
  // Cidade em pauta: O assunto que movimenta Goiânia (política local, segurança local ou pautas municipais)
  const cityCandidates = goiasPosts.filter(
