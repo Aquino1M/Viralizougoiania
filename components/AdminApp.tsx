@@ -937,8 +937,8 @@ export default function AdminApp() {
       setImportMessage(
         enabled
           ? (scope === "goias_priority"
-            ? "🟢 Piloto Automático ATIVO: Foco Goiânia & Goiás (+ Futebol, Fofocas & Política). Varrendo a cada 10 minutos."
-            : "🌐 Piloto Automático ATIVO: Geral Completo (Goiás + Brasil + Futebol + Fofocas + Política). Varrendo a cada 10 minutos.")
+            ? "🟢 Piloto Automático ATIVO: 📍 Goiânia & Goiás, ⚽ Futebol & Brasileirão, ✨ Fofocas & Famosos. Varrendo a cada 10 minutos."
+            : "🌐 Piloto Automático ATIVO: 🌐 Todos os Canais (Goiás + Nacional + Futebol + Fofocas). Varrendo a cada 10 minutos.")
           : "⏸️ Piloto Automático pausado no servidor."
       );
       if (enabled) await runAutoPilotCycle();
@@ -983,7 +983,7 @@ export default function AdminApp() {
       }
       setAutoPilotCountdown(600);
       setImportMessage(enabled
-        ? `🟢 Piloto Automático 24/7 ligado (${scope === "goias_priority" ? "Foco Goiânia & Goiás + Futebol, Fofocas e Política" : "Geral: Goiás + Nacional + Futebol, Fofocas e Política"}). Próximo ciclo em 10 min.`
+        ? `🟢 Piloto Automático 24/7 ligado (${scope === "goias_priority" ? "📍 Goiânia & Goiás, ⚽ Futebol & Brasileirão, ✨ Fofocas & Famosos" : "🌐 Todos os Canais (Goiás + Nacional + Futebol + Fofocas)"}). Próximo ciclo em 10 min.`
         : "⏸️ Piloto Automático 24/7 pausado no servidor.");
       if (enabled) await runAutoPilotCycle();
     } catch (err: any) {
@@ -2206,7 +2206,7 @@ export default function AdminApp() {
                   <div className="radarAutoPilotInfo">
                     {autoPilot ? (
                       <span className="radarAutoPilotBadgeActive">
-                        {autoPilotScope === "goias_priority" ? "🟢 PILOTO 10M: GOIÁS & GOIÂNIA" : "🌐 PILOTO 10M: NOTÍCIAS EM GERAL"}
+                        {autoPilotScope === "goias_priority" ? "🟢 PILOTO 10M: GOIÁS, FUTEBOL & FOFOCAS" : "🌐 PILOTO 10M: TODOS OS CANAIS"}
                       </span>
                     ) : (
                       <span style={{ fontSize: 13, opacity: 0.9 }}>
@@ -2215,7 +2215,7 @@ export default function AdminApp() {
                     )}
                     <span>
                       {autoPilot
-                        ? `Servidor 24/7 ativo: GitHub Actions → Vercel a cada 10 min atualiza ${autoPilotScope === "goias_priority" ? "📍 Foco Goiânia & Goiás (7 jornais) + ⚽ Futebol + ✨ Fofocas + 🏛️ Política + Arquivamento automático (+7 dias)" : "🌐 Geral & Nacional + 📍 Goiás + ⚽ Futebol + ✨ Fofocas + 🏛️ Política + Arquivamento automático (+7 dias)"} • Próximo ciclo aprox. em ${Math.floor(autoPilotCountdown / 60).toString().padStart(2, "0")}:${(autoPilotCountdown % 60).toString().padStart(2, "0")}${automationLastRun ? " • Última execução: " + new Date(automationLastRun).toLocaleTimeString("pt-BR", { hour: "2-digit", minute: "2-digit" }) : ""}`
+                        ? `Servidor 24/7 ativo: GitHub Actions → Vercel a cada 10 min atualiza ${autoPilotScope === "goias_priority" ? "📍 Goiânia & Goiás + ⚽ Futebol & Brasileirão + ✨ Fofocas & Famosos + 🏛️ Política + Arquivamento automático (+7 dias)" : "🌐 Todos os Canais (Goiás + Nacional + Futebol + Fofocas + Política) + Arquivamento automático (+7 dias)"} • Próximo ciclo aprox. em ${Math.floor(autoPilotCountdown / 60).toString().padStart(2, "0")}:${(autoPilotCountdown % 60).toString().padStart(2, "0")}${automationLastRun ? " • Última execução: " + new Date(automationLastRun).toLocaleTimeString("pt-BR", { hour: "2-digit", minute: "2-digit" }) : ""}`
                         : automationConfigured
                         ? `Piloto 24/7 pausado no servidor. Clique em ligar para voltar a varrer automaticamente.`
                         : `Configure o Supabase para habilitar o Piloto Automático 24/7 no servidor.`}
@@ -2244,8 +2244,8 @@ export default function AdminApp() {
                       onClick={() => setAutoPilotWithScope("goias_priority", !(autoPilot && autoPilotScope === "goias_priority"))}
                     >
                       {autoPilot && autoPilotScope === "goias_priority"
-                        ? "🟢 1. Piloto Goiás & Goiânia ATIVO"
-                        : "📍 1. Piloto Goiás & Goiânia (+ Futebol, Fofocas & Pol.)"}
+                        ? "🟢 1. ATIVO: 📍 Goiânia & Goiás, ⚽ Futebol & Brasileirão, ✨ Fofocas & Famosos"
+                        : "📍 Goiânia & Goiás , ⚽ Futebol & Brasileirão, ✨ Fofocas & Famosos"}
                     </button>
                     <button
                       type="button"
@@ -2258,8 +2258,8 @@ export default function AdminApp() {
                       title="Varre automaticamente a cada 10 min todas as matérias em geral do Brasil + Goiás, Futebol, Fofocas e Política"
                     >
                       {autoPilot && autoPilotScope === "all_news"
-                        ? "🌐 2. Piloto Geral & Brasil ATIVO"
-                        : "🌐 2. Piloto Geral (+ Goiás, Futebol, Fofocas & Pol.)"}
+                        ? "🌐 2. ATIVO: Todos os Canais (Goiás + Nacional + Futebol + Fofocas)"
+                        : "🌐 Todos os Canais (Goiás + Nacional + Futebol + Fofocas)"}
                     </button>
                     {autoPilot && (
                       <button
