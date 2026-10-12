@@ -447,7 +447,7 @@ export async function searchArchivedPosts(query: string): Promise<Post[]> {
 export async function getPostBySlug(slug: string, includeDrafts = false) {
   if (hasSupabaseConfig()) {
     try {
-      const status = includeDrafts ? "" : "&status=eq.published";
+      const status = includeDrafts ? "" : "&or=(status.eq.published,status.eq.archived)";
       const rows = await sb(`posts?select=*&slug=eq.${encodeURIComponent(slug)}${status}&limit=1`);
       if (rows?.[0]) {
         const normalized = normalizePostCategory(rows[0] as Post);
@@ -458,7 +458,7 @@ export async function getPostBySlug(slug: string, includeDrafts = false) {
     }
   }
   const posts = await readLocal();
-  const found = posts.find((p) => p.slug === slug && (includeDrafts || p.status === "published"));
+  const found = posts.find((p) => p.slug === slug && (includeDrafts || p.status === "published" || p.status === "archived"));
   if (!found) return undefined;
   const normalized = normalizePostCategory(found);
   return includeDrafts ? normalized : normalizePublicEditorial(normalized);
