@@ -16,3 +16,6 @@ skills-lock.json
 
 .vercel
 gran.zip
+tools/ffmpeg.exe
+*.mp4
+*.webm

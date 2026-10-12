@@ -57,6 +57,15 @@ if not exist "node_modules\next\package.json" (
   echo [1/2] Dependencias ja instaladas.
 )
 
+where ffmpeg >nul 2>nul
+if errorlevel 1 (
+  if not exist "tools\ffmpeg.exe" (
+    echo [Configurando FFmpeg para videos, Reels e WhatsApp...]
+    if not exist "tools" mkdir "tools"
+    curl.exe -L -s -o "tools\ffmpeg.exe" "https://github.com/eugeneware/ffmpeg-static/releases/download/b6.1.1/ffmpeg-win32-x64" >nul 2>nul
+  )
+)
+
 echo [2/2] Iniciando o Viralizougoiania...
 echo.
 echo Site:  http://localhost:3000

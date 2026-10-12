@@ -1,25 +1,13 @@
 import { NextResponse } from "next/server";
 import { isAdmin } from "@/lib/session";
-import { spawn } from "node:child_process";
+import { runFfmpeg } from "@/lib/ffmpeg";
 import fs from "node:fs/promises";
 import path from "node:path";
 import os from "node:os";
 import crypto from "node:crypto";
 
 export const dynamic = "force-dynamic";
-export const maxDuration = 120; // até 2 minutos para vídeos longos
-
-function runFfmpeg(args: string[]): Promise<{ code: number; stderr: string }> {
-  return new Promise((resolve, reject) => {
-    const proc = spawn("ffmpeg", args, { windowsHide: true });
-    let stderr = "";
-    proc.stderr?.on("data", (chunk) => {
-      stderr += chunk.toString();
-    });
-    proc.on("error", (err) => reject(err));
-    proc.on("close", (code) => resolve({ code: code ?? -1, stderr }));
-  });
-}
+export const maxDuration = 180;
 
 export async function POST(request: Request) {
   if (!(await isAdmin())) {
@@ -44,13 +32,16 @@ export async function POST(request: Request) {
     const buffer = Buffer.from(arrayBuffer);
     await fs.writeFile(inputPath, buffer);
 
-    // Converte para MP4 padrão H.264 + AAC 100% aceito no Instagram, TikTok, WhatsApp e iPhone/Android
+    // Converte para MP4 padrão oficial H.264 Main Profile + AAC 44.1kHz + faststart
+    // 100% aceito no WhatsApp, Instagram, TikTok, Windows Media Player e iOS
     const ffmpegArgs = [
       "-y",
       "-i", inputPath,
       "-c:v", "libx264",
       "-pix_fmt", "yuv420p",
-      "-preset", "ultrafast",
+      "-profile:v", "main",
+      "-level", "4.0",
+      "-preset", "veryfast",
       "-crf", "22",
       "-r", "30",
       "-c:a", "aac",
@@ -62,12 +53,11 @@ export async function POST(request: Request) {
 
     const result = await runFfmpeg(ffmpegArgs);
     if (result.code !== 0) {
-      console.error("FFmpeg error:", result.stderr);
-      throw new Error("Falha na conversão com FFmpeg.");
+      console.error("[convert-video] FFmpeg error:", result.stderr);
+      throw new Error(`Falha na conversão com FFmpeg (${result.code}).`);
     }
 
     const outputBuffer = await fs.readFile(outputPath);
-
     const safeFilename = requestedName.replace(/[^a-zA-Z0-9_.-]/g, "_").replace(/\.[^.]+$/, ".mp4");
 
     return new NextResponse(outputBuffer, {
@@ -81,12 +71,14 @@ export async function POST(request: Request) {
     });
   } catch (error) {
     console.error("Erro ao converter vídeo para MP4:", error);
+    const msg = (error as any)?.code === "ENOENT"
+      ? "FFmpeg não está instalado no PATH do servidor (ENOENT)."
+      : error instanceof Error ? error.message : "Não foi possível converter para MP4.";
     return NextResponse.json(
-      { error: error instanceof Error ? error.message : "Não foi possível converter para MP4." },
+      { error: msg },
       { status: 500 }
     );
   } finally {
-    // Limpa arquivos temporários
     await fs.unlink(inputPath).catch(() => {});
     await fs.unlink(outputPath).catch(() => {});
   }

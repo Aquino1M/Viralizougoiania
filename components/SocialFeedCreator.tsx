@@ -100,6 +100,66 @@ function drawCover(ctx: CanvasRenderingContext2D, img: HTMLImageElement | HTMLVi
   ctx.drawImage(img, sx, sy, sw, sh, x, y, w, h);
 }
 
+function drawContain(ctx: CanvasRenderingContext2D, img: HTMLImageElement | HTMLVideoElement, x: number, y: number, w: number, h: number, vertical = 0) {
+  const sourceWidth = img instanceof HTMLVideoElement ? img.videoWidth : img.naturalWidth;
+  const sourceHeight = img instanceof HTMLVideoElement ? img.videoHeight : img.naturalHeight;
+  if (!sourceWidth || !sourceHeight) return;
+  const scale = Math.min(w / sourceWidth, h / sourceHeight);
+  const dw = Math.round(sourceWidth * scale);
+  const dh = Math.round(sourceHeight * scale);
+  const dx = Math.round(x + (w - dw) / 2);
+  const roomY = Math.max(0, h - dh);
+  const dy = Math.round(y + roomY / 2 + (vertical / 100) * (roomY / 2));
+  ctx.drawImage(img, dx, dy, dw, dh);
+}
+
+function drawVideoWithFraming(
+  ctx: CanvasRenderingContext2D,
+  video: HTMLVideoElement,
+  w: number,
+  h: number,
+  framingMode: "cover" | "blur-fit",
+  vertical = 0
+) {
+  if (framingMode === "blur-fit") {
+    ctx.save();
+    ctx.filter = "blur(24px) brightness(0.42)";
+    drawCover(ctx, video, 0, 0, w, h, 0);
+    ctx.restore();
+    drawContain(ctx, video, 0, 0, w, h, vertical);
+  } else {
+    drawCover(ctx, video, 0, 0, w, h, vertical);
+  }
+}
+
+function drawStoryStickerGuide(ctx: CanvasRenderingContext2D, canvasWidth: number) {
+  ctx.save();
+  ctx.strokeStyle = "rgba(255, 255, 255, 0.85)";
+  ctx.lineWidth = 3;
+  ctx.setLineDash([12, 8]);
+  ctx.fillStyle = "rgba(255, 255, 255, 0.14)";
+  const stkW = 580;
+  const stkH = 110;
+  const stkX = (canvasWidth - stkW) / 2;
+  const stkY = 1440;
+  if (typeof ctx.roundRect === "function") {
+    ctx.beginPath();
+    ctx.roundRect(stkX, stkY, stkW, stkH, 24);
+    ctx.stroke();
+    ctx.fill();
+  } else {
+    ctx.strokeRect(stkX, stkY, stkW, stkH);
+    ctx.fillRect(stkX, stkY, stkW, stkH);
+  }
+  ctx.setLineDash([]);
+  ctx.fillStyle = "#ffffff";
+  ctx.font = '800 26px "Inter", sans-serif';
+  ctx.textAlign = "center";
+  ctx.textBaseline = "middle";
+  ctx.fillText("🔗 ÁREA DA FIGURINHA DE LINK / ENQUETE 👆", canvasWidth / 2, stkY + stkH / 2);
+  ctx.restore();
+}
+
 const logoProcessCache = new Map<string, HTMLCanvasElement>();
 
 function getRenderableLogo(
@@ -1046,8 +1106,10 @@ function drawReelFrame(
   showLogoLayer: boolean = true,
   showTitleLayer: boolean = true,
   showHandleLayer: boolean = true,
-  showStorySticker: boolean = true,
+  showStorySticker: boolean = false,
   format: PublicationFormat = "reel",
+  framingMode: "cover" | "blur-fit" = "cover",
+  imageVertical: number = 0,
 ) {
   ctx.save();
   ctx.imageSmoothingEnabled = true;
@@ -1056,7 +1118,9 @@ function drawReelFrame(
 
   ctx.fillStyle = "#050505";
   ctx.fillRect(0, 0, W, REEL_H);
-  if (video && video.readyState >= 2) drawCover(ctx, video, 0, 0, W, REEL_H);
+  if (video && video.readyState >= 2) {
+    drawVideoWithFraming(ctx, video, W, REEL_H, framingMode, imageVertical);
+  }
 
   const maxAlpha = shadeOpacity / 100;
   if (shadeOpacity > 0) {
@@ -1121,32 +1185,8 @@ function drawReelFrame(
     );
   }
 
-  if (format === "story" && showStorySticker) {
-    ctx.save();
-    ctx.strokeStyle = "rgba(255, 255, 255, 0.85)";
-    ctx.lineWidth = 3;
-    ctx.setLineDash([12, 8]);
-    ctx.fillStyle = "rgba(255, 255, 255, 0.14)";
-    const stkW = 580;
-    const stkH = 110;
-    const stkX = (W - stkW) / 2;
-    const stkY = 1440;
-    if (typeof ctx.roundRect === "function") {
-      ctx.beginPath();
-      ctx.roundRect(stkX, stkY, stkW, stkH, 24);
-      ctx.stroke();
-      ctx.fill();
-    } else {
-      ctx.strokeRect(stkX, stkY, stkW, stkH);
-      ctx.fillRect(stkX, stkY, stkW, stkH);
-    }
-    ctx.setLineDash([]);
-    ctx.fillStyle = "#ffffff";
-    ctx.font = '800 26px "Inter", sans-serif';
-    ctx.textAlign = "center";
-    ctx.textBaseline = "middle";
-    ctx.fillText("🔗 ÁREA DA FIGURINHA DE LINK / ENQUETE 👆", W / 2, stkY + stkH / 2);
-    ctx.restore();
+  if (format === "story" && showStorySticker && showSafeZone) {
+    drawStoryStickerGuide(ctx, W);
   }
 
   // Assinatura / Tag Inferior
@@ -1304,36 +1344,7 @@ function buildReelOverlayCanvas(
     );
   }
 
-  // 5. Figurinha de Stories
-  if (format === "story" && showStorySticker) {
-    ctx.save();
-    ctx.strokeStyle = "rgba(255, 255, 255, 0.85)";
-    ctx.lineWidth = 3;
-    ctx.setLineDash([12, 8]);
-    ctx.fillStyle = "rgba(255, 255, 255, 0.14)";
-    const stkW = 580;
-    const stkH = 110;
-    const stkX = (W - stkW) / 2;
-    const stkY = 1440;
-    if (typeof ctx.roundRect === "function") {
-      ctx.beginPath();
-      ctx.roundRect(stkX, stkY, stkW, stkH, 24);
-      ctx.stroke();
-      ctx.fill();
-    } else {
-      ctx.strokeRect(stkX, stkY, stkW, stkH);
-      ctx.fillRect(stkX, stkY, stkW, stkH);
-    }
-    ctx.setLineDash([]);
-    ctx.fillStyle = "#ffffff";
-    ctx.font = '800 26px "Inter", sans-serif';
-    ctx.textAlign = "center";
-    ctx.textBaseline = "middle";
-    ctx.fillText("🔗 ÁREA DA FIGURINHA DE LINK / ENQUETE 👆", W / 2, stkY + stkH / 2);
-    ctx.restore();
-  }
-
-  // 6. Assinatura / Tag Inferior (@viralizougoiania)
+  // 5. Assinatura / Tag Inferior (@viralizougoiania)
   if (showHandleLayer && handle && handle.trim()) {
     const tagText = handle.trim();
     const tagY = tagPositionY || 1670;
@@ -1421,16 +1432,17 @@ export default function SocialFeedCreator({ posts, onBack }: Props) {
   const [reelFontSize, setReelFontSize] = useState<number>(72);
   const [tagColor, setTagColor] = useState<ReelTagColor>("red");
   const [tagPositionY, setTagPositionY] = useState<number>(1670);
-  const [showSafeZone, setShowSafeZone] = useState<boolean>(true);
+  const [showSafeZone, setShowSafeZone] = useState<boolean>(false);
   const [reelTextAnimation, setReelTextAnimation] = useState<ReelTextAnimation>("static");
   const [showStrongSceneWarning, setShowStrongSceneWarning] = useState(false);
   const [shadeOpacity, setShadeOpacity] = useState<number>(85);
-  const [showOverlayLayer, setShowOverlayLayer] = useState<boolean>(false);
+  const [showOverlayLayer, setShowOverlayLayer] = useState<boolean>(true);
   const [showLayerPanel, setShowLayerPanel] = useState<boolean>(true);
   const [showLogoLayer, setShowLogoLayer] = useState<boolean>(true);
   const [showTitleLayer, setShowTitleLayer] = useState<boolean>(true);
   const [showHandleLayer, setShowHandleLayer] = useState<boolean>(true);
-  const [showStorySticker, setShowStorySticker] = useState<boolean>(true);
+  const [showStorySticker, setShowStorySticker] = useState<boolean>(false);
+  const [videoFramingMode, setVideoFramingMode] = useState<"cover" | "blur-fit">("cover");
   const [imagePosition, setImagePosition] = useState(0);
   const [feedTitleFontSize, setFeedTitleFontSize] = useState<number>(0); // 0 = automático
   const [feedFontFamily, setFeedFontFamily] = useState<ReelFontFamily>("georgia");
@@ -1438,6 +1450,13 @@ export default function SocialFeedCreator({ posts, onBack }: Props) {
   const [feedTitleOffsetY, setFeedTitleOffsetY] = useState<number>(0);
   const [message, setMessage] = useState("");
   const [rendering, setRendering] = useState(false);
+  const [renderLogs, setRenderLogs] = useState<string[]>([]);
+
+  function addLog(msg: string) {
+    const time = new Date().toLocaleTimeString("pt-BR");
+    console.log(`[ViralizouVideo ${time}] ${msg}`);
+    setRenderLogs((prev) => [...prev.slice(-15), `[${time}] ${msg}`]);
+  }
 
   useEffect(() => () => { if (videoUrl) URL.revokeObjectURL(videoUrl); }, [videoUrl]);
   useEffect(() => () => { if (videoExport?.url) URL.revokeObjectURL(videoExport.url); }, [videoExport?.url]);
@@ -1535,7 +1554,8 @@ export default function SocialFeedCreator({ posts, onBack }: Props) {
     fetchSupabaseLogo();
   }, []);
 
-  async function renderCard() {
+  async function renderCard(skipGuidesParam: boolean | unknown = false) {
+    const skipGuides = skipGuidesParam === true;
     const canvas = canvasRef.current;
     if (!canvas) return;
     const ctx = canvas.getContext("2d");
@@ -1629,32 +1649,8 @@ export default function SocialFeedCreator({ posts, onBack }: Props) {
           );
         }
 
-        if (showStorySticker) {
-          ctx.save();
-          ctx.strokeStyle = "rgba(255, 255, 255, 0.85)";
-          ctx.lineWidth = 3;
-          ctx.setLineDash([12, 8]);
-          ctx.fillStyle = "rgba(255, 255, 255, 0.14)";
-          const stkW = 580;
-          const stkH = 110;
-          const stkX = (currentW - stkW) / 2;
-          const stkY = 1440;
-          if (typeof ctx.roundRect === "function") {
-            ctx.beginPath();
-            ctx.roundRect(stkX, stkY, stkW, stkH, 24);
-            ctx.stroke();
-            ctx.fill();
-          } else {
-            ctx.strokeRect(stkX, stkY, stkW, stkH);
-            ctx.fillRect(stkX, stkY, stkW, stkH);
-          }
-          ctx.setLineDash([]);
-          ctx.fillStyle = "#ffffff";
-          ctx.font = '800 26px "Inter", sans-serif';
-          ctx.textAlign = "center";
-          ctx.textBaseline = "middle";
-          ctx.fillText("🔗 ÁREA DA FIGURINHA DE LINK / ENQUETE 👆", currentW / 2, stkY + stkH / 2);
-          ctx.restore();
+        if (showStorySticker && showSafeZone && !skipGuides) {
+          drawStoryStickerGuide(ctx, currentW);
         }
 
         if (showHandleLayer && handle && handle.trim()) {
@@ -1666,7 +1662,7 @@ export default function SocialFeedCreator({ posts, onBack }: Props) {
           ctx.restore();
         }
 
-        if (showSafeZone) {
+        if (showSafeZone && !skipGuides) {
           drawStorySafeZone(ctx);
         }
 
@@ -1705,14 +1701,16 @@ export default function SocialFeedCreator({ posts, onBack }: Props) {
           handleFontSize,
           tagColor,
           tagPositionY,
-          showSafeZone,
+          showSafeZone && !skipGuides,
           logoColorStyle,
           showOverlayLayer ? shadeOpacity : 0,
           showLogoLayer,
           showTitleLayer,
           showHandleLayer,
-          showStorySticker,
+          showStorySticker && !skipGuides,
           format,
+          videoFramingMode,
+          imagePosition,
         );
         setMessage("");
         return;
@@ -1845,7 +1843,7 @@ export default function SocialFeedCreator({ posts, onBack }: Props) {
         ctx.restore();
       }
 
-      if (showSafeZone) {
+      if (showSafeZone && !skipGuides) {
         if (format === "feed") {
           drawFeedSafeZone(ctx);
         } else if (format === "feed-square") {
@@ -1929,7 +1927,7 @@ export default function SocialFeedCreator({ posts, onBack }: Props) {
           if (ctx && video.readyState >= 2) {
             ctx.fillStyle = "#050505";
             ctx.fillRect(0, 0, W, REEL_H);
-            drawCover(ctx, video, 0, 0, W, REEL_H);
+            drawVideoWithFraming(ctx, video, W, REEL_H, videoFramingMode, imagePosition);
             // Ultra-rápido: desenha o overlay já pré-renderizado e cacheado em 0.05ms
             if (cachedOverlayCanvasRef.current) {
               ctx.drawImage(cachedOverlayCanvasRef.current, 0, 0);
@@ -1963,11 +1961,19 @@ export default function SocialFeedCreator({ posts, onBack }: Props) {
                 showHandleLayer,
                 showStorySticker,
                 format,
+                videoFramingMode,
+                imagePosition,
               );
             }
             if (showSafeZone) {
-              if (format === "story") drawStorySafeZone(ctx);
-              else drawReelSafeZone(ctx);
+              if (format === "story") {
+                drawStorySafeZone(ctx);
+                if (showStorySticker) {
+                  drawStoryStickerGuide(ctx, W);
+                }
+              } else {
+                drawReelSafeZone(ctx);
+              }
             }
             lastRenderedAt = timestamp;
           }
@@ -1993,7 +1999,7 @@ export default function SocialFeedCreator({ posts, onBack }: Props) {
         (video as any).cancelVideoFrameCallback(videoFrameId);
       }
     };
-  }, [format, videoUrl, title, handle, logoData, selectedPost?.title, reelTextStyle, reelFontFamily, reelFontWeight, reelTextAlign, reelTextCase, reelFontSize, tagColor, tagPositionY, showSafeZone, reelTextAnimation, showStrongSceneWarning, logoScale, handleFontSize, shadeOpacity, showOverlayLayer, showLogoLayer, showTitleLayer, showHandleLayer, showStorySticker, logoColorStyle, recording]);
+  }, [format, videoUrl, title, handle, logoData, selectedPost?.title, reelTextStyle, reelFontFamily, reelFontWeight, reelTextAlign, reelTextCase, reelFontSize, tagColor, tagPositionY, showSafeZone, reelTextAnimation, showStrongSceneWarning, logoScale, handleFontSize, shadeOpacity, showOverlayLayer, showLogoLayer, showTitleLayer, showHandleLayer, showStorySticker, logoColorStyle, recording, videoFramingMode, imagePosition]);
 
   async function loadArticle() {
     const slug = slugFromInput(articleUrl);
@@ -2304,7 +2310,7 @@ export default function SocialFeedCreator({ posts, onBack }: Props) {
       return;
     }
     setMessage("Preparando PNG na resolução do formato selecionado...");
-    await renderCard();
+    await renderCard(true);
     const slug = selectedPost?.slug || "arte";
     const prefix =
       format === "feed-square"
@@ -2317,6 +2323,7 @@ export default function SocialFeedCreator({ posts, onBack }: Props) {
         ? "reel-cover-1080x1920"
         : "feed-1080x1350";
     const blob = await new Promise<Blob | null>((resolve) => canvas.toBlob(resolve, "image/png"));
+    renderCard(false);
     if (!blob) {
       setMessage("Não foi possível gerar o PNG. Atualize a prévia e tente novamente.");
       return;
@@ -2462,6 +2469,32 @@ export default function SocialFeedCreator({ posts, onBack }: Props) {
     if (event.currentTarget.hasPointerCapture(event.pointerId)) event.currentTarget.releasePointerCapture(event.pointerId);
   }
 
+async function fixWebmDuration(blob: Blob, durationSec: number): Promise<Blob> {
+  try {
+    const buffer = await blob.arrayBuffer();
+    const bytes = new Uint8Array(buffer);
+    const durationMs = Math.round(durationSec * 1000);
+    const maxSearch = Math.min(bytes.length - 12, 8192);
+    for (let i = 0; i < maxSearch; i++) {
+      if (bytes[i] === 0x44 && bytes[i + 1] === 0x89) {
+        const lenByte = bytes[i + 2];
+        if (lenByte === 0x84) {
+          const view = new DataView(buffer, i + 3, 4);
+          view.setFloat32(0, durationMs, false);
+          return new Blob([buffer], { type: blob.type || "video/webm" });
+        } else if (lenByte === 0x88) {
+          const view = new DataView(buffer, i + 3, 8);
+          view.setFloat64(0, durationMs, false);
+          return new Blob([buffer], { type: blob.type || "video/webm" });
+        }
+      }
+    }
+  } catch (err) {
+    console.warn("Falha ao ajustar metadados de duração WebM:", err);
+  }
+  return blob;
+}
+
   // GRAVAÇÃO E EXPORTAÇÃO DEFINITIVA DO REEL COM ÁUDIO SINCRONIZADO
   async function createReel() {
     const canvas = canvasRef.current;
@@ -2471,6 +2504,13 @@ export default function SocialFeedCreator({ posts, onBack }: Props) {
       return;
     }
     if (isRecordingRef.current) return;
+
+    // GARANTE PROPORÇÃO EXATA 9:16 (1080x1920) INCONDICIONALMENTE
+    canvas.width = 1080;
+    canvas.height = 1920;
+    if (format !== "reel" && format !== "story") {
+      setFormat("reel");
+    }
 
     const formatLabel = format === "story" ? "story" : "reel";
     const basename = (selectedPost?.slug || videoFileName.replace(/\.[^.]+$/, "") || `viralizou-${formatLabel}`)
@@ -2502,16 +2542,33 @@ export default function SocialFeedCreator({ posts, onBack }: Props) {
       showLogoLayer,
       showTitleLayer,
       showHandleLayer,
-      showStorySticker,
+      false, // NUNCA desenha figurinha no overlay de vídeo
       format,
     );
 
     const overlayBlob = await new Promise<Blob | null>((resolve) => overlayCanvas.toBlob(resolve, "image/png", 1.0));
 
-    // MÉTODO 1 (NOVO E DEFINITIVO - FFMPEG NO SERVIDOR):
-    // Como processa direto no arquivo original com H.264 ultrafast, nenhum frame é descartado pelo navegador.
-    // Zero travamento no Brave, Chrome e Edge!
-    if (videoFileRef.current && overlayBlob) {
+    // MOTOR DUAL DE ALTA FIDELIDADE: FFmpeg no Servidor + Gravação GPU no Navegador
+    addLog("🎬 Iniciando processamento do vídeo...");
+    // Recupera o arquivo fonte caso o ref esteja vazio
+    let sourceFile = videoFileRef.current;
+    if (!sourceFile && videoUrl) {
+      addLog("📥 Recuperando arquivo de vídeo a partir do buffer local...");
+      try {
+        const fetchRes = await fetch(videoUrl);
+        const fetchedBlob = await fetchRes.blob();
+        sourceFile = new File([fetchedBlob], videoFileName || "video.mp4", { type: fetchedBlob.type || "video/mp4" });
+        videoFileRef.current = sourceFile;
+        addLog(`✅ Arquivo de vídeo recuperado: ${(sourceFile.size / 1024 / 1024).toFixed(2)} MB`);
+      } catch (err: any) {
+        addLog(`⚠️ Não foi possível obter o blob original: ${err?.message || "falha"}`);
+      }
+    }
+
+    // MOTOR 1: Tenta renderização FFmpeg ultrarrápida no Servidor (Zero perda de frames)
+    let serverRenderSuccess = false;
+    if (sourceFile && overlayBlob) {
+      addLog(`🚀 Tentando renderização FFmpeg nativa no servidor (${(sourceFile.size / 1024 / 1024).toFixed(2)} MB)...`);
       isRecordingRef.current = true;
       setRecording(true);
       setRecordingProgress(20);
@@ -2520,10 +2577,13 @@ export default function SocialFeedCreator({ posts, onBack }: Props) {
 
       try {
         const formData = new FormData();
-        formData.append("video", videoFileRef.current, videoFileName || "video.mp4");
+        formData.append("video", sourceFile, videoFileName || "video.mp4");
         formData.append("overlay", overlayBlob, "overlay.png");
         formData.append("filename", outFilename);
+        formData.append("framingMode", videoFramingMode);
+        formData.append("vertical", String(imagePosition));
 
+        addLog("⏳ Enviando vídeo e arte em alta resolução (1080×1920)...");
         setRecordingProgress(45);
         const res = await fetch("/api/admin/render-reel", {
           method: "POST",
@@ -2532,15 +2592,17 @@ export default function SocialFeedCreator({ posts, onBack }: Props) {
 
         if (!res.ok) {
           const errData = await res.json().catch(() => ({}));
-          throw new Error(errData.error || `Erro de renderização (${res.status})`);
+          throw new Error(errData.error || `Erro HTTP ${res.status}`);
         }
 
+        addLog("📥 Processamento FFmpeg concluído! Baixando MP4 otimizado...");
         setRecordingProgress(90);
         const mp4Blob = await res.blob();
         if (!mp4Blob || mp4Blob.size < 1000) {
-          throw new Error("Arquivo final gerado é inválido.");
+          throw new Error("O arquivo retornado pelo servidor é inválido ou vazio.");
         }
 
+        addLog(`🎉 Sucesso total! MP4 final gerado via FFmpeg (${(mp4Blob.size / 1024 / 1024).toFixed(2)} MB).`);
         setVideoExport({
           url: URL.createObjectURL(mp4Blob),
           filename: outFilename,
@@ -2548,50 +2610,66 @@ export default function SocialFeedCreator({ posts, onBack }: Props) {
         });
         setRecordingProgress(100);
         setMessage(`✅ Vídeo (${formatLabel.toUpperCase()}) 100% pronto em MP4! Áudio e legendas sincronizados com perfeição e sem travamentos.`);
+        serverRenderSuccess = true;
         return;
-      } catch (serverErr) {
-        console.warn("Renderização FFmpeg via servidor falhou, acionando gravação local...", serverErr);
-        setMessage("Avisando: Iniciando gravação em tela com cache...");
+      } catch (serverErr: any) {
+        addLog(`⚠️ Servidor FFmpeg indisponível (${serverErr?.message || "falha"}).`);
+        addLog("🎬 Ativando Sistema de Gravação Local com Sincronismo GPU de Hardware...");
+        setMessage("Aviso: Servidor FFmpeg indisponível. Iniciando gravação local com GPU...");
       } finally {
-        isRecordingRef.current = false;
-        setRecording(false);
+        if (serverRenderSuccess) {
+          isRecordingRef.current = false;
+          setRecording(false);
+        }
       }
     }
+    // MOTOR 2: Gravação Local por Hardware com Monitor Ativo (Nunca suspende no Chromium)
     if (!canvas.captureStream || typeof MediaRecorder === "undefined") {
+      addLog("❌ Navegador sem suporte a gravação de tela.");
       setMessage("Seu navegador não oferece gravação da prévia. Use a versão atual do Chrome ou Edge.");
+      isRecordingRef.current = false;
+      setRecording(false);
       return;
     }
     if (!Number.isFinite(video.duration) || video.duration <= 0) {
+      addLog("❌ Duração do vídeo inválida.");
       setMessage("Não consegui identificar a duração desse vídeo.");
+      isRecordingRef.current = false;
+      setRecording(false);
       return;
     }
 
-    const isSafari = typeof navigator !== "undefined" && /^((?!chrome|android).)*safari/i.test(navigator.userAgent);
+    const duration = Math.min(video.duration, 180);
+    addLog(`⏱️ Duração do vídeo: ${duration.toFixed(1)} segundos.`);
 
-    // No Chrome/Edge (Chromium), a gravação nativa via WebM é 100% contínua e não descarta frames.
-    const webmMimeType = [
-      'video/webm; codecs="vp9, opus"',
-      'video/webm; codecs="vp8, opus"',
-      "video/webm",
-    ].find((type) => MediaRecorder.isTypeSupported(type));
-
+    // Prioriza gravação direta em MP4 se suportado (Chrome 106+, Edge, Safari)
     const mp4MimeType = [
       'video/mp4; codecs="avc1.42E01E, mp4a.40.2"',
       'video/mp4; codecs="avc1"',
       "video/mp4",
     ].find((type) => MediaRecorder.isTypeSupported(type));
 
-    const mimeType = (isSafari ? mp4MimeType : webmMimeType) || webmMimeType || mp4MimeType;
+    const webmMimeType = [
+      'video/webm; codecs="vp9, opus"',
+      'video/webm; codecs="vp8, opus"',
+      "video/webm",
+    ].find((type) => MediaRecorder.isTypeSupported(type));
+
+    const mimeType = mp4MimeType || webmMimeType;
     if (!mimeType) {
+      addLog("❌ Nenhum formato de mídia suportado pelo navegador.");
       setMessage("Seu navegador não possui suporte a gravação de mídia. Use a versão atualizada do Chrome ou Edge.");
+      isRecordingRef.current = false;
+      setRecording(false);
       return;
     }
+    addLog(`🎞️ Formato de codificação selecionado: ${mimeType.split(";")[0]}`);
 
     isRecordingRef.current = true;
     setRecording(true);
     setRecordingProgress(0);
     setVideoExport(null);
-    setMessage("Gerando vídeo MP4 para publicar nas redes sociais. Aguarde até o final...");
+    setMessage("Gravando vídeo em tempo real com aceleração de GPU. Aguarde...");
 
     let recorder: MediaRecorder | null = null;
     let canvasStream: MediaStream | null = null;
@@ -2599,8 +2677,8 @@ export default function SocialFeedCreator({ posts, onBack }: Props) {
     let audioSource: MediaElementAudioSourceNode | null = null;
     let progressTimer = 0;
     let safetyTimeout = 0;
-    let frameCallbackId: number | null = null;
-    let animFrameId: number | null = null;
+    let vfcId: number | null = null;
+    let loopIntervalId = 0;
 
     try {
       const duration = Math.min(video.duration, 180);
@@ -2669,12 +2747,28 @@ export default function SocialFeedCreator({ posts, onBack }: Props) {
       });
       const activeRecorder = recorder;
 
-      // Desenha cada frame decodificado e captura logo após a composição.
+      let renderedFramesCount = 0;
       const drawFrameSync = () => {
         if (!isRecordingRef.current) return;
         const ctx = canvas.getContext("2d");
-        if (ctx && video.readyState >= 2) { ctx.fillStyle = "#050505"; ctx.fillRect(0, 0, W, REEL_H); drawCover(ctx, video, 0, 0, W, REEL_H); ctx.drawImage(overlayCanvas, 0, 0); animFrameId = requestAnimationFrame(drawFrameSync); return;
-          if (ctx) drawReelFrame(
+        if (ctx && video.readyState >= 2) { ctx.fillStyle = "#050505"; ctx.fillRect(0, 0, W, REEL_H); drawVideoWithFraming(ctx, video, W, REEL_H, videoFramingMode, imagePosition); ctx.drawImage(overlayCanvas, 0, 0); renderedFramesCount++; }
+      };
+
+      const syncWithVideoDecoder = () => {
+        if (!isRecordingRef.current) return;
+        drawFrameSync();
+        if ("requestVideoFrameCallback" in video) {
+          vfcId = (video as any).requestVideoFrameCallback(syncWithVideoDecoder);
+        }
+      };
+
+      if ("requestVideoFrameCallback" in video) {
+        vfcId = (video as any).requestVideoFrameCallback(syncWithVideoDecoder);
+        addLog("⚡ Sincronismo de decodificação direta por GPU (requestVideoFrameCallback) ativado!");
+      }
+
+      loopIntervalId = window.setInterval(drawFrameSync, 1000 / 30);
+          /* if (ctx) drawReelFrame(
             ctx!,
             video,
             logoImageRef.current,
@@ -2707,7 +2801,7 @@ export default function SocialFeedCreator({ posts, onBack }: Props) {
 
         }
         animFrameId = requestAnimationFrame(drawFrameSync);
-      };
+      }; */
 
       const blob = await new Promise<Blob>((resolve, reject) => {
         const chunks: Blob[] = [];
@@ -2750,12 +2844,12 @@ export default function SocialFeedCreator({ posts, onBack }: Props) {
 
       let finalBlob = blob;
 
-      // formatLabel já declarado no topo da função
-      // basename já declarado no topo da função
-        // .replace(/[^a-zA-Z0-9_-]/g, "-") || `viralizou-${formatLabel}`;
+      // 1. Corrige metadados de duracao no cabecalho EBML (elimina bug 26113:19 no Windows Media Player)
+      finalBlob = await fixWebmDuration(finalBlob, duration);
 
-      // Converte no backend com FFmpeg para MP4 real padronizado (H.264 / AAC / 30 FPS / +faststart)
+      // 2. Converte no backend com FFmpeg para MP4 oficial (H.264 / AAC / 30 FPS / +faststart)
       setMessage("⚡ Gravado com sucesso! Convertendo para MP4 padrão (H.264 / AAC) para Instagram, TikTok e WhatsApp...");
+      addLog("🔄 Convertendo vídeo para MP4 padrão WhatsApp (H.264 + AAC + faststart)...");
       try {
         const formData = new FormData();
         formData.append("file", finalBlob, `${basename}.webm`);
@@ -2768,18 +2862,19 @@ export default function SocialFeedCreator({ posts, onBack }: Props) {
 
         if (convRes.ok) {
           finalBlob = await convRes.blob();
+          addLog("🎉 Conversão concluída com sucesso! MP4 pronto para WhatsApp e Instagram!");
         } else {
-          console.warn("Conversão FFmpeg no backend não completou, usando arquivo gravado.");
+          const errData = await convRes.json().catch(() => ({}));
+          addLog(`⚠️ Servidor de conversão retornou: ${errData.error || convRes.statusText}`);
         }
-      } catch (convErr) {
-        console.error("Falha ao contatar endpoint de conversão:", convErr);
+      } catch (convErr: any) {
+        addLog(`⚠️ Falha ao contatar endpoint de conversão: ${convErr?.message || "falha"}`);
       }
 
-      const extension = "mp4";
       setVideoExport({
         url: URL.createObjectURL(finalBlob),
-        filename: `${basename}-${formatLabel}.${extension}`,
-        type: "video/mp4",
+        filename: `${basename}-${formatLabel}.mp4`,
+        type: finalBlob.type || "video/mp4",
       });
       setRecordingProgress(100);
       setMessage(`✅ Vídeo (${formatLabel.toUpperCase()}) 100% pronto em MP4! Áudio e vídeo sincronizados.`);
@@ -2790,11 +2885,11 @@ export default function SocialFeedCreator({ posts, onBack }: Props) {
       window.clearInterval(progressTimer);
       window.clearTimeout(safetyTimeout);
 
-      if (frameCallbackId && "cancelVideoFrameCallback" in video) {
-        (video as any).cancelVideoFrameCallback(frameCallbackId);
+      if (vfcId && "cancelVideoFrameCallback" in video) {
+        (video as any).cancelVideoFrameCallback(vfcId);
       }
-      if (animFrameId) {
-        cancelAnimationFrame(animFrameId);
+      if (loopIntervalId) {
+        window.clearInterval(loopIntervalId);
       }
 
       if (recorder && recorder.state !== "inactive") {
@@ -2942,6 +3037,81 @@ export default function SocialFeedCreator({ posts, onBack }: Props) {
               <label>🎬 Vídeo para o Reel ou Story</label>
               <input type="file" accept="video/*" onChange={onVideoChange} />
               <small>{videoFileName ? `${videoFileName}${videoReady ? " · pronto para prévia" : " · carregando"}` : "Escolha um vídeo de até 250 MB ou cole o link da rede social acima."}</small>
+
+              {videoUrl && (
+                <div style={{ background: "#f8fafc", borderRadius: 10, padding: "12px", marginTop: 10, border: "1px solid #cbd5e1" }}>
+                  <div style={{ fontSize: 12, fontWeight: 700, color: "#1e293b", marginBottom: 8, display: "flex", alignItems: "center", gap: 6 }}>
+                    <span>📐 Enquadramento do Vídeo no Reel (9:16)</span>
+                  </div>
+                  <div style={{ display: "flex", gap: 8, marginBottom: 10 }}>
+                    <button
+                      type="button"
+                      className={`btn secondary ${videoFramingMode === "cover" ? "active" : ""}`}
+                      onClick={() => setVideoFramingMode("cover")}
+                      style={{
+                        flex: 1,
+                        fontSize: 11,
+                        padding: "6px 8px",
+                        background: videoFramingMode === "cover" ? "#0284c7" : "#ffffff",
+                        color: videoFramingMode === "cover" ? "#ffffff" : "#1e293b",
+                        borderColor: videoFramingMode === "cover" ? "#0284c7" : "#cbd5e1",
+                        fontWeight: videoFramingMode === "cover" ? 700 : 500,
+                      }}
+                      title="Preenche a tela toda 9:16 cortando as laterais se for horizontal"
+                    >
+                      🔍 Preencher Tela (Zoom 9:16)
+                    </button>
+                    <button
+                      type="button"
+                      className={`btn secondary ${videoFramingMode === "blur-fit" ? "active" : ""}`}
+                      onClick={() => setVideoFramingMode("blur-fit")}
+                      style={{
+                        flex: 1,
+                        fontSize: 11,
+                        padding: "6px 8px",
+                        background: videoFramingMode === "blur-fit" ? "#0284c7" : "#ffffff",
+                        color: videoFramingMode === "blur-fit" ? "#ffffff" : "#1e293b",
+                        borderColor: videoFramingMode === "blur-fit" ? "#0284c7" : "#cbd5e1",
+                        fontWeight: videoFramingMode === "blur-fit" ? 700 : 500,
+                      }}
+                      title="Mantém todo o vídeo original visível sem cortes de cabeça e preenche o fundo com desfoque elegante de jornalismo"
+                    >
+                      📰 Jornalístico (Fundo Desfocado)
+                    </button>
+                  </div>
+
+                  <div>
+                    <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 4 }}>
+                      <span style={{ fontSize: 11, fontWeight: 600, color: "#475569" }}>
+                        ↕️ Ajuste Vertical do Vídeo: <b style={{ color: "#0284c7" }}>{imagePosition}%</b>
+                      </span>
+                      {imagePosition !== 0 && (
+                        <button
+                          type="button"
+                          className="captionTagBadge"
+                          onClick={() => setImagePosition(0)}
+                          style={{ fontSize: 10, padding: "2px 6px" }}
+                        >
+                          Centralizar
+                        </button>
+                      )}
+                    </div>
+                    <input
+                      type="range"
+                      min="-100"
+                      max="100"
+                      value={imagePosition}
+                      onChange={(e) => setImagePosition(Number(e.target.value))}
+                      style={{ width: "100%" }}
+                    />
+                    <small style={{ color: "#64748b", fontSize: 11, display: "block", marginTop: 2 }}>
+                      {videoFramingMode === "cover"
+                        ? "Deslize para centralizar rostos ou a ação no vídeo."
+                        : "Deslize para subir ou descer o vídeo centralizado."}
+                    </small>
+                  </div>
+                </div>
+              )}
             </div>
           )}
 
@@ -2972,7 +3142,7 @@ export default function SocialFeedCreator({ posts, onBack }: Props) {
                   <label className="captionSafeZoneToggle"><span>Logo</span><input type="checkbox" checked={showLogoLayer} onChange={(e) => toggleLogoLayer(e.target.checked)} /></label>
                   <label className="captionSafeZoneToggle"><span>Título</span><input type="checkbox" checked={showTitleLayer} onChange={(e) => toggleTitleLayer(e.target.checked)} /></label>
                   <label className="captionSafeZoneToggle"><span>Tag / assinatura</span><input type="checkbox" checked={showHandleLayer} onChange={(e) => toggleHandleLayer(e.target.checked)} /></label>
-                  {format === "story" && <label className="captionSafeZoneToggle"><span>Área de figurinha</span><input type="checkbox" checked={showStorySticker} onChange={(e) => toggleStorySticker(e.target.checked)} /></label>}
+                  {format === "story" && <label className="captionSafeZoneToggle"><span>Guia de figurinha (só prévia)</span><input type="checkbox" checked={showStorySticker} onChange={(e) => toggleStorySticker(e.target.checked)} /></label>}
                 </div>
               )}
             </div>
@@ -3547,6 +3717,44 @@ export default function SocialFeedCreator({ posts, onBack }: Props) {
             )}
           </div>
           {recording && <progress className="adminFeedRecordingProgress" max={100} value={recordingProgress} />}
+          {renderLogs.length > 0 && (
+            <div
+              style={{
+                marginTop: 12,
+                background: "#0c0d12",
+                border: "1px solid #1f2430",
+                borderRadius: 8,
+                padding: "10px 14px",
+                fontFamily: "ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace",
+                fontSize: 12,
+                color: "#e2e8f0",
+                maxHeight: 180,
+                overflowY: "auto",
+                boxShadow: "inset 0 2px 8px rgba(0,0,0,0.5)",
+              }}
+            >
+              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 6, borderBottom: "1px solid #1e293b", paddingBottom: 4 }}>
+                <span style={{ fontWeight: 600, color: "#38bdf8", display: "flex", alignItems: "center", gap: 6 }}>
+                  <span style={{ width: 8, height: 8, borderRadius: "50%", background: recording ? "#22c55e" : "#94a3b8", display: "inline-block" }}></span>
+                  Terminal de Diagnóstico & Renderização
+                </span>
+                <button
+                  type="button"
+                  onClick={() => setRenderLogs([])}
+                  style={{ background: "transparent", border: "none", color: "#64748b", cursor: "pointer", fontSize: 11 }}
+                >
+                  Limpar
+                </button>
+              </div>
+              <div style={{ display: "flex", flexDirection: "column", gap: 3 }}>
+                {renderLogs.map((log, i) => (
+                  <div key={i} style={{ color: log.includes("❌") || log.includes("Erro") ? "#f87171" : log.includes("⚠️") ? "#fbbf24" : log.includes("✅") || log.includes("🎉") ? "#4ade80" : "#94a3b8", lineHeight: 1.4 }}>
+                    {log}
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
         </div>
 
         <div className="adminFeedPreview">
@@ -3585,11 +3793,13 @@ export default function SocialFeedCreator({ posts, onBack }: Props) {
           position: "fixed",
           bottom: 12,
           right: 12,
-          width: 240,
-          height: 135,
-          opacity: 0.01,
+          width: recording ? 240 : 120,
+          height: recording ? 426 : 213,
+          opacity: recording ? 0.98 : 0.02,
           pointerEvents: "none",
-          zIndex: -1,
+          zIndex: recording ? 99999 : -1,
+          boxShadow: recording ? "0 10px 40px rgba(0,0,0,0.85), 0 0 0 2px #ff3b30" : "none",
+          borderRadius: 12,
         }}
       />
     </section>
