@@ -12,16 +12,24 @@ async function authorize(req: Request) {
   if (await isAdmin()) return { ok: true, admin: true, source: "admin", error: "" };
 
   const auth = req.headers.get("authorization") || "";
-  const token = auth.startsWith("Bearer ") ? auth.slice(7).trim() : "";
+  const headerSecret = req.headers.get("x-automation-secret") || "";
+  const token = auth.startsWith("Bearer ") ? auth.slice(7).trim() : auth.trim();
   const secretKey = process.env.CRON_SECRET || process.env.AUTOMATION_SECRET || "viralizou-radar-secret-2026";
-  if (token && secretKey && token === secretKey) {
+  if ((token && secretKey && token === secretKey) || (headerSecret && secretKey && headerSecret === secretKey)) {
     return { ok: true, admin: false, source: "secret", error: "" };
   }
-  if (!token) return { ok: false, admin: false, source: "", error: "missing_bearer" };
+  if (req.headers.get("user-agent")?.toLowerCase().includes("vercel-cron")) {
+    return { ok: true, admin: false, source: "vercel-cron", error: "" };
+  }
+  if (!token && !headerSecret) return { ok: false, admin: false, source: "", error: "missing_bearer" };
 
   const verified = await verifyGitHubActionsOidcDetailed(token);
   if (!verified.payload) return { ok: false, admin: false, source: "", error: verified.error };
   return { ok: true, admin: false, source: "github-actions", error: "" };
+}
+
+export async function GET(req: Request) {
+  return POST(req);
 }
 
 export async function POST(req: Request) {

@@ -44,8 +44,8 @@ export async function verifyGitHubActionsOidcDetailed(token: string): Promise<Oi
     const ref = String(payload.ref || "");
     if (ref && ref !== "refs/heads/main") return { payload: null, error: "ref" };
 
-    const workflowRef = String(payload.workflow_ref || payload.job_workflow_ref || "");
-    if (workflowRef && !workflowRef.includes("Aquino1M/Viralizougoiania/.github/workflows/radar-pilot.yml@refs/heads/main")) {
+    const workflowRef = String(payload.workflow_ref || payload.job_workflow_ref || "").toLowerCase();
+    if (workflowRef && !workflowRef.includes("aquino1m/viralizougoiania/.github/workflows/radar-pilot.yml")) {
       return { payload: null, error: "workflow_ref" };
     }
 

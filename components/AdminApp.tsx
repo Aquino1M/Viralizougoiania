@@ -761,7 +761,64 @@ export default function AdminApp() {
 
   // O Radar lê o snapshot gerado pelo mesmo Ciclo Único 24/7.
   // Trocar de aba não varre novamente os jornais e não cria novas execuções pesadas.
-  async function importAllFeeds(region: RadarRegion = radarRegion) {
+  async function importAllFeeds(region: RadarRegion = radarRegion, forceLive = false) {
+    setImporting(true);
+    setImportMessage("");
+    setSelectedUrls([]);
+    const label =
+      region === "goias" ? "Goiânia & Goiás"
+      : region === "brasil" ? "Grandes Jornais"
+      : region === "futebol" ? "Futebol & Brasileirão"
+      : region === "fofocas" ? "Fofocas & Famosos"
+      : "Todos os Canais";
+
+    try {
+      let items: ImportedNews[] = [];
+      let isLive = false;
+      let snapshotTime = "";
+
+      if (!forceLive) {
+        try {
+          const res = await fetch("/api/automation/radar-cache", { cache: "no-store" });
+          const data = await res.json().catch(() => ({}));
+          if (res.ok && Array.isArray(data.items) && data.items.length > 0) {
+            const ageMs = data.updated_at ? Date.now() - new Date(data.updated_at).getTime() : Infinity;
+            if (ageMs < 15 * 60 * 1000) {
+              const cached = data.items as RadarCachedItem[];
+              const scoped = region === "all" ? cached : cached.filter((item) => item.radar_group === region);
+              items = deduplicateImportedItems(scoped);
+              snapshotTime = data.updated_at
+                ? new Date(data.updated_at).toLocaleTimeString("pt-BR", { hour: "2-digit", minute: "2-digit" })
+                : "";
+            }
+          }
+        } catch {}
+      }
+
+      if (!items.length) {
+        setImportMessage(`📡 Varrendo todos os feeds de ${label} em tempo real agora...`);
+        items = await fetchRadarFeeds(region);
+        isLive = true;
+      }
+
+      setImportItems(items);
+      autoHealMissingImages(items);
+
+      const nowTime = new Date().toLocaleTimeString("pt-BR", { hour: "2-digit", minute: "2-digit" });
+      if (isLive) {
+        setImportMessage(`⚡ Radar ao vivo: ${items.length} notícias frescas varridas em tempo real (${label}) às ${nowTime}!`);
+      } else {
+        setImportMessage(`📡 Snapshot 24/7: ${items.length} notícias de ${label} • Atualizado às ${snapshotTime || nowTime}.`);
+      }
+    } catch (err: any) {
+      setImportItems([]);
+      setImportMessage(`Erro ao atualizar Radar: ${err.message}`);
+    } finally {
+      setImporting(false);
+    }
+  }
+
+  /*
     setImporting(true);
     setImportMessage("");
     setSelectedUrls([]);
@@ -782,14 +839,14 @@ export default function AdminApp() {
       const updated = data.updated_at
         ? new Date(data.updated_at).toLocaleTimeString("pt-BR", { hour: "2-digit", minute: "2-digit" })
         : "aguardando primeiro ciclo";
-      setImportMessage(`📡 Snapshot 24/7: ${items.length} notícias de ${label} • Atualizado ${updated}. Nenhum feed foi varrido novamente ao abrir esta aba.`);
+      // removed snapshot msg
     } catch (err: any) {
       setImportItems([]);
-      setImportMessage(`Radar aguardando o Ciclo Único 24/7: ${err.message}`);
+      // err msg
     } finally {
       setImporting(false);
     }
-  }
+  */
 
   function autoHealMissingImages(incomingItems: ImportedNews[]) {
     const missing = incomingItems.filter((it) => !it.image_url && it.source_url);
@@ -914,7 +971,7 @@ export default function AdminApp() {
         );
       }
       await Promise.all([load(), refreshAutomationStatus()]);
-      await importAllFeeds(radarRegion);
+      await importAllFeeds(radarRegion, true);
     } catch (err: any) {
       setImportMessage("Erro no Ciclo Único 24/7: " + err.message);
     } finally {
@@ -2421,7 +2478,7 @@ export default function AdminApp() {
                     disabled={importing || batchQueueing}
                     onClick={() => {
                       setActiveSourceUrl("ALL");
-                      importAllFeeds(radarRegion);
+                      importAllFeeds(radarRegion, true);
                     }}
                   >
                     ⚡ <b>

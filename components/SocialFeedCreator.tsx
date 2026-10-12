@@ -1414,6 +1414,9 @@ export default function SocialFeedCreator({ posts, onBack, initialPost, onOpenCo
   const cachedOverlayCanvasRef = useRef<HTMLCanvasElement | null>(null);
   const logoImageRef = useRef<HTMLImageElement | null>(null);
   const articleImageRef = useRef<{ src: string; image: HTMLImageElement } | null>(null);
+  const customImageRef = useRef<HTMLImageElement | null>(null);
+  const imageInputRef = useRef<HTMLInputElement | null>(null);
+  const videoInputRef = useRef<HTMLInputElement | null>(null);
   const logoPositionRef = useRef<LogoPosition>(DEFAULT_LOGO_POSITION);
   const titlePositionRef = useRef<LogoPosition>(DEFAULT_TITLE_POSITION);
   const feedTitlePositionRef = useRef<LogoPosition>(DEFAULT_FEED_TITLE_POSITION);
@@ -1432,6 +1435,8 @@ export default function SocialFeedCreator({ posts, onBack, initialPost, onOpenCo
   const [recording, setRecording] = useState(false);
   const [recordingProgress, setRecordingProgress] = useState(0);
   const [videoExport, setVideoExport] = useState<{ url: string; filename: string; type: string } | null>(null);
+  const [customImageUrl, setCustomImageUrl] = useState<string>("");
+  const [customImageFileName, setCustomImageFileName] = useState<string>("");
   const [articleUrl, setArticleUrl] = useState("");
   const [selectedPost, setSelectedPost] = useState<FeedPost | null>(null);
   const [title, setTitle] = useState("");
@@ -1480,6 +1485,7 @@ export default function SocialFeedCreator({ posts, onBack, initialPost, onOpenCo
 
   useEffect(() => () => { if (videoUrl) URL.revokeObjectURL(videoUrl); }, [videoUrl]);
   useEffect(() => () => { if (videoExport?.url) URL.revokeObjectURL(videoExport.url); }, [videoExport?.url]);
+  useEffect(() => () => { if (customImageUrl && customImageUrl.startsWith("blob:")) URL.revokeObjectURL(customImageUrl); }, [customImageUrl]);
   useEffect(() => () => { audioContextRef.current?.close().catch(() => {}); }, []);
   useEffect(() => {
     if (initialPost) {
@@ -1617,17 +1623,43 @@ export default function SocialFeedCreator({ posts, onBack, initialPost, onOpenCo
         ctx.fillStyle = "#050505";
         ctx.fillRect(0, 0, currentW, currentH);
 
-        if (selectedPost?.image_url) {
-          const src = `/api/admin/feed-image?slug=${encodeURIComponent(selectedPost.slug)}&v=${encodeURIComponent(selectedPost.updated_at || selectedPost.created_at || "")}`;
-          const img = articleImageRef.current?.src === src ? articleImageRef.current.image : await loadImage(src);
-          articleImageRef.current = { src, image: img };
-          drawCover(ctx, img, 0, 0, currentW, currentH, imagePosition);
-        } else {
+        let mediaDrawn = false;
+        if (customImageUrl) {
+          try {
+            if (!customImageRef.current || customImageRef.current.src !== customImageUrl) {
+              customImageRef.current = await loadImage(customImageUrl);
+            }
+            if (customImageRef.current) {
+              drawCover(ctx, customImageRef.current, 0, 0, currentW, currentH, imagePosition);
+              mediaDrawn = true;
+            }
+          } catch (e) {
+            console.warn("Erro ao carregar imagem personalizada:", e);
+          }
+        }
+
+        if (!mediaDrawn && selectedPost?.image_url) {
+          try {
+            const src = `/api/admin/feed-image?slug=${encodeURIComponent(selectedPost.slug)}&v=${encodeURIComponent(selectedPost.updated_at || selectedPost.created_at || "")}`;
+            const img = articleImageRef.current?.src === src ? articleImageRef.current.image : await loadImage(src);
+            articleImageRef.current = { src, image: img };
+            drawCover(ctx, img, 0, 0, currentW, currentH, imagePosition);
+            mediaDrawn = true;
+          } catch (e) {
+            console.warn("Erro ao carregar imagem da notícia:", e);
+          }
+        }
+
+        if (!mediaDrawn) {
           const gradient = ctx.createLinearGradient(0, 0, currentW, currentH);
           gradient.addColorStop(0, "#0f172a");
           gradient.addColorStop(1, "#1e293b");
           ctx.fillStyle = gradient;
           ctx.fillRect(0, 0, currentW, currentH);
+          ctx.fillStyle = "rgba(255,255,255,.75)";
+          ctx.font = "700 38px Arial, sans-serif";
+          ctx.textAlign = "center";
+          ctx.fillText("Envie uma foto ou selecione uma notícia", currentW / 2, currentH / 2);
         }
 
         const maxAlpha = shadeOpacity / 100;
@@ -1769,12 +1801,44 @@ export default function SocialFeedCreator({ posts, onBack, initialPost, onOpenCo
 
       const coverH = format === "feed-square" ? 760 : 930;
 
-      if (selectedPost?.image_url) {
-        const src = `/api/admin/feed-image?slug=${encodeURIComponent(selectedPost.slug)}&v=${encodeURIComponent(selectedPost.updated_at || selectedPost.created_at || "")}`;
-        const img = articleImageRef.current?.src === src ? articleImageRef.current.image : await loadImage(src);
-        articleImageRef.current = { src, image: img };
-        drawCover(ctx, img, 0, 0, currentW, coverH, imagePosition);
-      } else {
+      let mediaDrawn = false;
+
+      // 1. Imagem personalizada enviada pelo usuário
+      if (customImageUrl) {
+        try {
+          if (!customImageRef.current || customImageRef.current.src !== customImageUrl) {
+            customImageRef.current = await loadImage(customImageUrl);
+          }
+          if (customImageRef.current) {
+            drawCover(ctx, customImageRef.current, 0, 0, currentW, coverH, imagePosition);
+            mediaDrawn = true;
+          }
+        } catch (e) {
+          console.warn("Erro ao desenhar imagem personalizada no feed:", e);
+        }
+      }
+
+      // 2. Vídeo carregado (se houver e não tiver imagem personalizada)
+      if (!mediaDrawn && videoPreviewRef.current && videoReady) {
+        drawCover(ctx, videoPreviewRef.current, 0, 0, currentW, coverH, imagePosition);
+        mediaDrawn = true;
+      }
+
+      // 3. Imagem da notícia do portal
+      if (!mediaDrawn && selectedPost?.image_url) {
+        try {
+          const src = `/api/admin/feed-image?slug=${encodeURIComponent(selectedPost.slug)}&v=${encodeURIComponent(selectedPost.updated_at || selectedPost.created_at || "")}`;
+          const img = articleImageRef.current?.src === src ? articleImageRef.current.image : await loadImage(src);
+          articleImageRef.current = { src, image: img };
+          drawCover(ctx, img, 0, 0, currentW, coverH, imagePosition);
+          mediaDrawn = true;
+        } catch (e) {
+          console.warn("Erro ao carregar imagem da notícia:", e);
+        }
+      }
+
+      // 4. Fallback sem mídia
+      if (!mediaDrawn) {
         const gradient = ctx.createLinearGradient(0, 0, currentW, coverH);
         gradient.addColorStop(0, "#172033");
         gradient.addColorStop(1, "#334155");
@@ -1783,7 +1847,7 @@ export default function SocialFeedCreator({ posts, onBack, initialPost, onOpenCo
         ctx.fillStyle = "rgba(255,255,255,.75)";
         ctx.font = "700 38px Arial, sans-serif";
         ctx.textAlign = "center";
-        ctx.fillText("Selecione uma notícia do portal", currentW / 2, coverH / 2);
+        ctx.fillText("Envie uma foto ou selecione uma notícia", currentW / 2, coverH / 2);
       }
 
       const maxAlpha = shadeOpacity / 100;
@@ -1894,7 +1958,7 @@ export default function SocialFeedCreator({ posts, onBack, initialPost, onOpenCo
   useEffect(() => {
     renderCard();
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [selectedPost?.slug, selectedPost?.updated_at, title, logoData, handle, imagePosition, feedTitleFontSize, feedFontFamily, feedTitlePosition.x, feedTitlePosition.y, feedTitleOffsetY, format, logoPosition.x, logoPosition.y, titlePosition.x, titlePosition.y, reelTextStyle, reelFontFamily, reelFontWeight, reelTextAlign, reelTextCase, reelFontSize, tagColor, tagPositionY, showSafeZone, reelTextAnimation, showStrongSceneWarning, logoScale, handleFontSize, shadeOpacity, showOverlayLayer, showLogoLayer, showTitleLayer, showHandleLayer, showStorySticker, logoColorStyle]);
+  }, [selectedPost?.slug, selectedPost?.updated_at, customImageUrl, title, logoData, handle, imagePosition, feedTitleFontSize, feedFontFamily, feedTitlePosition.x, feedTitlePosition.y, feedTitleOffsetY, format, logoPosition.x, logoPosition.y, titlePosition.x, titlePosition.y, reelTextStyle, reelFontFamily, reelFontWeight, reelTextAlign, reelTextCase, reelFontSize, tagColor, tagPositionY, showSafeZone, reelTextAnimation, showStrongSceneWarning, logoScale, handleFontSize, shadeOpacity, showOverlayLayer, showLogoLayer, showTitleLayer, showHandleLayer, showStorySticker, logoColorStyle]);
 
   // MAX CACHE: Pré-renderiza todo o layout visual da legenda e sobreposições em 1080x1920
   // Isso zera 100% dos cálculos na CPU durante a reprodução do vídeo e evita travamentos
@@ -2155,6 +2219,51 @@ export default function SocialFeedCreator({ posts, onBack, initialPost, onOpenCo
     reader.readAsDataURL(file);
   }
 
+  function onImageChange(event: ChangeEvent<HTMLInputElement>) {
+    const file = event.target.files?.[0];
+    if (!file) return;
+    if (!file.type.startsWith("image/")) {
+      setMessage("Selecione um arquivo de imagem válido (PNG, JPG, WebP).");
+      return;
+    }
+    if (file.size > 20_000_000) {
+      setMessage("A imagem deve ter no máximo 20 MB.");
+      return;
+    }
+    if (customImageUrl && customImageUrl.startsWith("blob:")) {
+      URL.revokeObjectURL(customImageUrl);
+    }
+    const objectUrl = URL.createObjectURL(file);
+    setCustomImageUrl(objectUrl);
+    setCustomImageFileName(file.name);
+    customImageRef.current = null;
+    setMessage(`✅ Foto "${file.name}" carregada com sucesso!`);
+  }
+
+  function removeCustomImage() {
+    if (customImageUrl && customImageUrl.startsWith("blob:")) {
+      URL.revokeObjectURL(customImageUrl);
+    }
+    setCustomImageUrl("");
+    setCustomImageFileName("");
+    customImageRef.current = null;
+    if (imageInputRef.current) imageInputRef.current.value = "";
+    setMessage(selectedPost?.image_url ? "Foto personalizada removida. Restaurada foto original da notícia." : "Foto removida.");
+  }
+
+  function removeVideo() {
+    if (videoUrl && videoUrl.startsWith("blob:")) {
+      URL.revokeObjectURL(videoUrl);
+    }
+    videoFileRef.current = null;
+    setVideoUrl("");
+    setVideoFileName("");
+    setVideoReady(false);
+    setVideoExport(null);
+    if (videoInputRef.current) videoInputRef.current.value = "";
+    setMessage("Vídeo removido.");
+  }
+
   function onVideoChange(event: ChangeEvent<HTMLInputElement>) {
     const file = event.target.files?.[0];
     if (!file) return;
@@ -2170,9 +2279,14 @@ export default function SocialFeedCreator({ posts, onBack, initialPost, onOpenCo
     videoFileRef.current = file;
     setVideoReady(false);
     setVideoFileName(file.name);
+    if (videoUrl && videoUrl.startsWith("blob:")) {
+      URL.revokeObjectURL(videoUrl);
+    }
     setVideoUrl(URL.createObjectURL(file));
     setVideoExport(null);
-    setFormat("reel");
+    if (format !== "story" && format !== "feed" && format !== "feed-square" && format !== "reel-cover") {
+      setFormat("reel");
+    }
     setMessage("Carregando o vídeo para a prévia...");
   }
 
@@ -2221,14 +2335,16 @@ export default function SocialFeedCreator({ posts, onBack, initialPost, onOpenCo
 
       const blob = await mediaRes.blob();
       videoFileRef.current = new File([blob], `viralizou-${data.platform || "social"}.mp4`, { type: blob.type || "video/mp4" });
-      if (videoUrl) {
+      if (videoUrl && videoUrl.startsWith("blob:")) {
         URL.revokeObjectURL(videoUrl);
       }
       const objectUrl = URL.createObjectURL(blob);
       setVideoUrl(objectUrl);
       setVideoFileName(`viralizou-${data.platform || "social"}.mp4`);
       setVideoExport(null);
-      setFormat("reel");
+      if (format !== "story" && format !== "feed" && format !== "feed-square" && format !== "reel-cover") {
+        setFormat("reel");
+      }
       setImportVideoUrl("");
       setMessage("✅ Vídeo carregado com sucesso na memória! Não fica salvo no servidor e será limpo ao sair da página.");
     } catch (err: any) {
@@ -2382,13 +2498,13 @@ export default function SocialFeedCreator({ posts, onBack, initialPost, onOpenCo
 
   async function downloadPng() {
     const canvas = canvasRef.current;
-    if (!canvas || (!selectedPost && !title)) {
-      setMessage("Carregue uma notícia antes de baixar.");
+    if (!canvas || (!selectedPost && !title && !customImageUrl)) {
+      setMessage("Carregue uma notícia ou imagem antes de baixar.");
       return;
     }
     setMessage("Preparando PNG na resolução do formato selecionado...");
     await renderCard(true);
-    const slug = selectedPost?.slug || "arte";
+    const slug = selectedPost?.slug || (title ? title.toLowerCase().slice(0, 30).replace(/[^a-z0-9]+/g, "-") : "arte");
     const prefix =
       format === "feed-square"
         ? "feed-1080x1080"
@@ -3108,42 +3224,61 @@ async function fixWebmDuration(blob: Blob, durationSec: number): Promise<Blob> {
             </div>
           </div>
 
-          {(format === "reel" || format === "story") && (
-            <div className="field" style={{ background: "#f8fafc", border: "1.5px dashed #4f46e5", borderRadius: 10, padding: "12px 14px" }}>
-              <label style={{ color: "#312e81", fontWeight: 700, fontSize: 13, display: "flex", alignItems: "center", gap: 6 }}>
-                <span>📥 Baixar vídeo direto de link (TikTok, Instagram, Twitter/X)</span>
+          {/* SEÇÃO COMPLETA DE MÍDIA (FOTO, VÍDEO OU LINK) - DISPONÍVEL PARA FEED, STORIES E REELS */}
+          <div className="field" style={{ background: "#f8fafc", border: "1.5px solid #cbd5e1", borderRadius: 12, padding: "14px", marginTop: 2 }}>
+            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 10, flexWrap: "wrap", gap: 6 }}>
+              <label style={{ margin: 0, fontWeight: 700, fontSize: 13, color: "#1e293b", display: "flex", alignItems: "center", gap: 6 }}>
+                <span>📸 Mídia de Fundo da Arte (Foto do Feed, Imagem ou Vídeo)</span>
               </label>
-              <div style={{ display: "flex", gap: 8, marginTop: 6 }}>
-                <input
-                  type="url"
-                  placeholder="Cole o link do TikTok, Reels ou Twitter/X..."
-                  value={importVideoUrl}
-                  onChange={(e) => setImportVideoUrl(e.target.value)}
-                  onKeyDown={(e) => { if (e.key === "Enter") { e.preventDefault(); handleImportVideoFromUrl(); } }}
-                  style={{ flex: 1 }}
-                />
+              <span style={{ fontSize: 11, color: "#64748b", fontWeight: 600 }}>
+                {format === "reel" ? "Reels 9:16" : format === "story" ? "Stories 9:16" : format === "feed-square" ? "Feed 1:1" : format === "reel-cover" ? "Capa Reels 4:5" : "Feed 4:5"}
+              </span>
+            </div>
+
+            {/* Status da Mídia Atual */}
+            {customImageUrl ? (
+              <div style={{ background: "#ecfdf5", border: "1px solid #a7f3d0", borderRadius: 8, padding: "8px 12px", marginBottom: 12, display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+                <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+                  <img src={customImageUrl} alt="Prévia" style={{ width: 38, height: 38, objectFit: "cover", borderRadius: 6, border: "1px solid #6ee7b7" }} />
+                  <div>
+                    <div style={{ fontSize: 12, fontWeight: 700, color: "#065f46" }}>Foto personalizada ativa</div>
+                    <div style={{ fontSize: 11, color: "#047857" }}>{customImageFileName || "Imagem do seu dispositivo"}</div>
+                  </div>
+                </div>
                 <button
                   type="button"
-                  className="btn"
-                  onClick={handleImportVideoFromUrl}
-                  disabled={importingVideo}
-                  style={{ background: "#4f46e5", whiteSpace: "nowrap" }}
+                  className="btn secondary"
+                  onClick={removeCustomImage}
+                  style={{ fontSize: 11, padding: "3px 8px", borderColor: "#6ee7b7", color: "#065f46", background: "#fff" }}
                 >
-                  {importingVideo ? "Importando..." : "Importar Vídeo"}
+                  {selectedPost?.image_url ? "Restaurar foto da notícia" : "Remover foto"}
                 </button>
               </div>
-              <small style={{ color: "#64748b", marginTop: 4, display: "block" }}>
-                🔒 O vídeo é baixado temporariamente em proxy diretamente na memória do navegador e é apagado ao fechar a página.
+            ) : selectedPost?.image_url ? (
+              <div style={{ background: "#eff6ff", border: "1px solid #bfdbfe", borderRadius: 8, padding: "8px 12px", marginBottom: 12, display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+                <div style={{ fontSize: 12, color: "#1e40af" }}>
+                  📰 Usando imagem original da notícia: <b>{selectedPost.title.slice(0, 45)}...</b>
+                </div>
+              </div>
+            ) : null}
+
+            {/* 1. UPLOAD DE FOTO / IMAGEM (Feed, Capa ou Story) */}
+            <div style={{ marginBottom: 12 }}>
+              <label style={{ fontSize: 12, fontWeight: 600, color: "#334155", display: "block", marginBottom: 4 }}>
+                🖼️ Enviar Foto / Imagem do seu dispositivo (PNG, JPG, WebP)
+              </label>
+              <input ref={imageInputRef} type="file" accept="image/png,image/jpeg,image/webp" onChange={onImageChange} />
+              <small style={{ color: "#64748b", display: "block", marginTop: 2 }}>
+                Perfeito para montar post do Feed (4:5 e 1:1), Capas e Stories diretamente.
               </small>
             </div>
-          )}
 
-          {(format === "reel" || format === "story") && (
-            <div className="field">
-              <label>🎬 Vídeo para o Reel ou Story</label>
-              <input type="file" accept="video/*" onChange={onVideoChange} />
-              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginTop: 4, flexWrap: "wrap", gap: 6 }}>
-                <small>{videoFileName ? `${videoFileName}${videoReady ? " · pronto para prévia" : " · carregando"}` : "Escolha um vídeo de até 250 MB ou cole o link da rede social acima."}</small>
+            {/* 2. UPLOAD DE VÍDEO */}
+            <div style={{ marginBottom: 12 }}>
+              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 4 }}>
+                <label style={{ fontSize: 12, fontWeight: 600, color: "#334155" }}>
+                  🎬 Enviar Vídeo do seu dispositivo (MP4, MOV, WebM)
+                </label>
                 {onOpenCompressor && (
                   <button
                     type="button"
@@ -3155,83 +3290,128 @@ async function fixWebmDuration(blob: Blob, durationSec: number): Promise<Blob> {
                   </button>
                 )}
               </div>
-
-              {videoUrl && (
-                <div style={{ background: "#f8fafc", borderRadius: 10, padding: "12px", marginTop: 10, border: "1px solid #cbd5e1" }}>
-                  <div style={{ fontSize: 12, fontWeight: 700, color: "#1e293b", marginBottom: 8, display: "flex", alignItems: "center", gap: 6 }}>
-                    <span>📐 Enquadramento do Vídeo no Reel (9:16)</span>
-                  </div>
-                  <div style={{ display: "flex", gap: 8, marginBottom: 10 }}>
-                    <button
-                      type="button"
-                      className={`btn secondary ${videoFramingMode === "cover" ? "active" : ""}`}
-                      onClick={() => setVideoFramingMode("cover")}
-                      style={{
-                        flex: 1,
-                        fontSize: 11,
-                        padding: "6px 8px",
-                        background: videoFramingMode === "cover" ? "#0284c7" : "#ffffff",
-                        color: videoFramingMode === "cover" ? "#ffffff" : "#1e293b",
-                        borderColor: videoFramingMode === "cover" ? "#0284c7" : "#cbd5e1",
-                        fontWeight: videoFramingMode === "cover" ? 700 : 500,
-                      }}
-                      title="Preenche a tela toda 9:16 cortando as laterais se for horizontal"
-                    >
-                      🔍 Preencher Tela (Zoom 9:16)
-                    </button>
-                    <button
-                      type="button"
-                      className={`btn secondary ${videoFramingMode === "blur-fit" ? "active" : ""}`}
-                      onClick={() => setVideoFramingMode("blur-fit")}
-                      style={{
-                        flex: 1,
-                        fontSize: 11,
-                        padding: "6px 8px",
-                        background: videoFramingMode === "blur-fit" ? "#0284c7" : "#ffffff",
-                        color: videoFramingMode === "blur-fit" ? "#ffffff" : "#1e293b",
-                        borderColor: videoFramingMode === "blur-fit" ? "#0284c7" : "#cbd5e1",
-                        fontWeight: videoFramingMode === "blur-fit" ? 700 : 500,
-                      }}
-                      title="Mantém todo o vídeo original visível sem cortes de cabeça e preenche o fundo com desfoque elegante de jornalismo"
-                    >
-                      📰 Jornalístico (Fundo Desfocado)
-                    </button>
-                  </div>
-
-                  <div>
-                    <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 4 }}>
-                      <span style={{ fontSize: 11, fontWeight: 600, color: "#475569" }}>
-                        ↕️ Ajuste Vertical do Vídeo: <b style={{ color: "#0284c7" }}>{imagePosition}%</b>
-                      </span>
-                      {imagePosition !== 0 && (
-                        <button
-                          type="button"
-                          className="captionTagBadge"
-                          onClick={() => setImagePosition(0)}
-                          style={{ fontSize: 10, padding: "2px 6px" }}
-                        >
-                          Centralizar
-                        </button>
-                      )}
-                    </div>
-                    <input
-                      type="range"
-                      min="-100"
-                      max="100"
-                      value={imagePosition}
-                      onChange={(e) => setImagePosition(Number(e.target.value))}
-                      style={{ width: "100%" }}
-                    />
-                    <small style={{ color: "#64748b", fontSize: 11, display: "block", marginTop: 2 }}>
-                      {videoFramingMode === "cover"
-                        ? "Deslize para centralizar rostos ou a ação no vídeo."
-                        : "Deslize para subir ou descer o vídeo centralizado."}
-                    </small>
-                  </div>
-                </div>
-              )}
+              <input ref={videoInputRef} type="file" accept="video/*" onChange={onVideoChange} />
+              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginTop: 3 }}>
+                <small style={{ color: "#64748b" }}>
+                  {videoFileName ? `${videoFileName}${videoReady ? " · pronto para prévia" : " · carregando..."}` : "Vídeo de até 250 MB para Reel, Story ou Feed."}
+                </small>
+                {videoUrl && (
+                  <button
+                    type="button"
+                    onClick={removeVideo}
+                    style={{ background: "transparent", border: "none", color: "#dc2626", fontSize: 11, fontWeight: 700, cursor: "pointer", textDecoration: "underline" }}
+                  >
+                    Remover vídeo
+                  </button>
+                )}
+              </div>
             </div>
-          )}
+
+            {/* 3. BAIXAR VÍDEO DIRETO DE LINK (TikTok, Instagram, Twitter/X) */}
+            <div style={{ background: "#ffffff", border: "1.5px dashed #4f46e5", borderRadius: 10, padding: "10px 12px", marginBottom: 12 }}>
+              <label style={{ color: "#312e81", fontWeight: 700, fontSize: 12, display: "flex", alignItems: "center", gap: 6, marginBottom: 4 }}>
+                <span>📥 Baixar mídia direto de link (TikTok, Instagram Reels, Twitter/X)</span>
+              </label>
+              <div style={{ display: "flex", gap: 8 }}>
+                <input
+                  type="url"
+                  placeholder="Cole o link do TikTok, Reels ou Twitter/X..."
+                  value={importVideoUrl}
+                  onChange={(e) => setImportVideoUrl(e.target.value)}
+                  onKeyDown={(e) => { if (e.key === "Enter") { e.preventDefault(); handleImportVideoFromUrl(); } }}
+                  style={{ flex: 1, fontSize: 12 }}
+                />
+                <button
+                  type="button"
+                  className="btn"
+                  onClick={handleImportVideoFromUrl}
+                  disabled={importingVideo}
+                  style={{ background: "#4f46e5", whiteSpace: "nowrap", fontSize: 12, padding: "6px 12px" }}
+                >
+                  {importingVideo ? "Importando..." : "Importar"}
+                </button>
+              </div>
+              <small style={{ color: "#64748b", marginTop: 4, display: "block", fontSize: 10.5 }}>
+                🔒 O vídeo é baixado temporariamente em proxy direto na memória do navegador e apagado ao sair.
+              </small>
+            </div>
+
+            {/* 4. ENQUADRAMENTO E AJUSTE VERTICAL DA MÍDIA (FOTO OU VÍDEO) */}
+            {(customImageUrl || selectedPost?.image_url || videoUrl) && (
+              <div style={{ background: "#ffffff", borderRadius: 8, padding: "10px 12px", border: "1px solid #e2e8f0" }}>
+                {videoUrl && (format === "reel" || format === "story") && (
+                  <div style={{ marginBottom: 10 }}>
+                    <div style={{ fontSize: 11, fontWeight: 700, color: "#1e293b", marginBottom: 6 }}>
+                      📐 Enquadramento do Vídeo no Reel/Story (9:16)
+                    </div>
+                    <div style={{ display: "flex", gap: 8 }}>
+                      <button
+                        type="button"
+                        className={`btn secondary ${videoFramingMode === "cover" ? "active" : ""}`}
+                        onClick={() => setVideoFramingMode("cover")}
+                        style={{
+                          flex: 1,
+                          fontSize: 11,
+                          padding: "5px 8px",
+                          background: videoFramingMode === "cover" ? "#0284c7" : "#ffffff",
+                          color: videoFramingMode === "cover" ? "#ffffff" : "#1e293b",
+                          borderColor: videoFramingMode === "cover" ? "#0284c7" : "#cbd5e1",
+                          fontWeight: videoFramingMode === "cover" ? 700 : 500,
+                        }}
+                      >
+                        🔍 Preencher Tela (Zoom 9:16)
+                      </button>
+                      <button
+                        type="button"
+                        className={`btn secondary ${videoFramingMode === "blur-fit" ? "active" : ""}`}
+                        onClick={() => setVideoFramingMode("blur-fit")}
+                        style={{
+                          flex: 1,
+                          fontSize: 11,
+                          padding: "5px 8px",
+                          background: videoFramingMode === "blur-fit" ? "#0284c7" : "#ffffff",
+                          color: videoFramingMode === "blur-fit" ? "#ffffff" : "#1e293b",
+                          borderColor: videoFramingMode === "blur-fit" ? "#0284c7" : "#cbd5e1",
+                          fontWeight: videoFramingMode === "blur-fit" ? 700 : 500,
+                        }}
+                      >
+                        📰 Jornalístico (Fundo Desfocado)
+                      </button>
+                    </div>
+                  </div>
+                )}
+
+                <div>
+                  <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 4 }}>
+                    <span style={{ fontSize: 11, fontWeight: 700, color: "#334155" }}>
+                      ↕️ Ajuste Vertical da Mídia / Foto: <b style={{ color: "#0284c7" }}>{imagePosition}%</b>
+                    </span>
+                    {imagePosition !== 0 && (
+                      <button
+                        type="button"
+                        className="captionTagBadge"
+                        onClick={() => setImagePosition(0)}
+                        style={{ fontSize: 10, padding: "2px 6px" }}
+                      >
+                        Centralizar (0%)
+                      </button>
+                    )}
+                  </div>
+                  <input
+                    type="range"
+                    min="-100"
+                    max="100"
+                    value={imagePosition}
+                    onChange={(e) => setImagePosition(Number(e.target.value))}
+                    style={{ width: "100%" }}
+                  />
+                  <small style={{ color: "#64748b", fontSize: 10.5, display: "block", marginTop: 2 }}>
+                    Deslize para subir ou descer a imagem/vídeo para focar perfeitamente rostos ou o centro do post.
+                  </small>
+                </div>
+              </div>
+            )}
+          </div>
 
           <div className="captionStudioBox">
             <div className="captionHeaderTitle">
@@ -3485,107 +3665,89 @@ async function fixWebmDuration(blob: Blob, durationSec: number): Promise<Blob> {
             </div>
 
             {format === "reel" && (
-              <>
-                <div className="captionStudioField">
-                  <label>Animação</label>
-                  <div className="captionTagShortcuts">
-                    <button
-                      type="button"
-                      className={`captionColorPill ${reelTextAnimation === "typewriter" ? "active" : ""}`}
-                      onClick={() => chooseReelTextAnimation("typewriter")}
-                    >
-                      ⌨️ Digitando
-                    </button>
-                    <button
-                      type="button"
-                      className={`captionColorPill ${reelTextAnimation === "pop" ? "active" : ""}`}
-                      onClick={() => chooseReelTextAnimation("pop")}
-                    >
-                      💥 Impacto
-                    </button>
-                    <button
-                      type="button"
-                      className={`captionColorPill ${reelTextAnimation === "slide" ? "active" : ""}`}
-                      onClick={() => chooseReelTextAnimation("slide")}
-                    >
-                      ⬆️ Deslizar
-                    </button>
-                    <button
-                      type="button"
-                      className={`captionColorPill ${reelTextAnimation === "fade" ? "active" : ""}`}
-                      onClick={() => chooseReelTextAnimation("fade")}
-                    >
-                      ✨ Surgir
-                    </button>
-                    <button
-                      type="button"
-                      className={`captionColorPill ${reelTextAnimation === "static" ? "active" : ""}`}
-                      onClick={() => chooseReelTextAnimation("static")}
-                    >
-                      📌 Fixo
-                    </button>
-                  </div>
+              <div className="captionStudioField">
+                <label>Animação</label>
+                <div className="captionTagShortcuts">
+                  <button
+                    type="button"
+                    className={`captionColorPill ${reelTextAnimation === "typewriter" ? "active" : ""}`}
+                    onClick={() => chooseReelTextAnimation("typewriter")}
+                  >
+                    ⌨️ Digitando
+                  </button>
+                  <button
+                    type="button"
+                    className={`captionColorPill ${reelTextAnimation === "pop" ? "active" : ""}`}
+                    onClick={() => chooseReelTextAnimation("pop")}
+                  >
+                    💥 Impacto
+                  </button>
+                  <button
+                    type="button"
+                    className={`captionColorPill ${reelTextAnimation === "slide" ? "active" : ""}`}
+                    onClick={() => chooseReelTextAnimation("slide")}
+                  >
+                    ⬆️ Deslizar
+                  </button>
+                  <button
+                    type="button"
+                    className={`captionColorPill ${reelTextAnimation === "fade" ? "active" : ""}`}
+                    onClick={() => chooseReelTextAnimation("fade")}
+                  >
+                    ✨ Surgir
+                  </button>
+                  <button
+                    type="button"
+                    className={`captionColorPill ${reelTextAnimation === "static" ? "active" : ""}`}
+                    onClick={() => chooseReelTextAnimation("static")}
+                  >
+                    📌 Fixo
+                  </button>
                 </div>
-
-                <label className="captionSafeZoneToggle">
-                  <span>📐 Mostrar Área Segura do Instagram (Safe Zone)</span>
-                  <input
-                    type="checkbox"
-                    checked={showSafeZone}
-                    onChange={(e) => toggleSafeZone(e.target.checked)}
-                  />
-                </label>
-
-                <label className="adminFeedWarningOption" style={{ marginTop: 4 }}>
-                  <input type="checkbox" checked={showStrongSceneWarning} onChange={(event) => toggleStrongSceneWarning(event.target.checked)} />
-                  Exibir aviso “Cenas fortes” no Reel
-                </label>
-              </>
+              </div>
             )}
 
-            {format === "feed" && (
-              <>
-                <div className="captionStudioField">
-                  <label>
-                    <span>↕️ Posição vertical da legenda</span>
-                    <b style={{ color: "#c084fc" }}>{feedTitleOffsetY > 0 ? `+${feedTitleOffsetY}px` : `${feedTitleOffsetY}px`}</b>
-                  </label>
-                  <div style={{ display: "flex", gap: "8px", alignItems: "center" }}>
-                    <input
-                      type="range"
-                      min="-150"
-                      max="150"
-                      step="5"
-                      value={feedTitleOffsetY}
-                      onChange={(e) => saveFeedTitleOffsetY(Number(e.target.value))}
-                      style={{ flex: 1 }}
-                    />
-                    {feedTitleOffsetY !== 0 && (
-                      <button
-                        type="button"
-                        className="captionTagBadge"
-                        onClick={() => saveFeedTitleOffsetY(0)}
-                      >
-                        Reset
-                      </button>
-                    )}
-                  </div>
-                </div>
+            <label className="captionSafeZoneToggle">
+              <span>📐 Mostrar Área Segura do Instagram (Safe Zone)</span>
+              <input
+                type="checkbox"
+                checked={showSafeZone}
+                onChange={(e) => toggleSafeZone(e.target.checked)}
+              />
+            </label>
 
-                <div className="captionStudioField">
-                  <label>
-                    <span>↕️ Ajuste vertical da foto</span>
-                    <b style={{ color: "#c084fc" }}>{imagePosition}%</b>
-                  </label>
+            <label className="adminFeedWarningOption" style={{ marginTop: 4 }}>
+              <input type="checkbox" checked={showStrongSceneWarning} onChange={(event) => toggleStrongSceneWarning(event.target.checked)} />
+              Exibir aviso “Cenas fortes”
+            </label>
+
+            {(format === "feed" || format === "feed-square" || format === "reel-cover") && (
+              <div className="captionStudioField" style={{ marginTop: 8 }}>
+                <label>
+                  <span>↕️ Posição vertical da legenda</span>
+                  <b style={{ color: "#c084fc" }}>{feedTitleOffsetY > 0 ? `+${feedTitleOffsetY}px` : `${feedTitleOffsetY}px`}</b>
+                </label>
+                <div style={{ display: "flex", gap: "8px", alignItems: "center" }}>
                   <input
                     type="range"
-                    min="-100"
-                    max="100"
-                    value={imagePosition}
-                    onChange={(e) => setImagePosition(Number(e.target.value))}
+                    min="-150"
+                    max="150"
+                    step="5"
+                    value={feedTitleOffsetY}
+                    onChange={(e) => saveFeedTitleOffsetY(Number(e.target.value))}
+                    style={{ flex: 1 }}
                   />
+                  {feedTitleOffsetY !== 0 && (
+                    <button
+                      type="button"
+                      className="captionTagBadge"
+                      onClick={() => saveFeedTitleOffsetY(0)}
+                    >
+                      Reset
+                    </button>
+                  )}
                 </div>
-              </>
+              </div>
             )}
           </div>
 
@@ -3831,7 +3993,7 @@ async function fixWebmDuration(blob: Blob, durationSec: number): Promise<Blob> {
               </button>
             )}
             {(format === "feed" || format === "feed-square" || format === "reel-cover") && (
-              <button type="button" className="btn" disabled={!selectedPost || rendering} onClick={downloadPng}>
+              <button type="button" className="btn" disabled={(!selectedPost && !title && !customImageUrl) || rendering} onClick={downloadPng}>
                 {format === "feed-square" ? "⬇️ Baixar PNG 1080×1080" : format === "reel-cover" ? "⬇️ Baixar capa 1080×1350" : "⬇️ Baixar PNG 1080×1350"}
               </button>
             )}
@@ -3904,7 +4066,7 @@ async function fixWebmDuration(blob: Blob, durationSec: number): Promise<Blob> {
               onPointerMove={onPreviewPointerMove}
               onPointerUp={onPreviewPointerUp}
               onPointerCancel={onPreviewPointerUp}
-              style={{ cursor: logoData || format === "reel" || format === "story" || Boolean(title || selectedPost) ? (draggingLogo ? "grabbing" : "grab") : "default", touchAction: "none" }}
+              style={{ cursor: logoData || format === "reel" || format === "story" || Boolean(title || selectedPost || customImageUrl) ? (draggingLogo ? "grabbing" : "grab") : "default", touchAction: "none" }}
             />
           </div>
           <small>{format === "feed" ? "Formato Feed 4:5 · 1080×1350" : format === "feed-square" ? "Formato Feed quadrado 1:1 · 1080×1080" : format === "reel-cover" ? "Capa do Reels 4:5 · 1080×1350 (recorte da grade do perfil)" : format === "story" ? "Formato Story 9:16 · 1080×1920 (Área de Link)" : "Formato Reel 9:16 · 1080×1920"}</small>

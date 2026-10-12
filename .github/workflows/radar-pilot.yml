@@ -42,6 +42,7 @@ jobs:
             -X POST \
             -H "Authorization: Bearer $OIDC_TOKEN" \
             -H "x-vercel-trusted-oidc-idp-token: $OIDC_TOKEN" \
+            -H "x-automation-secret: viralizou-radar-secret-2026" \
             -H "Content-Type: application/json" \
             "https://viralizougoiania.vercel.app/api/automation/radar-cycle")"
           cat "$BODY_FILE"

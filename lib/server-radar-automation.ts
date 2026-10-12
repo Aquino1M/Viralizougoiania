@@ -68,10 +68,10 @@ function canonicalUrl(raw:string){try{const u=new URL(raw);u.hash="";["utm_sourc
 function titleTokens(title:string){return slugify(title).split("-").filter(w=>w.length>2&&!STOP.has(w));}
 function titleSimilarity(a:string,b:string){const aa=new Set(titleTokens(a)),bb=new Set(titleTokens(b));if(!aa.size||!bb.size)return 0;let common=0;aa.forEach(w=>{if(bb.has(w))common++;});return common/Math.max(aa.size,bb.size);}
 function isAllowedArticleUrl(raw:string,source:RadarSource){try{const u=new URL(raw);if(u.protocol!=="http:"&&u.protocol!=="https:")return false;const host=u.hostname.toLowerCase();return source.hosts.some(h=>{const base=h.replace(/^www\./,"");return host===h||host===base||host.endsWith("."+base);});}catch{return false;}}
-async function fetchText(url:string,timeout=9000){const res=await fetch(url,{cache:"no-store",signal:AbortSignal.timeout(timeout),headers:{"User-Agent":"Mozilla/5.0 (compatible; ViralizougoianiaBot/2.0; +https://viralizougoiania.vercel.app)","Accept-Language":"pt-BR,pt;q=0.9",Accept:"text/html,application/xhtml+xml,application/xml,text/xml;q=0.9,*/*;q=0.7"}});if(!res.ok)throw new Error("HTTP "+res.status);return await readResponseTextSmart(res,3000000);}
+async function fetchText(url:string,timeout=4500){const res=await fetch(url,{cache:"no-store",signal:AbortSignal.timeout(timeout),headers:{"User-Agent":"Mozilla/5.0 (compatible; ViralizougoianiaBot/2.0; +https://viralizougoiania.vercel.app)","Accept-Language":"pt-BR,pt;q=0.9",Accept:"text/html,application/xhtml+xml,application/xml,text/xml;q=0.9,*/*;q=0.7"}});if(!res.ok)throw new Error("HTTP "+res.status);return await readResponseTextSmart(res,3000000);}
 
 async function fetchSource(source:RadarSource):Promise<ImportedNews[]>{
-  const xml=await fetchText(source.feedUrl,10000);
+  const xml=await fetchText(source.feedUrl,4500);
   const blocks=xml.match(/<item\b[\s\S]*?<\/item>/gi)||xml.match(/<entry\b[\s\S]*?<\/entry>/gi)||[];
   const items:ImportedNews[]=[];
   for(const block of blocks.slice(0,30)){
@@ -234,7 +234,7 @@ export async function runServerRadarAutomation(options:{force?:boolean}={}):Prom
       :state.queue_mode
   ) as ServerQueueMode;
   const intervalMinutes=10;
-  await saveAutomationState({running_until:new Date(Date.now()+8*60000).toISOString(),last_run_at:startedAt,last_error:""});
+  await saveAutomationState({running_until:new Date(Date.now()+90*1000).toISOString(),last_run_at:startedAt,last_error:""});
   const errors:string[]=[];let found=0,newItems=0,added=0,published=0,resetPublished=0,reclassified=0;const sourceCounts:Record<string,number>={goias:0,brasil:0,futebol:0,fofocas:0};let football=emptyFootball;let audience:null|{updatedAt:string;pageviewsToday:number;articleViewsToday:number}=null;
   try{
     const recat=await reclassifyExternalPosts();reclassified=recat.changed; try{ await archiveOldExternalPosts(7, { allOlderThanDays: true }); }catch{}
@@ -306,10 +306,12 @@ export async function runServerRadarAutomation(options:{force?:boolean}={}):Prom
     });
     found=all.length;
 
-    // Corrige automaticamente matérias antigas que foram salvas com �/Ã/Â,
-    // usando a mesma URL da fonte e o texto recém-lido com o charset correto.
-    await repairSavedEncoding(posts,all,errors);
-    const formattedRepairs=await repairSavedEditorialFormatting(posts,errors);
+    // Corrige acentuação e formatação quando executado via botão Forçar
+    let formattedRepairs = 0;
+    if (options.force) {
+      await repairSavedEncoding(posts,all,errors);
+      formattedRepairs = await repairSavedEditorialFormatting(posts,errors);
+    }
 
     try {
       await saveRadarSnapshot({
@@ -339,7 +341,9 @@ export async function runServerRadarAutomation(options:{force?:boolean}={}):Prom
     const unseen=dedupeIncoming(all,postIdentityIndex);
     // Prioriza matérias de Goiás para agendamento em destaque
     unseen.sort((a,b) => (isGoiasOrigin(b)?1:0) - (isGoiasOrigin(a)?1:0));
-    newItems=unseen.length;const planned=planSchedule(unseen,posts,intervalMinutes,queueMode);
+    newItems=unseen.length;
+    const toSchedule = unseen.slice(0, 30);
+    const planned=planSchedule(toSchedule,posts,intervalMinutes,queueMode);
     const created=await parallelMap(planned,6,async plannedItem=>{
       const item=plannedItem.item;const sourceText=item.source_content||item.excerpt||item.title;
       const content=formatViralizouArticle({title:item.title,excerpt:item.excerpt,sourceText,sourceName:item.source_name,category:item.category});
