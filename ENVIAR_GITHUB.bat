@@ -16,7 +16,7 @@ git add .
 
 echo.
 echo [2/3] Criando commit com as correcoes...
-git commit -m "fix: correcoes de proporcao 9:16, compatibilidade whatsapp, duracao no windows e enquadramento"
+git commit -m "fix: loop 10s auto-arquivamento, motor hibrido cpu+gpu e correcoes no canvas e logos"
 
 echo.
 echo [3/3] Enviando para o GitHub (main)...

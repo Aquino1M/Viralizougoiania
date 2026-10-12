@@ -36,6 +36,7 @@ export async function POST(request: Request) {
     // 100% aceito no WhatsApp, Instagram, TikTok, Windows Media Player e iOS
     const ffmpegArgs = [
       "-y",
+      "-threads", "0",
       "-i", inputPath,
       "-c:v", "libx264",
       "-pix_fmt", "yuv420p",

@@ -22,11 +22,11 @@ export default async function SearchPage({
   const recentPool = term ? await getRecentSearchPool() : [];
   const query = term.toLocaleLowerCase("pt-BR");
   const recentResults = term
-    ? recentPool.filter((p) => [p.title, p.excerpt, p.category, p.city, p.content].some((value) => (value || "").toLocaleLowerCase("pt-BR").includes(query))).slice(0, 30)
+    ? recentPool.filter((p: { title?: string; excerpt?: string; category?: string; city?: string; content?: string }) => [p.title, p.excerpt, p.category, p.city, p.content].some((value) => (value || "").toLocaleLowerCase("pt-BR").includes(query))).slice(0, 30)
     : [];
-  const archiveResults = term && recentResults.length < 30 ? await searchArchivedPosts(term) : [];
-  const seen = new Set(recentResults.map((post) => post.id));
-  const results = [...recentResults, ...archiveResults.filter((post) => !seen.has(post.id))].slice(0, 30);
+  const archiveResults = term ? await searchArchivedPosts(term) : [];
+  const seen = new Set(recentResults.map((post: { id: string }) => post.id));
+  const results = [...recentResults, ...archiveResults.filter((post: { id: string }) => !seen.has(post.id))].slice(0, 50);
 
   return (
     <>

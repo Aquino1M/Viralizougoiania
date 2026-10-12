@@ -87,6 +87,41 @@ async function ensureFontReady(fontString: string) {
   }
 }
 
+function isImageDrawable(img: any): boolean {
+  if (!img) return false;
+  if ("naturalWidth" in img) {
+    return img.complete && img.naturalWidth > 0 && img.naturalHeight > 0;
+  }
+  if ("videoWidth" in img) {
+    return img.readyState >= 2 && img.videoWidth > 0;
+  }
+  if ("width" in img) {
+    return img.width > 0 && img.height > 0;
+  }
+  return false;
+}
+
+function safeDrawImage(
+  ctx: CanvasRenderingContext2D,
+  img: any,
+  dx: number,
+  dy: number,
+  dw?: number,
+  dh?: number
+): boolean {
+  if (!isImageDrawable(img)) return false;
+  try {
+    if (dw !== undefined && dh !== undefined) {
+      ctx.drawImage(img, dx, dy, dw, dh);
+    } else {
+      ctx.drawImage(img, dx, dy);
+    }
+    return true;
+  } catch {
+    return false;
+  }
+}
+
 function drawCover(ctx: CanvasRenderingContext2D, img: HTMLImageElement | HTMLVideoElement, x: number, y: number, w: number, h: number, vertical = 0) {
   const sourceWidth = img instanceof HTMLVideoElement ? img.videoWidth : img.naturalWidth;
   const sourceHeight = img instanceof HTMLVideoElement ? img.videoHeight : img.naturalHeight;
@@ -97,7 +132,7 @@ function drawCover(ctx: CanvasRenderingContext2D, img: HTMLImageElement | HTMLVi
   const sx = Math.max(0, (sourceWidth - sw) / 2);
   const room = Math.max(0, sourceHeight - sh);
   const sy = Math.min(room, Math.max(0, room / 2 + (vertical / 100) * (room / 2)));
-  ctx.drawImage(img, sx, sy, sw, sh, x, y, w, h);
+  try { ctx.drawImage(img, sx, sy, sw, sh, x, y, w, h); } catch {}
 }
 
 function drawContain(ctx: CanvasRenderingContext2D, img: HTMLImageElement | HTMLVideoElement, x: number, y: number, w: number, h: number, vertical = 0) {
@@ -110,7 +145,7 @@ function drawContain(ctx: CanvasRenderingContext2D, img: HTMLImageElement | HTML
   const dx = Math.round(x + (w - dw) / 2);
   const roomY = Math.max(0, h - dh);
   const dy = Math.round(y + roomY / 2 + (vertical / 100) * (roomY / 2));
-  ctx.drawImage(img, dx, dy, dw, dh);
+  try { ctx.drawImage(img, dx, dy, dw, dh); } catch {}
 }
 
 function drawVideoWithFraming(
@@ -160,30 +195,39 @@ function drawStoryStickerGuide(ctx: CanvasRenderingContext2D, canvasWidth: numbe
   ctx.restore();
 }
 
+const FALLBACK_WHITE_LOGO_SVG = `data:image/svg+xml;utf8,<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 640 180" width="640" height="180"><g transform="translate(10, 15) scale(0.95)"><path d="M 35 30 L 78 135 L 120 30 L 92 30 L 78 100 L 63 30 Z" fill="%23dc2626"/><path d="M 125 75 C 125 40 155 18 195 18 C 235 18 262 42 265 78 L 235 78 C 232 55 215 42 195 42 C 172 42 153 58 153 82 C 153 106 172 122 195 122 C 218 122 232 108 234 94 L 195 94 L 195 72 L 263 72 C 263 125 228 146 195 146 C 155 146 125 120 125 75 Z" fill="%23dc2626"/></g><text x="275" y="78" fill="%23ffffff" font-family="sans-serif" font-weight="900" font-size="52" letter-spacing="3.5">VIRALIZOU</text><text x="275" y="142" fill="%23ffffff" font-family="sans-serif" font-weight="900" font-size="52" letter-spacing="4.5">GOIÂNIA</text></svg>`;
+const FALLBACK_DARK_LOGO_SVG = `data:image/svg+xml;utf8,<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 640 180" width="640" height="180"><g transform="translate(10, 15) scale(0.95)"><path d="M 35 30 L 78 135 L 120 30 L 92 30 L 78 100 L 63 30 Z" fill="%23dc2626"/><path d="M 125 75 C 125 40 155 18 195 18 C 235 18 262 42 265 78 L 235 78 C 232 55 215 42 195 42 C 172 42 153 58 153 82 C 153 106 172 122 195 122 C 218 122 232 108 234 94 L 195 94 L 195 72 L 263 72 C 263 125 228 146 195 146 C 155 146 125 120 125 75 Z" fill="%23dc2626"/></g><text x="275" y="78" fill="%231e293b" font-family="sans-serif" font-weight="900" font-size="52" letter-spacing="3.5">VIRALIZOU</text><text x="275" y="142" fill="%231e293b" font-family="sans-serif" font-weight="900" font-size="52" letter-spacing="4.5">GOIÂNIA</text></svg>`;
+
 let cachedOfficialWhiteLogo: HTMLImageElement | null = null;
 let cachedOfficialDarkLogo: HTMLImageElement | null = null;
 
 function getOfficialLogo(variant: "white" | "dark"): HTMLImageElement | null {
   if (typeof window === "undefined") return null;
   if (variant === "white") {
-    if (!cachedOfficialWhiteLogo) {
+    if (!cachedOfficialWhiteLogo || (cachedOfficialWhiteLogo.complete && cachedOfficialWhiteLogo.naturalWidth === 0)) {
       cachedOfficialWhiteLogo = new Image();
       cachedOfficialWhiteLogo.crossOrigin = "anonymous";
       cachedOfficialWhiteLogo.onerror = () => {
         if (cachedOfficialWhiteLogo && cachedOfficialWhiteLogo.src.includes("/api/logos/")) {
           cachedOfficialWhiteLogo.src = "/logos/logo-viralizou-branca.png";
+          cachedOfficialWhiteLogo.onerror = () => {
+            if (cachedOfficialWhiteLogo) cachedOfficialWhiteLogo.src = FALLBACK_WHITE_LOGO_SVG;
+          };
         }
       };
       cachedOfficialWhiteLogo.src = "/api/logos/white";
     }
     return cachedOfficialWhiteLogo;
   } else {
-    if (!cachedOfficialDarkLogo) {
+    if (!cachedOfficialDarkLogo || (cachedOfficialDarkLogo.complete && cachedOfficialDarkLogo.naturalWidth === 0)) {
       cachedOfficialDarkLogo = new Image();
       cachedOfficialDarkLogo.crossOrigin = "anonymous";
       cachedOfficialDarkLogo.onerror = () => {
         if (cachedOfficialDarkLogo && cachedOfficialDarkLogo.src.includes("/api/logos/")) {
           cachedOfficialDarkLogo.src = "/logos/logo-viralizou-preta.png";
+          cachedOfficialDarkLogo.onerror = () => {
+            if (cachedOfficialDarkLogo) cachedOfficialDarkLogo.src = FALLBACK_DARK_LOGO_SVG;
+          };
         }
       };
       cachedOfficialDarkLogo.src = "/api/logos/dark";
@@ -200,24 +244,25 @@ function getRenderableLogo(
   // 1. Letras Brancas: utiliza diretamente a logo original com letras brancas já sem fundo
   if (colorStyle === "white") {
     const white = getOfficialLogo("white");
-    if (white && (white.naturalWidth || white.complete)) return white;
-    if (customLogo && (customLogo.naturalWidth || customLogo.complete)) return customLogo;
-    return white;
+    if (isImageDrawable(white)) return white;
+    if (isImageDrawable(customLogo)) return customLogo;
+    return isImageDrawable(white) ? white : null;
   }
 
   // 2. Letras Pretas: utiliza diretamente a logo original com letras pretas já sem fundo
   if (colorStyle === "dark") {
     const dark = getOfficialLogo("dark");
-    if (dark && (dark.naturalWidth || dark.complete)) return dark;
-    if (customLogo && (customLogo.naturalWidth || customLogo.complete)) return customLogo;
-    return dark;
+    if (isImageDrawable(dark)) return dark;
+    if (isImageDrawable(customLogo)) return customLogo;
+    return isImageDrawable(dark) ? dark : null;
   }
 
   // 3. Original: se o usuário enviou uma logo personalizada, usa ela; senão usa a oficial do formato
-  if (customLogo && (customLogo.naturalWidth || customLogo.complete)) {
+  if (isImageDrawable(customLogo)) {
     return customLogo;
   }
-  return getOfficialLogo(defaultVariant);
+  const def = getOfficialLogo(defaultVariant);
+  return isImageDrawable(def) ? def : null;
 }
 
 function getLogoSize(
@@ -225,8 +270,8 @@ function getLogoSize(
   format: PublicationFormat,
   multiplier = 1
 ) {
-  const w = "naturalWidth" in logo && logo.naturalWidth ? logo.naturalWidth : logo.width;
-  const h = "naturalHeight" in logo && logo.naturalHeight ? logo.naturalHeight : logo.height;
+  const w = ("naturalWidth" in logo && logo.naturalWidth) ? logo.naturalWidth : (logo.width || 400);
+  const h = ("naturalHeight" in logo && logo.naturalHeight) ? logo.naturalHeight : (logo.height || 100);
   const maxWidth = format === "reel" || format === "story" ? 600 : format === "feed-square" ? 400 : 430;
   const maxHeight = format === "reel" || format === "story" ? 145 : format === "feed-square" ? 95 : 105;
   const scale = Math.min(maxWidth / (w || 1), maxHeight / (h || 1), 1) * multiplier;
@@ -1142,9 +1187,9 @@ function drawReelFrame(
 
   if (showLogoLayer) {
     const renderLogo = getRenderableLogo(logo, logoColorStyle, "white");
-    if (renderLogo && (renderLogo.naturalWidth || renderLogo.complete)) {
+    if (renderLogo && isImageDrawable(renderLogo)) {
       const { width, height } = getLogoSize(renderLogo, format, logoScale / 100);
-      ctx.drawImage(renderLogo, logoPosition.x * W - width / 2, logoPosition.y * REEL_H - height / 2, width, height);
+      safeDrawImage(ctx, renderLogo, logoPosition.x * W - width / 2, logoPosition.y * REEL_H - height / 2, width, height);
     }
   }
 
@@ -1289,9 +1334,9 @@ function buildReelOverlayCanvas(
   // 3. Logo do jornal
   if (showLogoLayer) {
     const renderLogo = getRenderableLogo(logo, logoColorStyle, "white");
-    if (renderLogo && (renderLogo.naturalWidth || renderLogo.complete)) {
+    if (renderLogo && isImageDrawable(renderLogo)) {
       const { width, height } = getLogoSize(renderLogo, format, logoScale / 100);
-      ctx.drawImage(renderLogo, logoPosition.x * W - width / 2, logoPosition.y * REEL_H - height / 2, width, height);
+      safeDrawImage(ctx, renderLogo, logoPosition.x * W - width / 2, logoPosition.y * REEL_H - height / 2, width, height);
     }
   }
 
@@ -1763,10 +1808,10 @@ export default function SocialFeedCreator({ posts, onBack }: Props) {
           }
         }
         const renderLogo = getRenderableLogo(customImg, logoColorStyle, "dark");
-        if (renderLogo && (renderLogo.naturalWidth || renderLogo.complete)) {
+        if (renderLogo && isImageDrawable(renderLogo)) {
           const { width, height } = getLogoSize(renderLogo, format, logoScale / 100);
           const logoY = format === "feed-square" ? logoPosition.y * currentH - 40 : logoPosition.y * currentH;
-          ctx.drawImage(renderLogo, logoPosition.x * currentW - width / 2, logoY - height / 2, width, height);
+          safeDrawImage(ctx, renderLogo, logoPosition.x * currentW - width / 2, logoY - height / 2, width, height);
         }
       }
 
@@ -2541,9 +2586,9 @@ async function fixWebmDuration(blob: Blob, durationSec: number): Promise<Blob> {
     // MOTOR 1: Tenta renderização FFmpeg ultrarrápida no Servidor (Zero perda de frames)
     let serverRenderSuccess = false;
     const isCloudHost = typeof window !== "undefined" && window.location.hostname !== "localhost" && window.location.hostname !== "127.0.0.1";
-    const exceedsCloudPayload = isCloudHost && sourceFile && sourceFile.size > 4.2 * 1024 * 1024;
+    const shouldAttemptServerFfmpeg = !isCloudHost && Boolean(sourceFile) && Boolean(overlayBlob);
 
-    if (sourceFile && overlayBlob && !exceedsCloudPayload) {
+    if (shouldAttemptServerFfmpeg && sourceFile && overlayBlob) {
       addLog(`🚀 Tentando renderização FFmpeg nativa no servidor (${(sourceFile.size / 1024 / 1024).toFixed(2)} MB)...`);
       isRecordingRef.current = true;
       setRecording(true);
@@ -2608,8 +2653,8 @@ async function fixWebmDuration(blob: Blob, durationSec: number): Promise<Blob> {
           setRecording(false);
         }
       }
-    } else if (exceedsCloudPayload && sourceFile) {
-      addLog(`ℹ️ Vídeo (${(sourceFile.size / 1024 / 1024).toFixed(2)} MB) acima do limite de envio na nuvem (4.5 MB). Usando gravação acelerada por GPU local.`);
+    } else if (isCloudHost && sourceFile) {
+      addLog(`☁️ Ambiente em nuvem (Vercel) ativo: renderizando com o Motor Híbrido GPU + CPU.`);
       addLog("🎬 Ativando Sistema de Gravação Local com Sincronismo GPU de Hardware...");
     }
     // MOTOR 2: Gravação Local por Hardware com Monitor Ativo (Nunca suspende no Chromium)
@@ -2731,14 +2776,18 @@ async function fixWebmDuration(blob: Blob, durationSec: number): Promise<Blob> {
 
       recorder = new MediaRecorder(combinedStream, {
         mimeType,
-        videoBitsPerSecond: 5_000_000,
+        videoBitsPerSecond: typeof navigator !== "undefined" && ((navigator.hardwareConcurrency || 4) <= 4 || ((navigator as any).deviceMemory || 4) <= 4) ? 2_800_000 : 3_800_000,
         audioBitsPerSecond: 128_000,
       });
       const activeRecorder = recorder;
 
       let renderedFramesCount = 0;
+      let lastFrameTime = 0;
       const drawFrameSync = () => {
         if (!isRecordingRef.current) return;
+        const now = performance.now();
+        if (now - lastFrameTime < 27) return;
+        lastFrameTime = now;
         const ctx = canvas.getContext("2d");
         if (ctx && video.readyState >= 2) { ctx.fillStyle = "#050505"; ctx.fillRect(0, 0, W, REEL_H); drawVideoWithFraming(ctx, video, W, REEL_H, videoFramingMode, imagePosition); ctx.drawImage(overlayCanvas, 0, 0); renderedFramesCount++; }
       };
@@ -2753,8 +2802,11 @@ async function fixWebmDuration(blob: Blob, durationSec: number): Promise<Blob> {
 
       if ("requestVideoFrameCallback" in video) {
         vfcId = (video as any).requestVideoFrameCallback(syncWithVideoDecoder);
-        addLog("⚡ Sincronismo de decodificação direta por GPU (requestVideoFrameCallback) ativado!");
+        addLog("⚡ Sincronismo de decodificação por GPU (requestVideoFrameCallback) ativado!");
+      } else {
+        addLog("🖥️ Sincronismo direto por CPU ativado.");
       }
+      addLog("🛡️ Motor Híbrido GPU + CPU ativo: cadência cravada em 30 FPS para rodar leve em computadores fracos.");
 
       loopIntervalId = window.setInterval(drawFrameSync, 1000 / 30);
           /* if (ctx) drawReelFrame(
@@ -3650,7 +3702,17 @@ async function fixWebmDuration(blob: Blob, durationSec: number): Promise<Blob> {
                   }}
                 >
                   <img
-                    src={logoData || (logoColorStyle === "dark" ? "/logos/logo-viralizou-preta.png" : "/logos/logo-viralizou-branca.png")}
+                    key={`${logoColorStyle}_${Boolean(logoData)}`}
+                    src={
+                      logoData ||
+                      (logoColorStyle === "dark" ? "/api/logos/dark" : "/api/logos/white")
+                    }
+                    onError={(e) => {
+                      const img = e.currentTarget;
+                      if (img.src.includes("/api/logos/")) {
+                        img.src = logoColorStyle === "dark" ? "/logos/logo-viralizou-preta.png" : "/logos/logo-viralizou-branca.png";
+                      }
+                    }}
                     alt="Logo ativa"
                     style={{
                       maxHeight: 34,

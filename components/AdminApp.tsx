@@ -145,6 +145,7 @@ function localDateTime(value: string | null | undefined) {
 function statusLabel(status: PostStatus) {
   if (status === "draft") return "Rascunho";
   if (status === "scheduled") return "Agendada";
+  if (status === "archived") return "Arquivada (Busca)";
   return "Publicada";
 }
 
@@ -182,7 +183,13 @@ export default function AdminApp() {
   const [selectedUrls, setSelectedUrls] = useState<string[]>([]);
   const [batchQueueing, setBatchQueueing] = useState(false);
   const [batchProgress, setBatchProgress] = useState("");
-  const [postStats, setPostStats] = useState({ total: 0, published: 0, scheduled: 0, draft: 0 });
+  const [postStats, setPostStats] = useState({ total: 0, published: 0, scheduled: 0, draft: 0, archived: 0 });
+  const [statusFilter, setStatusFilter] = useState<"all" | "published" | "archived" | "scheduled" | "draft">("all");
+  const [archiving, setArchiving] = useState(false);
+  const [archiveLoopActive, setArchiveLoopActive] = useState<boolean>(true);
+  const [archiveLoopCountdown, setArchiveLoopCountdown] = useState<number>(10);
+  const [lastArchiveCheckAt, setLastArchiveCheckAt] = useState<string>("");
+  const [archiveLoopChecking, setArchiveLoopChecking] = useState<boolean>(false);
 
   // Ritmo de postagem na fila, incluindo modos inteligentes por Aba/Editoria.
   type QueueScheduleMode = "1_per_10m" | "2_per_10m" | "3_per_10m" | "50_per_10m" | "50_per_1m" | "300_per_10m" | "1_per_category" | "3_per_category";
@@ -306,13 +313,81 @@ export default function AdminApp() {
     setLoading(false);
   }
 
+  async function triggerArchiveOldPosts() {
+    if (!confirm("Deseja arquivar agora todas as matérias com mais de 7 dias que não sejam de Goiânia ou do Estado de Goiás?\n\nElas sairão da página inicial e do portal para deixar o site ultrarrápido, e continuarão acessíveis quando alguém pesquisar na aba de busca.")) {
+      return;
+    }
+    setArchiving(true);
+    setMessage("");
+    try {
+      const res = await fetch("/api/admin/archive-posts", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ days: 7 }),
+      });
+      const data = await res.json();
+      if (!res.ok) {
+        setMessage(`Erro ao arquivar: ${data.error || "Falha na comunicação."}`);
+      } else {
+        setMessage(`📦 Sucesso! ${data.result?.archived || 0} matérias fora de Goiás foram arquivadas. O site agora está muito mais leve e rápido!`);
+        if (data.stats) setPostStats(data.stats);
+        await load();
+      }
+    } catch (err: any) {
+      setMessage(`Erro ao arquivar: ${err.message}`);
+    } finally {
+      setArchiving(false);
+    }
+  }
+
   useEffect(() => {
     load();
   }, []);
 
+  async function checkAndArchive10s() {
+    if (archiveLoopChecking) return;
+    setArchiveLoopChecking(true);
+    try {
+      const res = await fetch("/api/admin/archive-posts", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ days: 7 }),
+      });
+      if (res.ok) {
+        const data = await res.json();
+        if (data.stats) {
+          setPostStats(data.stats);
+        }
+        if (data.result?.archived > 0) {
+          setMessage(`📦 Loop de 10s: ${data.result.archived} matérias fora de Goiás (+7 dias) arquivadas automaticamente no Supabase!`);
+          await load();
+        }
+      }
+      setLastArchiveCheckAt(new Date().toLocaleTimeString("pt-BR"));
+    } catch {
+      // Falha momentânea tratada silenciosamente
+    } finally {
+      setArchiveLoopChecking(false);
+    }
+  }
+
+  useEffect(() => {
+    if (!archiveLoopActive) return;
+    const timer = window.setInterval(() => {
+      setArchiveLoopCountdown((prev) => {
+        if (prev <= 1) {
+          checkAndArchive10s();
+          return 10;
+        }
+        return prev - 1;
+      });
+    }, 1000);
+    return () => window.clearInterval(timer);
+  }, [archiveLoopActive]);
+
   const filtered = useMemo(
-    () => posts.filter((p) => (p.title + p.category + p.city).toLowerCase().includes(search.toLowerCase())),
-    [posts, search],
+    () => posts.filter((p) => (statusFilter === "all" ? true : p.status === statusFilter)).filter((p) => (p.title + p.category + p.city).toLowerCase().includes(search.toLowerCase())),
+    [posts, search, statusFilter],
   );
 
   const orderedCategories = useMemo(
@@ -1580,6 +1655,7 @@ export default function AdminApp() {
 
   const published = postStats.published || posts.filter((p) => p.status === "published").length;
   const scheduled = postStats.scheduled || posts.filter((p) => p.status === "scheduled").length;
+  const archived = postStats.archived || posts.filter((p) => p.status === "archived").length;
   const totalPosts = postStats.total || posts.length;
 
   return (
@@ -1626,10 +1702,11 @@ export default function AdminApp() {
           </aside>
 
           <main>
-            <div className="stats">
-              <div className="stat"><b>{totalPosts.toLocaleString("pt-BR")}</b><span>Total</span></div>
-              <div className="stat"><b>{published.toLocaleString("pt-BR")}</b><span>Publicadas</span></div>
-              <div className="stat"><b>{scheduled.toLocaleString("pt-BR")}</b><span>Agendadas</span></div>
+            <div className="stats" style={{ gridTemplateColumns: "repeat(auto-fit, minmax(150px, 1fr))" }}>
+              <div className="stat" onClick={() => setStatusFilter("all")} style={{ cursor: "pointer", borderColor: statusFilter === "all" ? "#ff5a1f" : undefined, background: statusFilter === "all" ? "#fff8f5" : undefined }} title="Ver todas as matérias"><b>{totalPosts.toLocaleString("pt-BR")}</b><span>Total</span></div>
+              <div className="stat" onClick={() => setStatusFilter("published")} style={{ cursor: "pointer", borderColor: statusFilter === "published" ? "#059669" : undefined, background: statusFilter === "published" ? "#f0fdf4" : undefined }} title="Ver matérias públicas no portal"><b style={{ color: "#059669" }}>{published.toLocaleString("pt-BR")}</b><span>🟢 Públicas (Site)</span></div>
+              <div className="stat" onClick={() => setStatusFilter("archived")} style={{ cursor: "pointer", borderColor: statusFilter === "archived" ? "#d97706" : undefined, background: statusFilter === "archived" ? "#fefce8" : undefined }} title="Ver matérias arquivadas (+7 dias fora de GO)"><b style={{ color: "#d97706" }}>{archived.toLocaleString("pt-BR")}</b><span>📦 Arquivadas (Busca)</span></div>
+              <div className="stat" onClick={() => setStatusFilter("scheduled")} style={{ cursor: "pointer", borderColor: statusFilter === "scheduled" ? "#2563eb" : undefined, background: statusFilter === "scheduled" ? "#eff6ff" : undefined }} title="Ver matérias agendadas na fila"><b style={{ color: "#2563eb" }}>{scheduled.toLocaleString("pt-BR")}</b><span>🕒 Agendadas</span></div>
               <div className="stat"><b>{admins.length}</b><span>Equipe / Logins</span></div>
             </div>
 
@@ -1656,6 +1733,190 @@ export default function AdminApp() {
                   onChange={(e) => setSearch(e.target.value)}
                   style={{ width: "100%", padding: 11, border: "1px solid #d9e0de", borderRadius: 9, marginBottom: 14 }}
                 />
+                <div
+                  style={{
+                    background: "#f8fafc",
+                    border: "1px solid #cbd5e1",
+                    borderRadius: 10,
+                    padding: "8px 14px",
+                    display: "flex",
+                    alignItems: "center",
+                    justifyContent: "space-between",
+                    marginBottom: 14,
+                    fontSize: 12,
+                    color: "#334155",
+                    flexWrap: "wrap",
+                    gap: 8,
+                  }}
+                >
+                  <div style={{ display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap" }}>
+                    <span
+                      style={{
+                        display: "inline-block",
+                        width: 9,
+                        height: 9,
+                        borderRadius: "50%",
+                        background: archiveLoopActive ? "#10b981" : "#94a3b8",
+                        boxShadow: archiveLoopActive ? "0 0 0 3px rgba(16, 185, 129, 0.2)" : "none",
+                      }}
+                    />
+                    <b style={{ color: "#0f172a" }}>Loop de 10s Ativo:</b>
+                    <span>
+                      Verificando e arquivando matérias fora de Goiás (+7 dias). Próxima checagem em:{" "}
+                      <b style={{ color: "#ff5a1f", fontVariantNumeric: "tabular-nums" }}>{archiveLoopCountdown}s</b>
+                    </span>
+                    {lastArchiveCheckAt && (
+                      <span style={{ color: "#64748b", fontSize: 11 }}>
+                        • Última checagem: <b>{lastArchiveCheckAt}</b>
+                      </span>
+                    )}
+                    {archiveLoopChecking && (
+                      <span style={{ color: "#d97706", fontWeight: 700 }}>
+                        ⏳ Verificando arquivo no Supabase...
+                      </span>
+                    )}
+                  </div>
+                  <div style={{ display: "flex", gap: 6, alignItems: "center" }}>
+                    <button
+                      type="button"
+                      onClick={() => checkAndArchive10s()}
+                      disabled={archiveLoopChecking}
+                      style={{
+                        padding: "4px 10px",
+                        fontSize: 11,
+                        fontWeight: 700,
+                        background: "#fff",
+                        border: "1px solid #cbd5e1",
+                        borderRadius: 6,
+                        cursor: "pointer",
+                      }}
+                      title="Forçar checagem e arquivamento agora"
+                    >
+                      🔄 Checar Agora
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setArchiveLoopActive(!archiveLoopActive)}
+                      style={{
+                        padding: "4px 10px",
+                        fontSize: 11,
+                        fontWeight: 700,
+                        background: archiveLoopActive ? "#fee2e2" : "#ecfdf5",
+                        border: `1px solid ${archiveLoopActive ? "#fca5a5" : "#a7f3d0"}`,
+                        color: archiveLoopActive ? "#b91c1c" : "#047857",
+                        borderRadius: 6,
+                        cursor: "pointer",
+                      }}
+                    >
+                      {archiveLoopActive ? "⏸️ Pausar Loop" : "▶️ Retomar Loop (10s)"}
+                    </button>
+                  </div>
+                </div>
+                <div style={{ display: "flex", gap: 8, flexWrap: "wrap", alignItems: "center", marginBottom: 14 }}>
+                  <div style={{ display: "inline-flex", gap: 4, background: "#f1f5f9", padding: 4, borderRadius: 10, flexWrap: "wrap" }}>
+                    <button
+                      type="button"
+                      onClick={() => setStatusFilter("all")}
+                      style={{
+                        padding: "6px 12px",
+                        fontSize: 11,
+                        fontWeight: 700,
+                        background: statusFilter === "all" ? "#0f172a" : "transparent",
+                        color: statusFilter === "all" ? "#fff" : "#475569",
+                        border: "none",
+                        borderRadius: 8,
+                        cursor: "pointer",
+                      }}
+                    >
+                      Todas ({totalPosts.toLocaleString("pt-BR")})
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setStatusFilter("published")}
+                      style={{
+                        padding: "6px 12px",
+                        fontSize: 11,
+                        fontWeight: 700,
+                        background: statusFilter === "published" ? "#059669" : "transparent",
+                        color: statusFilter === "published" ? "#fff" : "#475569",
+                        border: "none",
+                        borderRadius: 8,
+                        cursor: "pointer",
+                      }}
+                    >
+                      🟢 Públicas ({published.toLocaleString("pt-BR")})
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setStatusFilter("archived")}
+                      style={{
+                        padding: "6px 12px",
+                        fontSize: 11,
+                        fontWeight: 700,
+                        background: statusFilter === "archived" ? "#d97706" : "transparent",
+                        color: statusFilter === "archived" ? "#fff" : "#475569",
+                        border: "none",
+                        borderRadius: 8,
+                        cursor: "pointer",
+                      }}
+                    >
+                      📦 Arquivadas ({archived.toLocaleString("pt-BR")})
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setStatusFilter("scheduled")}
+                      style={{
+                        padding: "6px 12px",
+                        fontSize: 11,
+                        fontWeight: 700,
+                        background: statusFilter === "scheduled" ? "#2563eb" : "transparent",
+                        color: statusFilter === "scheduled" ? "#fff" : "#475569",
+                        border: "none",
+                        borderRadius: 8,
+                        cursor: "pointer",
+                      }}
+                    >
+                      🕒 Agendadas ({scheduled.toLocaleString("pt-BR")})
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setStatusFilter("draft")}
+                      style={{
+                        padding: "6px 12px",
+                        fontSize: 11,
+                        fontWeight: 700,
+                        background: statusFilter === "draft" ? "#475569" : "transparent",
+                        color: statusFilter === "draft" ? "#fff" : "#475569",
+                        border: "none",
+                        borderRadius: 8,
+                        cursor: "pointer",
+                      }}
+                    >
+                      📝 Rascunhos
+                    </button>
+                  </div>
+
+                  <button
+                    type="button"
+                    className="btn secondary"
+                    disabled={archiving}
+                    onClick={triggerArchiveOldPosts}
+                    style={{
+                      marginLeft: "auto",
+                      padding: "7px 14px",
+                      fontSize: 11,
+                      fontWeight: 800,
+                      background: "#fffbeb",
+                      border: "1px solid #fde68a",
+                      color: "#92400e",
+                      borderRadius: 9,
+                      cursor: "pointer",
+                    }}
+                    title="Arquiva no Supabase matérias com mais de 7 dias que não são de Goiás ou Goiânia para deixar o portal leve e rápido"
+                  >
+                    {archiving ? "⏳ Arquivando matérias no Supabase..." : "📦 Arquivar matérias fora de GO (+7 dias)"}
+                  </button>
+                </div>
                 {loading ? (
                   <div className="empty">Carregando...</div>
                 ) : (
@@ -2918,6 +3179,7 @@ export default function AdminApp() {
                       <option value="published">Publicar agora</option>
                       <option value="draft">Rascunho</option>
                       <option value="scheduled">Programar publicação</option>
+                      <option value="archived">Arquivada (Apenas busca)</option>
                     </select>
                   </div>
 

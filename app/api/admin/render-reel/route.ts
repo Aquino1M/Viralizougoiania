@@ -63,6 +63,7 @@ export async function POST(request: Request) {
     // 100% aceito no WhatsApp, Instagram Reels, TikTok, Windows Media Player e iOS
     const ffmpegArgs = [
       "-y",
+      "-threads", "0",
       "-i", videoInputPath,
       "-loop", "1",
       "-i", overlayInputPath,

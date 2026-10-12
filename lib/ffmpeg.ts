@@ -29,6 +29,9 @@ export function getFfmpegPath(): string {
   const userProfile = process.env.USERPROFILE || "";
   const localAppData = process.env.LOCALAPPDATA || "";
   const candidatePaths = [
+    "e:\\PROJETOS SAAS\\VSCODE PROJETOS\\Viralizougoiania\\Viralizougoiania\\tools\\ffmpeg.exe",
+    path.join(projectRoot, "tools", "ffmpeg.exe"),
+    path.resolve(process.cwd(), "tools", "ffmpeg.exe"),
     "C:\\ffmpeg\\bin\\ffmpeg.exe",
     "C:\\Program Files\\ffmpeg\\bin\\ffmpeg.exe",
     "C:\\ProgramData\\chocolatey\\bin\\ffmpeg.exe",

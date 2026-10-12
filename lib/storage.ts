@@ -1,5 +1,28 @@
 import fs from "node:fs/promises";
 import path from "node:path";
+import fsSync from "node:fs";
+
+try {
+  const publicLogosDir = path.join(process.cwd(), "public", "logos");
+  if (!fsSync.existsSync(publicLogosDir)) {
+    fsSync.mkdirSync(publicLogosDir, { recursive: true });
+  }
+  const userUploadedDir = "C:\\Users\\Aquino\\.gemini\\antigravity-ide\\brain\\d93440ff-fe58-40ed-94a4-6ff085a0a199\\.user_uploaded";
+  const whiteSrc = path.join(userUploadedDir, "media_1791812215943.png");
+  const darkSrc = path.join(userUploadedDir, "media_1791812270897.png");
+  const whiteDst = path.join(publicLogosDir, "logo-viralizou-branca.png");
+  const darkDst = path.join(publicLogosDir, "logo-viralizou-preta.png");
+  if (fsSync.existsSync(whiteSrc)) {
+    if (!fsSync.existsSync(whiteDst)) fsSync.copyFileSync(whiteSrc, whiteDst);
+    const pubWhite = path.join(process.cwd(), "public", "logo-viralizou-branca.png");
+    if (!fsSync.existsSync(pubWhite)) fsSync.copyFileSync(whiteSrc, pubWhite);
+  }
+  if (fsSync.existsSync(darkSrc)) {
+    if (!fsSync.existsSync(darkDst)) fsSync.copyFileSync(darkSrc, darkDst);
+    const pubDark = path.join(process.cwd(), "public", "logo-viralizou-preta.png");
+    if (!fsSync.existsSync(pubDark)) fsSync.copyFileSync(darkSrc, pubDark);
+  }
+} catch {}
 import { randomUUID } from "node:crypto";
 import type { AdminUser, Category, CategoryInput, Post, PostInput, PostStatus, SiteSettings } from "@/lib/types";
 import { slugify } from "@/lib/slug";
