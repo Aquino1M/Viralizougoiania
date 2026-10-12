@@ -58,11 +58,17 @@ if not exist "node_modules\next\package.json" (
 )
 
 if not exist "public\logos" mkdir "public\logos"
-if exist "C:\Users\Aquino\.gemini\antigravity-ide\brain\d93440ff-fe58-40ed-94a4-6ff085a0a199\.user_uploaded\media_1791812215943.png" (
+if exist "C:\Users\Aquino\.gemini\antigravity-ide\brain\d5396812-fe0c-45aa-9024-57e5752b1e04\.user_uploaded\media_1791847748374.png" (
+  copy /y "C:\Users\Aquino\.gemini\antigravity-ide\brain\d5396812-fe0c-45aa-9024-57e5752b1e04\.user_uploaded\media_1791847748374.png" "public\logos\logo-viralizou-branca.png" >nul 2>nul
+  copy /y "C:\Users\Aquino\.gemini\antigravity-ide\brain\d5396812-fe0c-45aa-9024-57e5752b1e04\.user_uploaded\media_1791847748374.png" "public\logo-viralizou-branca.png" >nul 2>nul
+) else if exist "C:\Users\Aquino\.gemini\antigravity-ide\brain\d93440ff-fe58-40ed-94a4-6ff085a0a199\.user_uploaded\media_1791812215943.png" (
   copy /y "C:\Users\Aquino\.gemini\antigravity-ide\brain\d93440ff-fe58-40ed-94a4-6ff085a0a199\.user_uploaded\media_1791812215943.png" "public\logos\logo-viralizou-branca.png" >nul 2>nul
   copy /y "C:\Users\Aquino\.gemini\antigravity-ide\brain\d93440ff-fe58-40ed-94a4-6ff085a0a199\.user_uploaded\media_1791812215943.png" "public\logo-viralizou-branca.png" >nul 2>nul
 )
-if exist "C:\Users\Aquino\.gemini\antigravity-ide\brain\d93440ff-fe58-40ed-94a4-6ff085a0a199\.user_uploaded\media_1791812270897.png" (
+if exist "C:\Users\Aquino\.gemini\antigravity-ide\brain\d5396812-fe0c-45aa-9024-57e5752b1e04\.user_uploaded\media_1791847748387.png" (
+  copy /y "C:\Users\Aquino\.gemini\antigravity-ide\brain\d5396812-fe0c-45aa-9024-57e5752b1e04\.user_uploaded\media_1791847748387.png" "public\logos\logo-viralizou-preta.png" >nul 2>nul
+  copy /y "C:\Users\Aquino\.gemini\antigravity-ide\brain\d5396812-fe0c-45aa-9024-57e5752b1e04\.user_uploaded\media_1791847748387.png" "public\logo-viralizou-preta.png" >nul 2>nul
+) else if exist "C:\Users\Aquino\.gemini\antigravity-ide\brain\d93440ff-fe58-40ed-94a4-6ff085a0a199\.user_uploaded\media_1791812270897.png" (
   copy /y "C:\Users\Aquino\.gemini\antigravity-ide\brain\d93440ff-fe58-40ed-94a4-6ff085a0a199\.user_uploaded\media_1791812270897.png" "public\logos\logo-viralizou-preta.png" >nul 2>nul
   copy /y "C:\Users\Aquino\.gemini\antigravity-ide\brain\d93440ff-fe58-40ed-94a4-6ff085a0a199\.user_uploaded\media_1791812270897.png" "public\logo-viralizou-preta.png" >nul 2>nul
 )

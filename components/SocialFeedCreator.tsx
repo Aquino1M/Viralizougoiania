@@ -216,15 +216,6 @@ function drawStoryStickerGuide(ctx: CanvasRenderingContext2D, canvasWidth: numbe
   ctx.restore();
 }
 
-function createSvgDataUri(isWhite: boolean): string {
-  const textColor = isWhite ? "%23ffffff" : "%231e293b";
-  const svg = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 640 180" width="640" height="180"><defs><style>.vg-brand-text{font-family:'Montserrat',-apple-system,BlinkMacSystemFont,sans-serif;font-weight:900;}</style></defs><g transform="translate(10, 15) scale(0.95)"><path d="M 35 30 L 78 135 L 120 30 L 92 30 L 78 100 L 63 30 Z" fill="%23dc2626"/><path d="M 125 75 C 125 40 155 18 195 18 C 235 18 262 42 265 78 L 235 78 C 232 55 215 42 195 42 C 172 42 153 58 153 82 C 153 106 172 122 195 122 C 218 122 232 108 234 94 L 195 94 L 195 72 L 263 72 C 263 125 228 146 195 146 C 155 146 125 120 125 75 Z" fill="%23dc2626"/></g><text x="275" y="78" fill="${textColor}" font-size="52" class="vg-brand-text" letter-spacing="3.5">VIRALIZOU</text><text x="275" y="142" fill="${textColor}" font-size="52" class="vg-brand-text" letter-spacing="4.5">GOIÂNIA</text></svg>`;
-  return `data:image/svg+xml;charset=utf-8,${svg}`;
-}
-
-const FALLBACK_WHITE_LOGO_SVG = createSvgDataUri(true);
-const FALLBACK_DARK_LOGO_SVG = createSvgDataUri(false);
-
 let cachedOfficialWhiteLogo: HTMLImageElement | null = null;
 let cachedOfficialDarkLogo: HTMLImageElement | null = null;
 
@@ -235,7 +226,12 @@ function getOfficialLogo(variant: "white" | "dark"): HTMLImageElement | null {
 
   if (!cached || !isImageDrawable(cached)) {
     const img = new Image();
-    img.src = isWhite ? FALLBACK_WHITE_LOGO_SVG : FALLBACK_DARK_LOGO_SVG;
+    img.src = isWhite ? "/logos/logo-viralizou-branca.png" : "/logos/logo-viralizou-preta.png";
+    img.onerror = () => {
+      if (!img.src.includes("/api/logos/")) {
+        img.src = isWhite ? "/api/logos/white" : "/api/logos/dark";
+      }
+    };
     if (isWhite) cachedOfficialWhiteLogo = img;
     else cachedOfficialDarkLogo = img;
     return img;
@@ -3920,11 +3916,13 @@ async function fixWebmDuration(blob: Blob, durationSec: number): Promise<Blob> {
                     key={`${logoColorStyle}_${Boolean(logoData)}`}
                     src={
                       logoData ||
-                      (logoColorStyle === "dark" ? "/logos/logo-viralizou-preta.svg" : "/logos/logo-viralizou-branca.svg")
+                      (logoColorStyle === "dark" ? "/logos/logo-viralizou-preta.png" : "/logos/logo-viralizou-branca.png")
                     }
                     onError={(e) => {
                       const img = e.currentTarget;
-                      img.src = logoColorStyle === "dark" ? FALLBACK_DARK_LOGO_SVG : FALLBACK_WHITE_LOGO_SVG;
+                      if (!img.src.includes("/api/logos/")) {
+                        img.src = logoColorStyle === "dark" ? "/api/logos/dark" : "/api/logos/white";
+                      }
                     }}
                     alt="Logo ativa"
                     style={{
