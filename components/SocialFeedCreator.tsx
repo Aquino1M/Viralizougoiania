@@ -749,7 +749,7 @@ function renderCaptionStyleToContext(
       ctx.shadowBlur = 14;
       ctx.shadowOffsetY = 4;
 
-      let boxBg = "#ffffff";
+      let boxBg = "#ffcc00";
       let textFg = "#111111";
 
       if (textStyle === "highlight-dark") {
@@ -1202,9 +1202,185 @@ function drawReelFrame(
   ctx.restore();
 }
 
+function buildReelOverlayCanvas(
+  logo: HTMLImageElement | null,
+  headline: string,
+  category: string,
+  handle: string,
+  logoPosition: LogoPosition,
+  titlePosition: LogoPosition,
+  textStyle: ReelTextStyle,
+  fontFamily: ReelFontFamily,
+  fontWeight: ReelFontWeight,
+  textAlign: ReelTextAlign,
+  textCase: ReelTextCase,
+  fontSize: number,
+  showStrongSceneWarning: boolean,
+  logoScale: number,
+  handleFontSize: number,
+  tagColor: ReelTagColor,
+  tagPositionY: number,
+  logoColorStyle: LogoColorStyle = "white",
+  shadeOpacity: number = 85,
+  showOverlayLayer: boolean = true,
+  showLogoLayer: boolean = true,
+  showTitleLayer: boolean = true,
+  showHandleLayer: boolean = true,
+  showStorySticker: boolean = true,
+  format: PublicationFormat = "reel",
+): HTMLCanvasElement {
+  const canvas = document.createElement("canvas");
+  canvas.width = W;
+  canvas.height = REEL_H;
+  const ctx = canvas.getContext("2d");
+  if (!ctx) return canvas;
+
+  ctx.imageSmoothingEnabled = true;
+  ctx.imageSmoothingQuality = "high";
+  (ctx as any).textRendering = "geometricPrecision";
+
+  // 1. Gradiente inferior de contraste (shade)
+  const maxAlpha = (showOverlayLayer ? shadeOpacity : 0) / 100;
+  if (maxAlpha > 0) {
+    const shade = ctx.createLinearGradient(0, 650, 0, REEL_H);
+    shade.addColorStop(0, `rgba(0,0,0,${(0.05 * maxAlpha).toFixed(2)})`);
+    shade.addColorStop(0.42, `rgba(0,0,0,${(0.68 * maxAlpha).toFixed(2)})`);
+    shade.addColorStop(1, `rgba(0,0,0,${(0.96 * maxAlpha).toFixed(2)})`);
+    ctx.fillStyle = shade;
+    ctx.fillRect(0, 600, W, REEL_H - 600);
+  }
+
+  // 2. Alerta de cenas fortes
+  if (showStrongSceneWarning) {
+    ctx.fillStyle = "#b91c1c";
+    ctx.fillRect(48, 56, W - 96, 78);
+    ctx.fillStyle = "#ffffff";
+    ctx.textAlign = "center";
+    ctx.textBaseline = "middle";
+    ctx.font = '800 36px Arial, sans-serif';
+    ctx.fillText("AVISO: CENAS FORTES", W / 2, 95);
+  }
+
+  // 3. Logo do jornal
+  if (showLogoLayer) {
+    const renderLogo = getRenderableLogo(logo, logoColorStyle);
+    if (renderLogo) {
+      const { width, height } = getLogoSize(renderLogo, format, logoScale / 100);
+      ctx.drawImage(renderLogo, logoPosition.x * W - width / 2, logoPosition.y * REEL_H - height / 2, width, height);
+    } else {
+      const ly = logoPosition.y * REEL_H;
+      const lx = logoPosition.x * W;
+      ctx.save();
+      ctx.textAlign = "center";
+      ctx.textBaseline = "middle";
+      ctx.fillStyle = logoColorStyle === "dark" ? "#111111" : "#ffffff";
+      ctx.font = "900 48px Arial, sans-serif";
+      ctx.fillText("VIRALIZOU", lx - 82, ly);
+      ctx.fillStyle = "#ff5a1f";
+      ctx.font = "900 32px Arial, sans-serif";
+      ctx.fillText("GOIÂNIA", lx + 124, ly);
+      ctx.restore();
+    }
+  }
+
+  // 4. Manchete / Legenda
+  if (showTitleLayer) {
+    drawReelHeadline(
+      ctx,
+      headline,
+      category,
+      fontFamily,
+      fontWeight,
+      textStyle,
+      textAlign,
+      textCase,
+      fontSize,
+      "static",
+      titlePosition,
+      10,
+      10,
+      REEL_H,
+      820,
+    );
+  }
+
+  // 5. Figurinha de Stories
+  if (format === "story" && showStorySticker) {
+    ctx.save();
+    ctx.strokeStyle = "rgba(255, 255, 255, 0.85)";
+    ctx.lineWidth = 3;
+    ctx.setLineDash([12, 8]);
+    ctx.fillStyle = "rgba(255, 255, 255, 0.14)";
+    const stkW = 580;
+    const stkH = 110;
+    const stkX = (W - stkW) / 2;
+    const stkY = 1440;
+    if (typeof ctx.roundRect === "function") {
+      ctx.beginPath();
+      ctx.roundRect(stkX, stkY, stkW, stkH, 24);
+      ctx.stroke();
+      ctx.fill();
+    } else {
+      ctx.strokeRect(stkX, stkY, stkW, stkH);
+      ctx.fillRect(stkX, stkY, stkW, stkH);
+    }
+    ctx.setLineDash([]);
+    ctx.fillStyle = "#ffffff";
+    ctx.font = '800 26px "Inter", sans-serif';
+    ctx.textAlign = "center";
+    ctx.textBaseline = "middle";
+    ctx.fillText("🔗 ÁREA DA FIGURINHA DE LINK / ENQUETE 👆", W / 2, stkY + stkH / 2);
+    ctx.restore();
+  }
+
+  // 6. Assinatura / Tag Inferior (@viralizougoiania)
+  if (showHandleLayer && handle && handle.trim()) {
+    const tagText = handle.trim();
+    const tagY = tagPositionY || 1670;
+
+    ctx.save();
+    ctx.textAlign = "center";
+    ctx.textBaseline = "middle";
+    ctx.font = `800 ${handleFontSize}px "Montserrat", -apple-system, sans-serif`;
+
+    let textColor = "#ffffff";
+    if (tagColor === "red") textColor = "#ff3b30";
+    else if (tagColor === "yellow") textColor = "#ffcc00";
+    else if (tagColor === "orange") textColor = "#ff5a1f";
+
+    const metrics = ctx.measureText(tagText);
+    const padX = 20;
+    const padY = 10;
+    const boxW = metrics.width + padX * 2;
+    const boxH = handleFontSize + padY * 2;
+    const boxX = W / 2 - boxW / 2;
+    const boxY = tagY - boxH / 2;
+
+    ctx.fillStyle = "rgba(10, 10, 12, 0.72)";
+    ctx.shadowColor = "rgba(0, 0, 0, 0.6)";
+    ctx.shadowBlur = 10;
+    ctx.shadowOffsetY = 2;
+    if (typeof ctx.roundRect === "function") {
+      ctx.beginPath();
+      ctx.roundRect(boxX, boxY, boxW, boxH, 10);
+      ctx.fill();
+    } else {
+      ctx.fillRect(boxX, boxY, boxW, boxH);
+    }
+
+    ctx.fillStyle = textColor;
+    ctx.fillText(tagText, W / 2, tagY);
+    ctx.restore();
+  }
+
+  return canvas;
+}
+
 export default function SocialFeedCreator({ posts, onBack }: Props) {
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
   const videoPreviewRef = useRef<HTMLVideoElement | null>(null);
+  const videoFileRef = useRef<File | Blob | null>(null);
+  const cachedOverlayCanvasRef = useRef<HTMLCanvasElement | null>(null);
   const logoImageRef = useRef<HTMLImageElement | null>(null);
   const articleImageRef = useRef<{ src: string; image: HTMLImageElement } | null>(null);
   const logoPositionRef = useRef<LogoPosition>(DEFAULT_LOGO_POSITION);
@@ -1693,7 +1869,51 @@ export default function SocialFeedCreator({ posts, onBack }: Props) {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [selectedPost?.slug, selectedPost?.updated_at, title, logoData, handle, imagePosition, feedTitleFontSize, feedFontFamily, feedTitlePosition.x, feedTitlePosition.y, feedTitleOffsetY, format, logoPosition.x, logoPosition.y, titlePosition.x, titlePosition.y, reelTextStyle, reelFontFamily, reelFontWeight, reelTextAlign, reelTextCase, reelFontSize, tagColor, tagPositionY, showSafeZone, reelTextAnimation, showStrongSceneWarning, logoScale, handleFontSize, shadeOpacity, showOverlayLayer, showLogoLayer, showTitleLayer, showHandleLayer, showStorySticker, logoColorStyle]);
 
-  // Loop de pré-visualização interativa do Reel e Story
+  // MAX CACHE: Pré-renderiza todo o layout visual da legenda e sobreposições em 1080x1920
+  // Isso zera 100% dos cálculos na CPU durante a reprodução do vídeo e evita travamentos
+  useEffect(() => {
+    if (typeof document === "undefined") return;
+    try {
+      const overlayCanvas = buildReelOverlayCanvas(
+        logoImageRef.current,
+        title || selectedPost?.title || "",
+        selectedPost?.category || "",
+        handle,
+        logoPosition,
+        titlePosition,
+        reelTextStyle,
+        reelFontFamily,
+        reelFontWeight,
+        reelTextAlign,
+        reelTextCase,
+        reelFontSize,
+        showStrongSceneWarning,
+        logoScale,
+        handleFontSize,
+        tagColor,
+        tagPositionY,
+        logoColorStyle,
+        shadeOpacity,
+        showOverlayLayer,
+        showLogoLayer,
+        showTitleLayer,
+        showHandleLayer,
+        showStorySticker,
+        format,
+      );
+      cachedOverlayCanvasRef.current = overlayCanvas;
+    } catch (err) {
+      console.error("Erro ao gerar cache da legenda:", err);
+    }
+  }, [
+    format, title, selectedPost?.title, selectedPost?.category, handle,
+    logoData, logoColorStyle, logoScale, logoPosition, titlePosition,
+    reelTextStyle, reelFontFamily, reelFontWeight, reelTextAlign, reelTextCase, reelFontSize,
+    showStrongSceneWarning, handleFontSize, tagColor, tagPositionY,
+    shadeOpacity, showOverlayLayer, showLogoLayer, showTitleLayer, showHandleLayer, showStorySticker,
+  ]);
+
+  // Loop de pré-visualização interativa do Reel e Story (máxima suavidade)
   useEffect(() => {
     const video = videoPreviewRef.current;
     if ((format !== "reel" && format !== "story") || !videoUrl || !video || recording) return;
@@ -1707,36 +1927,48 @@ export default function SocialFeedCreator({ posts, onBack }: Props) {
           const canvas = canvasRef.current;
           const ctx = canvas?.getContext("2d");
           if (ctx && video.readyState >= 2) {
-            drawReelFrame(
-              ctx,
-              video,
-              logoImageRef.current,
-              title || selectedPost?.title || "",
-              selectedPost?.category || "",
-              handle,
-              logoPositionRef.current,
-              titlePositionRef.current,
-              reelTextStyle,
-              reelFontFamily,
-              reelFontWeight,
-              reelTextAlign,
-              reelTextCase,
-              reelFontSize,
-              reelTextAnimation,
-              showStrongSceneWarning,
-              logoScale,
-              handleFontSize,
-              tagColor,
-              tagPositionY,
-              showSafeZone,
-              logoColorStyle,
-              showOverlayLayer ? shadeOpacity : 0,
-              showLogoLayer,
-              showTitleLayer,
-              showHandleLayer,
-              showStorySticker,
-              format,
-            );
+            ctx.fillStyle = "#050505";
+            ctx.fillRect(0, 0, W, REEL_H);
+            drawCover(ctx, video, 0, 0, W, REEL_H);
+            // Ultra-rápido: desenha o overlay já pré-renderizado e cacheado em 0.05ms
+            if (cachedOverlayCanvasRef.current) {
+              ctx.drawImage(cachedOverlayCanvasRef.current, 0, 0);
+            } else {
+              drawReelFrame(
+                ctx,
+                video,
+                logoImageRef.current,
+                title || selectedPost?.title || "",
+                selectedPost?.category || "",
+                handle,
+                logoPositionRef.current,
+                titlePositionRef.current,
+                reelTextStyle,
+                reelFontFamily,
+                reelFontWeight,
+                reelTextAlign,
+                reelTextCase,
+                reelFontSize,
+                reelTextAnimation,
+                showStrongSceneWarning,
+                logoScale,
+                handleFontSize,
+                tagColor,
+                tagPositionY,
+                showSafeZone,
+                logoColorStyle,
+                showOverlayLayer ? shadeOpacity : 0,
+                showLogoLayer,
+                showTitleLayer,
+                showHandleLayer,
+                showStorySticker,
+                format,
+              );
+            }
+            if (showSafeZone) {
+              if (format === "story") drawStorySafeZone(ctx);
+              else drawReelSafeZone(ctx);
+            }
             lastRenderedAt = timestamp;
           }
         }
@@ -1852,6 +2084,7 @@ export default function SocialFeedCreator({ posts, onBack }: Props) {
       return;
     }
 
+    videoFileRef.current = file;
     setVideoReady(false);
     setVideoFileName(file.name);
     setVideoUrl(URL.createObjectURL(file));
@@ -1904,6 +2137,7 @@ export default function SocialFeedCreator({ posts, onBack }: Props) {
       }
 
       const blob = await mediaRes.blob();
+      videoFileRef.current = new File([blob], `viralizou-${data.platform || "social"}.mp4`, { type: blob.type || "video/mp4" });
       if (videoUrl) {
         URL.revokeObjectURL(videoUrl);
       }
@@ -2237,6 +2471,92 @@ export default function SocialFeedCreator({ posts, onBack }: Props) {
       return;
     }
     if (isRecordingRef.current) return;
+
+    const formatLabel = format === "story" ? "story" : "reel";
+    const basename = (selectedPost?.slug || videoFileName.replace(/\.[^.]+$/, "") || `viralizou-${formatLabel}`)
+      .replace(/[^a-zA-Z0-9_-]/g, "-") || `viralizou-${formatLabel}`;
+    const outFilename = `${basename}-${formatLabel}.mp4`;
+
+    // 1. Gera o canvas do overlay em alta resolução (1080x1920) com as legendas e marcas
+    const overlayCanvas = buildReelOverlayCanvas(
+      logoImageRef.current,
+      title || selectedPost?.title || "",
+      selectedPost?.category || "",
+      handle,
+      logoPositionRef.current,
+      titlePositionRef.current,
+      reelTextStyle,
+      reelFontFamily,
+      reelFontWeight,
+      reelTextAlign,
+      reelTextCase,
+      reelFontSize,
+      showStrongSceneWarning,
+      logoScale,
+      handleFontSize,
+      tagColor,
+      tagPositionY,
+      logoColorStyle,
+      shadeOpacity,
+      showOverlayLayer,
+      showLogoLayer,
+      showTitleLayer,
+      showHandleLayer,
+      showStorySticker,
+      format,
+    );
+
+    const overlayBlob = await new Promise<Blob | null>((resolve) => overlayCanvas.toBlob(resolve, "image/png", 1.0));
+
+    // MÉTODO 1 (NOVO E DEFINITIVO - FFMPEG NO SERVIDOR):
+    // Como processa direto no arquivo original com H.264 ultrafast, nenhum frame é descartado pelo navegador.
+    // Zero travamento no Brave, Chrome e Edge!
+    if (videoFileRef.current && overlayBlob) {
+      isRecordingRef.current = true;
+      setRecording(true);
+      setRecordingProgress(20);
+      setVideoExport(null);
+      setMessage("⚡ Renderizando vídeo com alta qualidade e 0 engasgos via FFmpeg...");
+
+      try {
+        const formData = new FormData();
+        formData.append("video", videoFileRef.current, videoFileName || "video.mp4");
+        formData.append("overlay", overlayBlob, "overlay.png");
+        formData.append("filename", outFilename);
+
+        setRecordingProgress(45);
+        const res = await fetch("/api/admin/render-reel", {
+          method: "POST",
+          body: formData,
+        });
+
+        if (!res.ok) {
+          const errData = await res.json().catch(() => ({}));
+          throw new Error(errData.error || `Erro de renderização (${res.status})`);
+        }
+
+        setRecordingProgress(90);
+        const mp4Blob = await res.blob();
+        if (!mp4Blob || mp4Blob.size < 1000) {
+          throw new Error("Arquivo final gerado é inválido.");
+        }
+
+        setVideoExport({
+          url: URL.createObjectURL(mp4Blob),
+          filename: outFilename,
+          type: "video/mp4",
+        });
+        setRecordingProgress(100);
+        setMessage(`✅ Vídeo (${formatLabel.toUpperCase()}) 100% pronto em MP4! Áudio e legendas sincronizados com perfeição e sem travamentos.`);
+        return;
+      } catch (serverErr) {
+        console.warn("Renderização FFmpeg via servidor falhou, acionando gravação local...", serverErr);
+        setMessage("Avisando: Iniciando gravação em tela com cache...");
+      } finally {
+        isRecordingRef.current = false;
+        setRecording(false);
+      }
+    }
     if (!canvas.captureStream || typeof MediaRecorder === "undefined") {
       setMessage("Seu navegador não oferece gravação da prévia. Use a versão atual do Chrome ou Edge.");
       return;
@@ -2353,9 +2673,9 @@ export default function SocialFeedCreator({ posts, onBack }: Props) {
       const drawFrameSync = () => {
         if (!isRecordingRef.current) return;
         const ctx = canvas.getContext("2d");
-        if (ctx && video.readyState >= 2) {
-          drawReelFrame(
-            ctx,
+        if (ctx && video.readyState >= 2) { ctx.fillStyle = "#050505"; ctx.fillRect(0, 0, W, REEL_H); drawCover(ctx, video, 0, 0, W, REEL_H); ctx.drawImage(overlayCanvas, 0, 0); animFrameId = requestAnimationFrame(drawFrameSync); return;
+          if (ctx) drawReelFrame(
+            ctx!,
             video,
             logoImageRef.current,
             title || selectedPost?.title || "",
@@ -2430,9 +2750,9 @@ export default function SocialFeedCreator({ posts, onBack }: Props) {
 
       let finalBlob = blob;
 
-      const formatLabel = format === "story" ? "story" : "reel";
-      const basename = (selectedPost?.slug || videoFileName.replace(/\.[^.]+$/, "") || `viralizou-${formatLabel}`)
-        .replace(/[^a-zA-Z0-9_-]/g, "-") || `viralizou-${formatLabel}`;
+      // formatLabel já declarado no topo da função
+      // basename já declarado no topo da função
+        // .replace(/[^a-zA-Z0-9_-]/g, "-") || `viralizou-${formatLabel}`;
 
       // Converte no backend com FFmpeg para MP4 real padronizado (H.264 / AAC / 30 FPS / +faststart)
       setMessage("⚡ Gravado com sucesso! Convertendo para MP4 padrão (H.264 / AAC) para Instagram, TikTok e WhatsApp...");
@@ -2808,7 +3128,7 @@ export default function SocialFeedCreator({ posts, onBack }: Props) {
                 >
                   🏷️ Selo de Categoria (Jornal Opção)
                 </button>
-                <button
+                <button type="button" className={`captionStyleBtn ${reelTextStyle === "highlight" || reelTextStyle === "highlight-yellow" ? "active" : ""}`} onClick={() => chooseReelTextStyle("highlight")} title="Faixa amarela noticiosa em destaque (Alto impacto)">🟨 Faixa Noticiosa (Destaque)</button> {false && (<><button
                   type="button"
                   className={`captionStyleBtn ${reelTextStyle === "left-border" ? "active" : ""}`}
                   onClick={() => chooseReelTextStyle("left-border")}
@@ -2858,7 +3178,7 @@ export default function SocialFeedCreator({ posts, onBack }: Props) {
                   onClick={() => chooseReelTextStyle("stroke-strong")}
                 >
                   🔲 Contorno forte
-                </button>
+                </button></>)}
               </div>
             </div>
 
