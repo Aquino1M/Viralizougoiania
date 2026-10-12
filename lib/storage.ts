@@ -428,7 +428,7 @@ const getArchivedPostIndexCached = unstable_cache(
     const queryLower = safeQuery.toLocaleLowerCase("pt-BR");
     const cutoffMs = Date.now() - 30 * 24 * 60 * 60 * 1000;
     return local
-      .filter((post) => post.status === "published" && new Date(post.published_at || post.created_at).getTime() < cutoffMs)
+      .filter((post) => post.status === "archived" || (post.status === "published" && new Date(post.published_at || post.created_at).getTime() < cutoffMs))
       .filter((post) => [post.title, post.excerpt, post.category, post.city, post.content, post.source_content].some((field) => (field || "").toLocaleLowerCase("pt-BR").includes(queryLower)))
       .sort((a, b) => +new Date(b.published_at || b.created_at) - +new Date(a.published_at || a.created_at))
       .slice(0, 30)
