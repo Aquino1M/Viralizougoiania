@@ -7,6 +7,7 @@ import { getPosts } from "@/lib/storage";
 import { getLiveFootballData } from "@/lib/football-sync";
 import type { Post } from "@/lib/types";
 
+export const dynamic = "force-dynamic";
 export const revalidate = 60;
 
 const getFootballPosts = unstable_cache(

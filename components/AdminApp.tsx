@@ -403,7 +403,7 @@ export default function AdminApp() {
       const res = await fetch("/api/admin/archive-posts", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ days: 7 }),
+        body: JSON.stringify({ days: 0, nonGoiasOnly: true }),
       });
       if (res.ok) {
         const data = await res.json();
@@ -411,7 +411,7 @@ export default function AdminApp() {
           setPostStats(data.stats);
         }
         if (data.result?.archived > 0) {
-          setMessage(`📦 Loop de 10s: ${data.result.archived} matérias fora de Goiás (+7 dias) arquivadas automaticamente no Supabase!`);
+          setMessage(`📦 Loop de 10s: ${data.result.archived} matérias fora de Goiás arquivadas no Supabase! (Notícias de Goiânia e Goiás 100% preservadas).`);
           await load();
         }
       }
@@ -1933,7 +1933,7 @@ export default function AdminApp() {
                     />
                     <b style={{ color: "#0f172a" }}>Loop de 10s Ativo:</b>
                     <span>
-                      Verificando e arquivando matérias fora de Goiás (+7 dias). Próxima checagem em:{" "}
+                      Verificando e arquivando matérias fora de Goiás (Goiânia e Goiás 100% protegidos). Próxima checagem em:{" "}
                       <b style={{ color: "#ff5a1f", fontVariantNumeric: "tabular-nums" }}>{archiveLoopCountdown}s</b>
                     </span>
                     {lastArchiveCheckAt && (
@@ -2071,40 +2071,43 @@ export default function AdminApp() {
                     type="button"
                     className="btn secondary"
                     disabled={archiving}
-                    onClick={() => triggerArchiveOldPosts({ allOlderThanDays: true, days: 7 })}
+                    onClick={() => triggerArchiveOldPosts({ nonGoiasOnly: true, days: 0 })}
                     style={{
                       marginLeft: "auto",
-                      padding: "7px 14px",
-                      fontSize: 11,
+                      padding: "8px 16px",
+                      fontSize: 12,
                       fontWeight: 800,
                       background: "#fffbeb",
                       border: "1px solid #fde68a",
                       color: "#92400e",
                       borderRadius: 9,
                       cursor: "pointer",
+                      display: "inline-flex",
+                      alignItems: "center",
+                      gap: 6,
                     }}
-                    title="Arquiva no Supabase matérias com mais de 7 dias que não são de Goiás ou Goiânia para deixar o portal leve e rápido"
+                    title="Arquiva imediatamente matérias que NÃO são de Goiás ou Goiânia para priorizar o estado (100% de Goiás/Goiânia preservadas)"
                   >
-                    {archiving ? "⏳ Arquivando..." : "📦 Arquivar Todas (+7 dias)"}
+                    {archiving ? "⏳ Arquivando..." : "📦 Arquivar Notícias Fora de Goiás"}
                   </button>
                   <button
                     type="button"
                     className="btn secondary"
                     disabled={archiving}
-                    onClick={() => triggerArchiveOldPosts({ nonGoiasOnly: true, days: 0 })}
+                    onClick={() => triggerArchiveOldPosts({ allOlderThanDays: true, days: 7 })}
                     style={{
-                      padding: "7px 14px",
+                      padding: "8px 14px",
                       fontSize: 11,
-                      fontWeight: 800,
-                      background: "#fef2f2",
-                      border: "1px solid #fecaca",
-                      color: "#991b1b",
+                      fontWeight: 700,
+                      background: "#f8fafc",
+                      border: "1px solid #cbd5e1",
+                      color: "#475569",
                       borderRadius: 9,
                       cursor: "pointer",
                     }}
-                    title="Arquiva matérias que não são de Goiás ou Goiânia para priorizar o estado"
+                    title="Arquiva matérias antigas com mais de 7 dias (fora de Goiás)"
                   >
-                    📍 Limpar Fora de Goiás
+                    ⏳ Arquivar (+7 dias)
                   </button>
                 </div>
                 {loading ? (

@@ -21,7 +21,7 @@ export async function GET() {
   const foundPaths = commonPaths.filter((p) => {
     if (p === "ffmpeg" || p === "ffmpeg.exe") return false;
     try {
-      return fs.existsSync(p);
+      return fs.existsSync(/*turbopackIgnore: true*/ p);
     } catch {
       return false;
     }

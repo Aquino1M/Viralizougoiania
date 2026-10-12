@@ -4,7 +4,9 @@ import Header from "@/components/Header";
 import Footer from "@/components/Footer";
 import NewsCard from "@/components/NewsCard";
 import { getPosts } from "@/lib/storage";
+import type { Post } from "@/lib/types";
 
+export const dynamic = "force-dynamic";
 export const revalidate = 60;
 
 const getFofocaPosts = unstable_cache(
@@ -31,7 +33,7 @@ export const metadata: Metadata = {
 
 export default async function FofocaPage() {
   const fofocaPosts = (await getFofocaPosts()).filter(
-    (p) => p.status === "published" && Boolean(p.image_url && p.image_url.trim())
+    (p: Post) => p.status === "published" && Boolean(p.image_url && p.image_url.trim())
   );
 
   const lead = fofocaPosts[0];
@@ -62,7 +64,7 @@ export default async function FofocaPage() {
 
             {fofocaPosts.length > 0 ? (
               <div className="cardGrid">
-                {fofocaPosts.map((p) => (
+                {fofocaPosts.map((p: Post) => (
                   <NewsCard key={p.id} post={p} />
                 ))}
               </div>

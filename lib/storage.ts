@@ -385,12 +385,26 @@ export async function getPosts(opts: { includeDrafts?: boolean; category?: strin
 
   if (hasSupabaseConfig()) {
     try {
-      const selectFields = summaryOnly ? "id,slug,title,excerpt,category,city,author,image_url,image_credit,video_url,featured,status,published_at,created_at,updated_at" : "*";
+      const selectFields = summaryOnly ? "id,slug,title,excerpt,category,city,author,image_url,image_credit,featured,status,published_at,created_at,updated_at" : "*";
       const filters = [`select=${selectFields}`, "order=published_at.desc.nullslast,created_at.desc"];
       if (status) filters.push(`status=eq.${encodeURIComponent(status)}`); else if (!includeDrafts) filters.push("status=eq.published");
       if (category) filters.push(`category=eq.${encodeURIComponent(category)}`);
       if (limit) filters.push(`limit=${limit}`);
-      const posts: Post[] = await sb(`posts?${filters.join("&")}`);
+      let posts: Post[] = [];
+      try {
+        posts = await sb(`posts?${filters.join("&")}`);
+      } catch (subErr: any) {
+        if (subErr.message && subErr.message.includes("video_url")) {
+          const safeFilters = filters.map((f) =>
+            f.startsWith("select=")
+              ? "select=id,slug,title,excerpt,category,city,author,image_url,image_credit,featured,status,published_at,created_at,updated_at"
+              : f
+          );
+          posts = await sb(`posts?${safeFilters.join("&")}`);
+        } else {
+          throw subErr;
+        }
+      }
       if (Array.isArray(posts) && posts.length > 0) {
         postsList = posts;
       }
@@ -767,15 +781,42 @@ export async function reclassifyExternalPosts(): Promise<{ checked: number; chan
   return { checked: rawPosts.length, changed: changes.length, byCategory };
 }
 
+function isProtectedGoiasPost(post: Partial<Post>): boolean {
+  if (isGoiasOrigin(post as Post)) return true;
+  const cat = (post.category || "").toLowerCase();
+  if (cat === "goiânia" || cat === "goiania" || cat === "bairros") return true;
+  const city = (post.city || "").toLowerCase();
+  if (
+    city === "goiânia" ||
+    city === "goiania" ||
+    city === "goiás" ||
+    city === "goias" ||
+    city.includes("aparecida") ||
+    city.includes("anápolis") ||
+    city.includes("anapolis") ||
+    city.includes("rio verde") ||
+    city.includes("trindade") ||
+    city.includes("senador canedo") ||
+    city.includes("setor ")
+  ) {
+    return true;
+  }
+  const text = `${post.title || ""} ${post.excerpt || ""} ${post.source_name || ""} ${post.source_url || ""}`.toLowerCase();
+  if (/\b(goi[aá]nia|goi[aá]s|goiano|goiana|aparecida|an[aá]polis|rio verde|trindade|senador canedo|pmgo|pcgo|caiado|ronaldo caiado|mabel|vila nova|drag[aã]o|atl[eé]tico-go|goi[aá]s e\.c)\b/i.test(text)) {
+    return true;
+  }
+  return false;
+}
+
 export async function archiveOldExternalPosts(
-  days = 7,
+  days = 0,
   options: { nonGoiasOnly?: boolean; allOlderThanDays?: boolean } = {}
 ): Promise<{
   checked: number;
   archived: number;
   totalArchived?: number;
 }> {
-  const cutoffMs = Date.now() - days * 24 * 60 * 60 * 1000;
+  const cutoffMs = days > 0 ? Date.now() - days * 24 * 60 * 60 * 1000 : Date.now();
   const cutoffIso = new Date(cutoffMs).toISOString();
 
   let archivedCount = 0;
@@ -785,12 +826,12 @@ export async function archiveOldExternalPosts(
     try {
       const pageSize = 1000;
       const idsToArchive: string[] = [];
-      const isCleanNonGoias = days <= 0 || options.nonGoiasOnly;
+      const isCleanNonGoias = days <= 0 || options.nonGoiasOnly !== false;
 
       for (let offset = 0; offset < 50000; offset += pageSize) {
-        let query = `posts?select=id,title,excerpt,city,category,published_at,created_at&status=eq.published&order=published_at.asc.nullsfirst,created_at.asc&limit=${pageSize}&offset=${offset}`;
-        if (!isCleanNonGoias) {
-          query = `posts?select=id,title,excerpt,city,category,published_at,created_at&status=eq.published&or=(published_at.lt.${encodeURIComponent(cutoffIso)},and(published_at.is.null,created_at.lt.${encodeURIComponent(cutoffIso)}))&order=published_at.asc&limit=${pageSize}&offset=${offset}`;
+        let query = `posts?select=id,title,excerpt,city,category,source_name,source_url,author,published_at,created_at&status=eq.published&order=published_at.asc.nullsfirst,created_at.asc&limit=${pageSize}&offset=${offset}`;
+        if (!isCleanNonGoias && days > 0) {
+          query = `posts?select=id,title,excerpt,city,category,source_name,source_url,author,published_at,created_at&status=eq.published&or=(published_at.lt.${encodeURIComponent(cutoffIso)},and(published_at.is.null,created_at.lt.${encodeURIComponent(cutoffIso)}))&order=published_at.asc&limit=${pageSize}&offset=${offset}`;
         }
 
         const rows = await sb(query);
@@ -798,14 +839,17 @@ export async function archiveOldExternalPosts(
         checkedCount += rows.length;
 
         for (const post of rows as Post[]) {
+          // REGRA DE SEGURANÇA MÁXIMA: NUNCA arquivar notícias de Goiás ou Goiânia!
+          if (isProtectedGoiasPost(post)) {
+            continue;
+          }
+
+          // Se não é de Goiás/Goiânia, arquiva (ou se passou dos dias especificados)
           if (isCleanNonGoias) {
-            if (!isGoiasOrigin(post)) {
-              idsToArchive.push(post.id);
-            }
-          } else if (options.allOlderThanDays) {
             idsToArchive.push(post.id);
-          } else {
-            if (!isGoiasOrigin(post)) {
+          } else if (days > 0) {
+            const pTime = new Date(post.published_at || post.created_at || 0).getTime();
+            if (pTime < cutoffMs) {
               idsToArchive.push(post.id);
             }
           }
@@ -815,22 +859,34 @@ export async function archiveOldExternalPosts(
       }
 
       const updatedAt = new Date().toISOString();
-      for (let i = 0; i < idsToArchive.length; i += 75) {
-        const chunk = idsToArchive.slice(i, i + 75);
-        const filter = chunk.map((id) => `"${id.replace(/"/g, "")}"`).join(",");
-        try {
-          await sb(`posts?id=in.(${filter})`, {
-            method: "PATCH",
-            headers: { Prefer: "return=minimal" },
-            body: JSON.stringify({
-              status: "archived",
-              updated_at: updatedAt,
-            }),
-          });
-          archivedCount += chunk.length;
-        } catch (err: any) {
-          console.warn("Erro ao salvar lote arquivado no Supabase:", err.message);
-        }
+      const chunkSize = 150;
+      const chunks: string[][] = [];
+      for (let i = 0; i < idsToArchive.length; i += chunkSize) {
+        chunks.push(idsToArchive.slice(i, i + chunkSize));
+      }
+
+      // Executa até 5 lotes em paralelo para arquivar milhares de notícias em poucos segundos
+      const concurrency = 5;
+      for (let i = 0; i < chunks.length; i += concurrency) {
+        const batch = chunks.slice(i, i + concurrency);
+        await Promise.all(
+          batch.map(async (chunk) => {
+            const filter = chunk.map((id) => `"${id.replace(/"/g, "")}"`).join(",");
+            try {
+              await sb(`posts?id=in.(${filter})`, {
+                method: "PATCH",
+                headers: { Prefer: "return=minimal" },
+                body: JSON.stringify({
+                  status: "archived",
+                  updated_at: updatedAt,
+                }),
+              });
+              archivedCount += chunk.length;
+            } catch (err: any) {
+              console.warn("Erro ao salvar lote arquivado no Supabase:", err.message);
+            }
+          })
+        );
       }
     } catch (err: any) {
       console.warn("Erro no processo de arquivamento no Supabase:", err.message);

@@ -48,7 +48,7 @@ export async function GET(
   const filePath = path.join(publicDir, fileName);
 
   try {
-    const buffer = await fs.readFile(filePath);
+    const buffer = await fs.readFile(/*turbopackIgnore: true*/ filePath);
     return new Response(buffer, {
       status: 200,
       headers: {
@@ -65,7 +65,7 @@ export async function GET(
 
     for (const candidate of candidatePaths) {
       try {
-        const buffer = await fs.readFile(candidate);
+        const buffer = await fs.readFile(/*turbopackIgnore: true*/ candidate);
         await fs.mkdir(publicDir, { recursive: true }).catch(() => {});
         await fs.writeFile(filePath, buffer).catch(() => {});
         return new Response(buffer, {

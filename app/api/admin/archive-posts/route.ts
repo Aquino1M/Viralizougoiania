@@ -10,13 +10,13 @@ export async function GET() {
   }
 
   try {
-    const result = await archiveOldExternalPosts(7);
+    const result = await archiveOldExternalPosts(0, { nonGoiasOnly: true });
     const stats = await getPostStats();
     return NextResponse.json({
       ok: true,
       result,
       stats,
-      message: `${result.archived} matérias fora de Goiás (+7 dias) foram arquivadas no Supabase.`,
+      message: `${result.archived} matérias fora de Goiás foram arquivadas no Supabase. Notícias de Goiás e Goiânia foram 100% preservadas.`,
     });
   } catch (error: any) {
     return NextResponse.json(
@@ -32,9 +32,9 @@ export async function POST(req: Request) {
   }
 
   try {
-    let days = 7;
-    let nonGoiasOnly = false;
-    let allOlderThanDays = true;
+    let days = 0;
+    let nonGoiasOnly = true;
+    let allOlderThanDays = false;
     try {
       const body = await req.json();
       if (typeof body?.days === "number") days = body.days;
@@ -44,9 +44,7 @@ export async function POST(req: Request) {
 
     const result = await archiveOldExternalPosts(days, { nonGoiasOnly, allOlderThanDays });
     const stats = await getPostStats();
-    const msg = nonGoiasOnly
-      ? `${result.archived} matérias fora de Goiás foram arquivadas no Supabase.`
-      : `${result.archived} matérias com mais de ${days} dias foram arquivadas no Supabase.`;
+    const msg = `Sucesso! ${result.archived} matérias fora de Goiás foram arquivadas no Supabase. Notícias de Goiás e Goiânia foram 100% preservadas no site.`;
     return NextResponse.json({
       ok: true,
       result,

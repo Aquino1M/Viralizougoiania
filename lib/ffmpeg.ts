@@ -9,7 +9,7 @@ let cachedFfmpegPath: string | null = null;
  * Procura o executável do FFmpeg em caminhos conhecidos do Windows e no PATH.
  */
 export function getFfmpegPath(): string {
-  if (cachedFfmpegPath && fs.existsSync(cachedFfmpegPath)) {
+  if (cachedFfmpegPath && fs.existsSync(/*turbopackIgnore: true*/ cachedFfmpegPath)) {
     return cachedFfmpegPath;
   }
 
@@ -41,7 +41,7 @@ export function getFfmpegPath(): string {
   ];
 
   for (const p of candidatePaths) {
-    if (p && fs.existsSync(p)) {
+    if (p && fs.existsSync(/*turbopackIgnore: true*/ p)) {
       cachedFfmpegPath = p;
       return p;
     }
@@ -77,7 +77,7 @@ export function getFfmpegPath(): string {
  */
 export async function ensureFfmpegAvailable(): Promise<string> {
   const current = getFfmpegPath();
-  if (current !== "ffmpeg" && fs.existsSync(current)) {
+  if (current !== "ffmpeg" && fs.existsSync(/*turbopackIgnore: true*/ current)) {
     return current;
   }
 

@@ -19,3 +19,5 @@ gran.zip
 tools/ffmpeg.exe
 *.mp4
 *.webm
+app/api/test-supabase/
+tools/check_count.mjs
