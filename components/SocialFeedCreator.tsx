@@ -2021,15 +2021,13 @@ export default function SocialFeedCreator({ posts, onBack }: Props) {
       return;
     }
 
+    // Social platforms expect MP4/H.264 uploads. Never silently export WebM.
     const mimeType = [
-      'video/webm; codecs="vp9, opus"',
-      'video/webm; codecs="vp8, opus"',
-      "video/webm",
       'video/mp4; codecs="avc1.42E01E, mp4a.40.2"',
       "video/mp4",
     ].find((type) => MediaRecorder.isTypeSupported(type));
     if (!mimeType) {
-      setMessage("Este navegador não oferece um formato de gravação compatível.");
+      setMessage("Este navegador não grava MP4 diretamente. Use um navegador com suporte a gravação MP4. O sistema não vai gerar WebM com extensão MP4.");
       return;
     }
 
@@ -2037,7 +2035,7 @@ export default function SocialFeedCreator({ posts, onBack }: Props) {
     setRecording(true);
     setRecordingProgress(0);
     setVideoExport(null);
-    setMessage("Gravando o Reel com áudio perfeitamente sincronizado. Aguarde até o final...");
+    setMessage("Gerando vídeo MP4 para publicar nas redes sociais. Aguarde até o final...");
 
     let recorder: MediaRecorder | null = null;
     let canvasStream: MediaStream | null = null;
@@ -2099,9 +2097,15 @@ export default function SocialFeedCreator({ posts, onBack }: Props) {
       video.muted = false;
       video.volume = 1;
 
-      // 4. Captura stream do Canvas. Exporta a 24 fps para manter a composição
-      // do canvas abaixo do custo de renderizar um frame novo a cada 16 ms.
-      canvasStream = canvas.captureStream(24);
+      // Captura manual: a saída só recebe quadros após a composição terminar.
+      // Evita amostragem por relógio quando a renderização pesada atrasa.
+      canvasStream = canvas.captureStream(0);
+      const canvasVideoTrack = canvasStream.getVideoTracks()[0] as (MediaStreamTrack & { requestFrame?: () => void }) | undefined;
+      if (!canvasVideoTrack?.requestFrame) {
+        canvasStream.getTracks().forEach((track) => track.stop());
+        canvasStream = null;
+        throw new Error("Este navegador não suporta captura manual de quadros. Atualize o Chrome ou Edge e tente novamente.");
+      }
       const combinedTracks: MediaStreamTrack[] = [...canvasStream.getVideoTracks()];
       if (audioTrack) {
         combinedTracks.push(audioTrack);
@@ -2115,7 +2119,7 @@ export default function SocialFeedCreator({ posts, onBack }: Props) {
       });
       const activeRecorder = recorder;
 
-      // 5. Renderização sincronizada com os frames decodificados do vídeo
+      // Desenha cada frame decodificado e captura logo após a composição.
       const drawFrameSync = () => {
         if (!isRecordingRef.current) return;
         const ctx = canvas.getContext("2d");
@@ -2150,6 +2154,7 @@ export default function SocialFeedCreator({ posts, onBack }: Props) {
             showStorySticker,
             format,
           );
+          canvasVideoTrack.requestFrame();
         }
         if ("requestVideoFrameCallback" in video) {
           frameCallbackId = (video as any).requestVideoFrameCallback(drawFrameSync);
@@ -2197,7 +2202,10 @@ export default function SocialFeedCreator({ posts, onBack }: Props) {
         }, 150);
       });
 
-      const extension = blob.type.includes("mp4") ? "mp4" : "webm";
+      if (!blob.type.toLowerCase().includes("mp4")) {
+        throw new Error("O navegador não produziu um arquivo MP4 válido. Nenhum arquivo WebM foi disponibilizado para download.");
+      }
+      const extension = "mp4";
       const formatLabel = format === "story" ? "story" : "reel";
       const basename = (selectedPost?.slug || videoFileName.replace(/\.[^.]+$/, "") || `viralizou-${formatLabel}`)
         .replace(/[^a-zA-Z0-9_-]/g, "-") || `viralizou-${formatLabel}`;
