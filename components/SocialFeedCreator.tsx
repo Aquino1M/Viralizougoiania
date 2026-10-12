@@ -955,28 +955,61 @@ function drawReelHeadline(
   } else if (animation === "typewriter" && rawProgress < 1) {
     const totalChars = raster.layout.lines.join("").length;
     const visibleChars = Math.floor(totalChars * rawProgress);
-    let charsLeft = visibleChars;
+
+    // Identifica o ponto de partida vertical das linhas
+    let line0Top = raster.originY - raster.layout.height / 2;
+    if (textStyle === "category-badge") {
+      const badgeFontSize = Math.max(22, Math.round(raster.layout.fontSize * 0.36));
+      const badgeH = badgeFontSize + 16;
+      line0Top = raster.originY - (badgeH + 16 + raster.layout.height) / 2 + badgeH + 16;
+    } else if (textStyle === "editorial-serif") {
+      const eyebrowSize = Math.max(18, Math.round(raster.layout.fontSize * 0.32));
+      line0Top = raster.originY - (eyebrowSize + 18 + raster.layout.height) / 2 + eyebrowSize + 18;
+    }
+
+    const absLine0Top = drawY + line0Top;
+
     ctx.save();
-    renderCaptionStyleToContext(
-      ctx,
-      {
-        ...raster.layout,
-        lines: raster.layout.lines.map((l) => {
-          const count = Math.max(0, Math.min(l.length, charsLeft));
-          charsLeft -= count;
-          return l.slice(0, count);
-        }),
-      },
-      category,
-      fontFamily,
-      fontWeight,
-      textStyle,
-      textAlign,
-      centerX,
-      centerY,
-      maxWidth,
-      canvasHeight,
-    );
+    ctx.beginPath();
+
+    // Badges ou barras de topo sempre visíveis desde o início da animação
+    if (textStyle === "category-badge" || textStyle === "editorial-serif") {
+      ctx.rect(0, drawY - 20, W, Math.max(0, absLine0Top - drawY + 10));
+    }
+    if (textStyle === "left-border") {
+      ctx.rect(0, drawY - 20, W, raster.layout.height + 40);
+    }
+
+    let charsCounted = 0;
+    ctx.font = getReelFont(fontFamily, raster.layout.fontSize, fontWeight);
+
+    for (let i = 0; i < raster.layout.lines.length; i++) {
+      const lineText = raster.layout.lines[i];
+      const lineLen = lineText.length;
+      const charsInThisLine = Math.max(0, Math.min(lineLen, visibleChars - charsCounted));
+      charsCounted += lineLen;
+
+      if (charsInThisLine > 0) {
+        const lineTop = absLine0Top + i * raster.layout.lineHeight - 4;
+        const lineH = raster.layout.lineHeight + 8;
+
+        if (charsInThisLine >= lineLen) {
+          ctx.rect(0, lineTop, W, lineH);
+        } else {
+          const fullLineW = ctx.measureText(lineText).width;
+          const partialW = ctx.measureText(lineText.slice(0, charsInThisLine)).width;
+
+          let lineStartX = centerX - fullLineW / 2;
+          if (textAlign === "left") lineStartX = centerX - raster.layout.width / 2;
+          else if (textAlign === "right") lineStartX = centerX + raster.layout.width / 2 - fullLineW;
+
+          ctx.rect(0, lineTop, Math.max(0, lineStartX + partialW + 20), lineH);
+        }
+      }
+    }
+
+    ctx.clip();
+    ctx.drawImage(raster.canvas, drawX, drawY);
     ctx.restore();
   } else {
     // Modo estático ou pós-conclusão da animação (0.05ms)
@@ -1213,7 +1246,7 @@ export default function SocialFeedCreator({ posts, onBack }: Props) {
   const [tagColor, setTagColor] = useState<ReelTagColor>("red");
   const [tagPositionY, setTagPositionY] = useState<number>(1670);
   const [showSafeZone, setShowSafeZone] = useState<boolean>(true);
-  const [reelTextAnimation, setReelTextAnimation] = useState<ReelTextAnimation>("typewriter");
+  const [reelTextAnimation, setReelTextAnimation] = useState<ReelTextAnimation>("static");
   const [showStrongSceneWarning, setShowStrongSceneWarning] = useState(false);
   const [shadeOpacity, setShadeOpacity] = useState<number>(85);
   const [showOverlayLayer, setShowOverlayLayer] = useState<boolean>(false);
@@ -1663,11 +1696,9 @@ export default function SocialFeedCreator({ posts, onBack }: Props) {
   // Loop de pré-visualização interativa do Reel e Story
   useEffect(() => {
     const video = videoPreviewRef.current;
-    if ((format !== "reel" && format !== "story") || !videoUrl || !video) return;
+    if ((format !== "reel" && format !== "story") || !videoUrl || !video || recording) return;
     let frameId = 0;
     let videoFrameId = 0;
-    // Preview is deliberately capped at 24 fps. A full 1080x1920 composition
-    // at source 60 fps repeatedly recalculates expensive text effects.
     let lastRenderedAt = 0;
     const previewInterval = 1000 / 24;
     const draw = (timestamp = 0) => {
@@ -1730,7 +1761,7 @@ export default function SocialFeedCreator({ posts, onBack }: Props) {
         (video as any).cancelVideoFrameCallback(videoFrameId);
       }
     };
-  }, [format, videoUrl, title, handle, logoData, selectedPost?.title, reelTextStyle, reelFontFamily, reelFontWeight, reelTextAlign, reelTextCase, reelFontSize, tagColor, tagPositionY, showSafeZone, reelTextAnimation, showStrongSceneWarning, logoScale, handleFontSize, shadeOpacity, showOverlayLayer, showLogoLayer, showTitleLayer, showHandleLayer, showStorySticker, logoColorStyle]);
+  }, [format, videoUrl, title, handle, logoData, selectedPost?.title, reelTextStyle, reelFontFamily, reelFontWeight, reelTextAlign, reelTextCase, reelFontSize, tagColor, tagPositionY, showSafeZone, reelTextAnimation, showStrongSceneWarning, logoScale, handleFontSize, shadeOpacity, showOverlayLayer, showLogoLayer, showTitleLayer, showHandleLayer, showStorySticker, logoColorStyle, recording]);
 
   async function loadArticle() {
     const slug = slugFromInput(articleUrl);
@@ -2215,27 +2246,22 @@ export default function SocialFeedCreator({ posts, onBack }: Props) {
       return;
     }
 
-    // Prioriza todos os perfis compatíveis de gravação MP4 nos navegadores modernos
-    const mp4MimeType = [
-      'video/mp4; codecs="avc1.42E01E, mp4a.40.2"',
-      'video/mp4; codecs="avc1, mp4a.40.2"',
-      'video/mp4; codecs="avc1, opus"',
-      'video/mp4; codecs="avc1.42E01E"',
-      'video/mp4; codecs="avc1"',
-      'video/mp4; codecs="h264, aac"',
-      'video/mp4; codecs="h264, opus"',
-      'video/mp4; codecs="h264"',
-      "video/mp4",
-    ].find((type) => MediaRecorder.isTypeSupported(type));
+    const isSafari = typeof navigator !== "undefined" && /^((?!chrome|android).)*safari/i.test(navigator.userAgent);
 
-    // Fallback caso o navegador só ofereça gravação WebM: convertemos no backend para MP4 real
+    // No Chrome/Edge (Chromium), a gravação nativa via WebM é 100% contínua e não descarta frames.
     const webmMimeType = [
       'video/webm; codecs="vp9, opus"',
       'video/webm; codecs="vp8, opus"',
       "video/webm",
     ].find((type) => MediaRecorder.isTypeSupported(type));
 
-    const mimeType = mp4MimeType || webmMimeType;
+    const mp4MimeType = [
+      'video/mp4; codecs="avc1.42E01E, mp4a.40.2"',
+      'video/mp4; codecs="avc1"',
+      "video/mp4",
+    ].find((type) => MediaRecorder.isTypeSupported(type));
+
+    const mimeType = (isSafari ? mp4MimeType : webmMimeType) || webmMimeType || mp4MimeType;
     if (!mimeType) {
       setMessage("Seu navegador não possui suporte a gravação de mídia. Use a versão atualizada do Chrome ou Edge.");
       return;
@@ -2360,11 +2386,7 @@ export default function SocialFeedCreator({ posts, onBack }: Props) {
           );
 
         }
-        if ("requestVideoFrameCallback" in video) {
-          frameCallbackId = (video as any).requestVideoFrameCallback(drawFrameSync);
-        } else {
-          animFrameId = requestAnimationFrame(drawFrameSync);
-        }
+        animFrameId = requestAnimationFrame(drawFrameSync);
       };
 
       const blob = await new Promise<Blob>((resolve, reject) => {
@@ -2407,32 +2429,30 @@ export default function SocialFeedCreator({ posts, onBack }: Props) {
       });
 
       let finalBlob = blob;
-      const isNativeMp4 = finalBlob.type.toLowerCase().includes("mp4");
+
       const formatLabel = format === "story" ? "story" : "reel";
       const basename = (selectedPost?.slug || videoFileName.replace(/\.[^.]+$/, "") || `viralizou-${formatLabel}`)
         .replace(/[^a-zA-Z0-9_-]/g, "-") || `viralizou-${formatLabel}`;
 
-      // Se a gravação foi WebM, converte automaticamente no backend para MP4 real padrão H.264 / AAC
-      if (!isNativeMp4) {
-        setMessage("⚡ Gravado com sucesso! Convertendo para MP4 padrão (H.264 / AAC) para Instagram, TikTok e WhatsApp...");
-        try {
-          const formData = new FormData();
-          formData.append("file", finalBlob, `${basename}.webm`);
-          formData.append("filename", `${basename}-${formatLabel}.mp4`);
+      // Converte no backend com FFmpeg para MP4 real padronizado (H.264 / AAC / 30 FPS / +faststart)
+      setMessage("⚡ Gravado com sucesso! Convertendo para MP4 padrão (H.264 / AAC) para Instagram, TikTok e WhatsApp...");
+      try {
+        const formData = new FormData();
+        formData.append("file", finalBlob, `${basename}.webm`);
+        formData.append("filename", `${basename}-${formatLabel}.mp4`);
 
-          const convRes = await fetch("/api/admin/convert-video", {
-            method: "POST",
-            body: formData,
-          });
+        const convRes = await fetch("/api/admin/convert-video", {
+          method: "POST",
+          body: formData,
+        });
 
-          if (convRes.ok) {
-            finalBlob = await convRes.blob();
-          } else {
-            console.warn("Conversão FFmpeg no backend não completou, usando arquivo gravado.");
-          }
-        } catch (convErr) {
-          console.error("Falha ao contatar endpoint de conversão:", convErr);
+        if (convRes.ok) {
+          finalBlob = await convRes.blob();
+        } else {
+          console.warn("Conversão FFmpeg no backend não completou, usando arquivo gravado.");
         }
+      } catch (convErr) {
+        console.error("Falha ao contatar endpoint de conversão:", convErr);
       }
 
       const extension = "mp4";
@@ -3241,7 +3261,16 @@ export default function SocialFeedCreator({ posts, onBack }: Props) {
         preload="auto"
         onLoadedData={() => { setVideoReady(true); renderCard(); }}
         onError={() => { setVideoReady(false); setMessage("Não foi possível abrir esse arquivo de vídeo."); }}
-        style={{ position: "absolute", width: 1, height: 1, opacity: 0, pointerEvents: "none" }}
+        style={{
+          position: "fixed",
+          bottom: 12,
+          right: 12,
+          width: 240,
+          height: 135,
+          opacity: 0.01,
+          pointerEvents: "none",
+          zIndex: -1,
+        }}
       />
     </section>
   );

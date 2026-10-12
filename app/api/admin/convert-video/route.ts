@@ -52,6 +52,7 @@ export async function POST(request: Request) {
       "-pix_fmt", "yuv420p",
       "-preset", "ultrafast",
       "-crf", "22",
+      "-r", "30",
       "-c:a", "aac",
       "-b:a", "128k",
       "-ar", "44100",
