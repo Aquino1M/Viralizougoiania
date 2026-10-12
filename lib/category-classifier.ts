@@ -47,17 +47,69 @@ export const GOIAS_TERMS_REGEX =
 
 // Detecta se a matéria é genuinamente de Goiás / Goiânia
 export function isGoiasOrigin(input: CategoryInput): boolean {
-  const sourceName = input.source_name || "";
-  const sourceUrl = input.source_url || "";
-  if (GOIAS_SOURCES_REGEX.test(sourceName) || GOIAS_SOURCES_REGEX.test(sourceUrl)) {
+  // 1. Se a cidade salva for explicitamente de fora de Goiás ou nacional
+  const city = normalize(input.city || "");
+  const outsideCities = [
+    "brasil", "mundo", "estados unidos", "europa", "sao paulo", "rio de janeiro",
+    "belo horizonte", "brasilia", "curitiba", "porto alegre", "salvador", "recife",
+    "fortaleza", "manaus", "minas gerais", "bahia", "ceara", "parana", "rio grande do sul",
+    "para", "xangai", "china", "pequim"
+  ];
+  if (outsideCities.includes(city)) {
+    return false;
+  }
+
+  // 2. Se a categoria for explicitamente de Goiânia ou Bairros da capital
+  const category = normalize(input.category || "");
+  if (category === "goiania" || category === "bairros") {
+    return true;
+  }
+
+  // 3. Se a cidade for Goiânia, Goiás ou município goiano reconhecido
+  if (
+    city === "goiania" ||
+    city === "goias" ||
+    city.includes("aparecida") ||
+    city.includes("anapolis") ||
+    city.includes("rio verde") ||
+    city.includes("jatai") ||
+    city.includes("caldas novas") ||
+    city.includes("trindade") ||
+    city.includes("senador canedo") ||
+    city.includes("itumbiara") ||
+    city.includes("catalao") ||
+    city.includes("pirenopolis")
+  ) {
     return true;
   }
 
   const text = normalize(
-    `${input.title || ""} ${input.excerpt || ""} ${input.source_url || ""} ${input.city || ""}`
+    `${input.title || ""} ${input.excerpt || ""} ${input.city || ""}`
   );
 
-  return GOIAS_TERMS_REGEX.test(text) || GOIANIA_BAIRROS_REGEX.test(text);
+  // 4. Termos e bairros goianos no texto
+  const hasGoiasTerm = GOIAS_TERMS_REGEX.test(text) || GOIANIA_BAIRROS_REGEX.test(text);
+  if (hasGoiasTerm) {
+    return true;
+  }
+
+  // 5. Se não tiver termos de Goiás no texto e tiver assuntos esportivos ou celebridades nacionais/internacionais
+  const hasOutsideSubject = /\b(atletico-mg|atletico mineiro|santos fc|duelo entre atletico|santos nao terminou|flamengo|palmeiras|corinthians|sao paulo fc|vasco|botafogo|gremio|internacional|cruzeiro|luisa stefani|dabrowski|pequim|wta 1000|wta|atp|formula 1|f1|champions league|real madrid|barcelona|stf|lula|bolsonaro|trump|biden)\b/i.test(text);
+  if (hasOutsideSubject) {
+    return false;
+  }
+
+  // 6. Fontes locais goianas apenas se não for pauta nacional de futebol ou fofocas
+  const sourceName = input.source_name || "";
+  const sourceUrl = input.source_url || "";
+  if (GOIAS_SOURCES_REGEX.test(sourceName) || GOIAS_SOURCES_REGEX.test(sourceUrl)) {
+    if (category === "fofocas" || category === "futebol") {
+      return false;
+    }
+    return true;
+  }
+
+  return false;
 }
 
 // Localização inteligente

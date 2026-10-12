@@ -57,6 +57,16 @@ if not exist "node_modules\next\package.json" (
   echo [1/2] Dependencias ja instaladas.
 )
 
+if not exist "public\logos" mkdir "public\logos"
+if exist "C:\Users\Aquino\.gemini\antigravity-ide\brain\d93440ff-fe58-40ed-94a4-6ff085a0a199\.user_uploaded\media_1791812215943.png" (
+  copy /y "C:\Users\Aquino\.gemini\antigravity-ide\brain\d93440ff-fe58-40ed-94a4-6ff085a0a199\.user_uploaded\media_1791812215943.png" "public\logos\logo-viralizou-branca.png" >nul 2>nul
+  copy /y "C:\Users\Aquino\.gemini\antigravity-ide\brain\d93440ff-fe58-40ed-94a4-6ff085a0a199\.user_uploaded\media_1791812215943.png" "public\logo-viralizou-branca.png" >nul 2>nul
+)
+if exist "C:\Users\Aquino\.gemini\antigravity-ide\brain\d93440ff-fe58-40ed-94a4-6ff085a0a199\.user_uploaded\media_1791812270897.png" (
+  copy /y "C:\Users\Aquino\.gemini\antigravity-ide\brain\d93440ff-fe58-40ed-94a4-6ff085a0a199\.user_uploaded\media_1791812270897.png" "public\logos\logo-viralizou-preta.png" >nul 2>nul
+  copy /y "C:\Users\Aquino\.gemini\antigravity-ide\brain\d93440ff-fe58-40ed-94a4-6ff085a0a199\.user_uploaded\media_1791812270897.png" "public\logo-viralizou-preta.png" >nul 2>nul
+)
+
 where ffmpeg >nul 2>nul
 if errorlevel 1 (
   if not exist "tools\ffmpeg.exe" (

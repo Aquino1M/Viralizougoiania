@@ -1,4 +1,4 @@
-export type PostStatus = "published" | "draft" | "scheduled";
+export type PostStatus = "published" | "draft" | "scheduled" | "archived";
 
 export type Post = {
   id: string;

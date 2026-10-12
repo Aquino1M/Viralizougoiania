@@ -118,16 +118,16 @@ async function sbExactCount(pathname: string): Promise<number> {
   return Number.isFinite(total) ? total : 0;
 }
 
-export async function getPostStats(): Promise<{ total: number; published: number; scheduled: number; draft: number }> {
+export async function getPostStats(): Promise<{ total: number; published: number; scheduled: number; draft: number; archived: number }> {
   if (hasSupabaseConfig()) {
     try {
-      const [total, published, scheduled, draft] = await Promise.all([
+      const [total, published, scheduled, draft, archived] = await Promise.all([
         sbExactCount("posts?select=id"),
         sbExactCount("posts?select=id&status=eq.published"),
         sbExactCount("posts?select=id&status=eq.scheduled"),
-        sbExactCount("posts?select=id&status=eq.draft"),
+        sbExactCount("posts?select=id&status=eq.draft"), sbExactCount("posts?select=id&status=eq.archived"),
       ]);
-      return { total, published, scheduled, draft };
+      return { total, published, scheduled, draft, archived };
     } catch (err: any) {
       console.warn("Aviso ao contar posts no Supabase:", err.message);
     }
@@ -137,7 +137,7 @@ export async function getPostStats(): Promise<{ total: number; published: number
     total: posts.length,
     published: posts.filter((p) => p.status === "published").length,
     scheduled: posts.filter((p) => p.status === "scheduled").length,
-    draft: posts.filter((p) => p.status === "draft").length,
+    draft: posts.filter((p) => p.status === "draft").length, archived: posts.filter((p) => p.status === "archived").length,
   };
 }
 

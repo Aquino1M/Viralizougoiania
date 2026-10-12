@@ -41,7 +41,7 @@ alter table public.posts add column if not exists seo_description text not null 
 alter table public.posts add column if not exists seo_keywords text not null default '';
 alter table public.posts add column if not exists video_url text not null default '';
 alter table public.posts drop constraint if exists posts_status_check;
-alter table public.posts add constraint posts_status_check check (status in ('published','draft','scheduled'));
+alter table public.posts add constraint posts_status_check check (status in ('published','draft','scheduled','archived'));
 
 create index if not exists posts_status_published_at_idx on public.posts(status, published_at desc);
 create index if not exists posts_category_idx on public.posts(category);

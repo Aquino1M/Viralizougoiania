@@ -160,66 +160,64 @@ function drawStoryStickerGuide(ctx: CanvasRenderingContext2D, canvasWidth: numbe
   ctx.restore();
 }
 
-const logoProcessCache = new Map<string, HTMLCanvasElement>();
+let cachedOfficialWhiteLogo: HTMLImageElement | null = null;
+let cachedOfficialDarkLogo: HTMLImageElement | null = null;
+
+function getOfficialLogo(variant: "white" | "dark"): HTMLImageElement | null {
+  if (typeof window === "undefined") return null;
+  if (variant === "white") {
+    if (!cachedOfficialWhiteLogo) {
+      cachedOfficialWhiteLogo = new Image();
+      cachedOfficialWhiteLogo.crossOrigin = "anonymous";
+      cachedOfficialWhiteLogo.onerror = () => {
+        if (cachedOfficialWhiteLogo && cachedOfficialWhiteLogo.src.includes("/api/logos/")) {
+          cachedOfficialWhiteLogo.src = "/logos/logo-viralizou-branca.png";
+        }
+      };
+      cachedOfficialWhiteLogo.src = "/api/logos/white";
+    }
+    return cachedOfficialWhiteLogo;
+  } else {
+    if (!cachedOfficialDarkLogo) {
+      cachedOfficialDarkLogo = new Image();
+      cachedOfficialDarkLogo.crossOrigin = "anonymous";
+      cachedOfficialDarkLogo.onerror = () => {
+        if (cachedOfficialDarkLogo && cachedOfficialDarkLogo.src.includes("/api/logos/")) {
+          cachedOfficialDarkLogo.src = "/logos/logo-viralizou-preta.png";
+        }
+      };
+      cachedOfficialDarkLogo.src = "/api/logos/dark";
+    }
+    return cachedOfficialDarkLogo;
+  }
+}
 
 function getRenderableLogo(
-  logo: HTMLImageElement | null,
-  colorStyle: LogoColorStyle
-): HTMLCanvasElement | HTMLImageElement | null {
-  if (!logo || !logo.complete || !logo.naturalWidth) return null;
-  if (colorStyle === "original") return logo;
-
-  const key = `${logo.src.slice(0, 100)}_${logo.naturalWidth}x${logo.naturalHeight}_${colorStyle}`;
-  const existing = logoProcessCache.get(key);
-  if (existing) return existing;
-
-  try {
-    const canvas = document.createElement("canvas");
-    canvas.width = logo.naturalWidth;
-    canvas.height = logo.naturalHeight;
-    const ctx = canvas.getContext("2d", { willReadFrequently: true });
-    if (!ctx) return logo;
-
-    ctx.drawImage(logo, 0, 0);
-    const imgData = ctx.getImageData(0, 0, canvas.width, canvas.height);
-    const d = imgData.data;
-
-    for (let i = 0; i < d.length; i += 4) {
-      const a = d[i + 3];
-      if (a < 15) continue; // pixel transparente
-
-      const r = d[i];
-      const g = d[i + 1];
-      const b = d[i + 2];
-
-      // Preserva o símbolo "VG" que é vermelho vivo/vibrante
-      const isRed = r > 140 && (r - g) > 55 && (r - b) > 55 && r > (g + b) * 0.85;
-      if (isRed) continue;
-
-      const lum = r * 0.299 + g * 0.587 + b * 0.114;
-      if (colorStyle === "white") {
-        // Converte letras escuras/pretas/cinzas/douradas em branco puro e luminoso
-        if (lum < 235) {
-          d[i] = 255;
-          d[i + 1] = 255;
-          d[i + 2] = 255;
-        }
-      } else if (colorStyle === "dark") {
-        // Converte letras brancas/claras em preto/grafite escuro
-        if (lum > 115) {
-          d[i] = 18;
-          d[i + 1] = 18;
-          d[i + 2] = 18;
-        }
-      }
-    }
-
-    ctx.putImageData(imgData, 0, 0);
-    logoProcessCache.set(key, canvas);
-    return canvas;
-  } catch {
-    return logo;
+  customLogo: HTMLImageElement | null,
+  colorStyle: LogoColorStyle,
+  defaultVariant: "white" | "dark" = "white"
+): HTMLImageElement | null {
+  // 1. Letras Brancas: utiliza diretamente a logo original com letras brancas já sem fundo
+  if (colorStyle === "white") {
+    const white = getOfficialLogo("white");
+    if (white && (white.naturalWidth || white.complete)) return white;
+    if (customLogo && (customLogo.naturalWidth || customLogo.complete)) return customLogo;
+    return white;
   }
+
+  // 2. Letras Pretas: utiliza diretamente a logo original com letras pretas já sem fundo
+  if (colorStyle === "dark") {
+    const dark = getOfficialLogo("dark");
+    if (dark && (dark.naturalWidth || dark.complete)) return dark;
+    if (customLogo && (customLogo.naturalWidth || customLogo.complete)) return customLogo;
+    return dark;
+  }
+
+  // 3. Original: se o usuário enviou uma logo personalizada, usa ela; senão usa a oficial do formato
+  if (customLogo && (customLogo.naturalWidth || customLogo.complete)) {
+    return customLogo;
+  }
+  return getOfficialLogo(defaultVariant);
 }
 
 function getLogoSize(
@@ -1143,23 +1141,10 @@ function drawReelFrame(
   }
 
   if (showLogoLayer) {
-    const renderLogo = getRenderableLogo(logo, logoColorStyle);
-    if (renderLogo) {
+    const renderLogo = getRenderableLogo(logo, logoColorStyle, "white");
+    if (renderLogo && (renderLogo.naturalWidth || renderLogo.complete)) {
       const { width, height } = getLogoSize(renderLogo, format, logoScale / 100);
       ctx.drawImage(renderLogo, logoPosition.x * W - width / 2, logoPosition.y * REEL_H - height / 2, width, height);
-    } else {
-      const ly = logoPosition.y * REEL_H;
-      const lx = logoPosition.x * W;
-      ctx.save();
-      ctx.textAlign = "center";
-      ctx.textBaseline = "middle";
-      ctx.fillStyle = logoColorStyle === "dark" ? "#111111" : "#ffffff";
-      ctx.font = "900 48px Arial, sans-serif";
-      ctx.fillText("VIRALIZOU", lx - 82, ly);
-      ctx.fillStyle = "#ff5a1f";
-      ctx.font = "900 32px Arial, sans-serif";
-      ctx.fillText("GOIÂNIA", lx + 124, ly);
-      ctx.restore();
     }
   }
 
@@ -1303,23 +1288,10 @@ function buildReelOverlayCanvas(
 
   // 3. Logo do jornal
   if (showLogoLayer) {
-    const renderLogo = getRenderableLogo(logo, logoColorStyle);
-    if (renderLogo) {
+    const renderLogo = getRenderableLogo(logo, logoColorStyle, "white");
+    if (renderLogo && (renderLogo.naturalWidth || renderLogo.complete)) {
       const { width, height } = getLogoSize(renderLogo, format, logoScale / 100);
       ctx.drawImage(renderLogo, logoPosition.x * W - width / 2, logoPosition.y * REEL_H - height / 2, width, height);
-    } else {
-      const ly = logoPosition.y * REEL_H;
-      const lx = logoPosition.x * W;
-      ctx.save();
-      ctx.textAlign = "center";
-      ctx.textBaseline = "middle";
-      ctx.fillStyle = logoColorStyle === "dark" ? "#111111" : "#ffffff";
-      ctx.font = "900 48px Arial, sans-serif";
-      ctx.fillText("VIRALIZOU", lx - 82, ly);
-      ctx.fillStyle = "#ff5a1f";
-      ctx.font = "900 32px Arial, sans-serif";
-      ctx.fillText("GOIÂNIA", lx + 124, ly);
-      ctx.restore();
     }
   }
 
@@ -1552,6 +1524,20 @@ export default function SocialFeedCreator({ posts, onBack }: Props) {
       } catch {}
     }
     fetchSupabaseLogo();
+
+    // Pré-carrega as duas logos oficiais (branca e preta) sem fundo
+    const whiteLogo = getOfficialLogo("white");
+    const darkLogo = getOfficialLogo("dark");
+    if (whiteLogo) {
+      whiteLogo.onload = () => {
+        if (canvasRef.current) renderCard();
+      };
+    }
+    if (darkLogo) {
+      darkLogo.onload = () => {
+        if (canvasRef.current) renderCard();
+      };
+    }
   }, []);
 
   async function renderCard(skipGuidesParam: boolean | unknown = false) {
@@ -1609,23 +1595,19 @@ export default function SocialFeedCreator({ posts, onBack }: Props) {
         }
 
         if (showLogoLayer) {
-          if (logoData) {
+          let customImg: HTMLImageElement | null = logoImageRef.current;
+          if (logoData && (!customImg || customImg.src !== logoData)) {
             try {
-              if (!logoImageRef.current || logoImageRef.current.src !== logoData) logoImageRef.current = await loadImage(logoData);
-              const renderLogo = getRenderableLogo(logoImageRef.current, logoColorStyle);
-              if (renderLogo) {
-                const { width, height } = getLogoSize(renderLogo, "story", logoScale / 100);
-                ctx.drawImage(renderLogo, logoPositionRef.current.x * currentW - width / 2, logoPositionRef.current.y * currentH - height / 2, width, height);
-              }
-            } catch { logoImageRef.current = null; }
-          } else {
-            ctx.textAlign = "center";
-            ctx.fillStyle = logoColorStyle === "dark" ? "#111111" : "#ffffff";
-            ctx.font = "900 57px Arial, sans-serif";
-            ctx.fillText("VIRALIZOU", currentW / 2 - 22, 1050);
-            ctx.fillStyle = "#ff5a1f";
-            ctx.font = "900 35px Arial, sans-serif";
-            ctx.fillText("GOIÂNIA", currentW / 2 + 214, 1050);
+              logoImageRef.current = await loadImage(logoData);
+              customImg = logoImageRef.current;
+            } catch {
+              logoImageRef.current = null;
+            }
+          }
+          const renderLogo = getRenderableLogo(customImg, logoColorStyle, "white");
+          if (renderLogo && (renderLogo.naturalWidth || renderLogo.complete)) {
+            const { width, height } = getLogoSize(renderLogo, "story", logoScale / 100);
+            ctx.drawImage(renderLogo, logoPositionRef.current.x * currentW - width / 2, logoPositionRef.current.y * currentH - height / 2, width, height);
           }
         }
 
@@ -1771,29 +1753,20 @@ export default function SocialFeedCreator({ posts, onBack }: Props) {
       }
 
       if (showLogoLayer) {
-        if (logoData) {
+        let customImg: HTMLImageElement | null = logoImageRef.current;
+        if (logoData && (!customImg || customImg.src !== logoData)) {
           try {
-            if (!logoImageRef.current || logoImageRef.current.src !== logoData) logoImageRef.current = await loadImage(logoData);
-            const logo = logoImageRef.current;
-            const renderLogo = getRenderableLogo(logo, logoColorStyle);
-            if (renderLogo) {
-              const { width, height } = getLogoSize(renderLogo, format, logoScale / 100);
-              const logoY = format === "feed-square" ? logoPosition.y * currentH - 40 : logoPosition.y * currentH;
-              ctx.drawImage(renderLogo, logoPosition.x * currentW - width / 2, logoY - height / 2, width, height);
-            }
+            logoImageRef.current = await loadImage(logoData);
+            customImg = logoImageRef.current;
           } catch {
             logoImageRef.current = null;
-            setLogoData("");
           }
-        } else {
-          ctx.textAlign = "center";
-          ctx.fillStyle = logoColorStyle === "dark" ? "#111111" : "#ffffff";
-          ctx.font = "900 57px Arial, sans-serif";
-          const defaultLogoY = format === "feed-square" ? 680 : 838;
-          ctx.fillText("VIRALIZOU", currentW / 2 - 22, defaultLogoY);
-          ctx.fillStyle = "#ff5a1f";
-          ctx.font = "900 35px Arial, sans-serif";
-          ctx.fillText("GOIÂNIA", currentW / 2 + 214, defaultLogoY);
+        }
+        const renderLogo = getRenderableLogo(customImg, logoColorStyle, "dark");
+        if (renderLogo && (renderLogo.naturalWidth || renderLogo.complete)) {
+          const { width, height } = getLogoSize(renderLogo, format, logoScale / 100);
+          const logoY = format === "feed-square" ? logoPosition.y * currentH - 40 : logoPosition.y * currentH;
+          ctx.drawImage(renderLogo, logoPosition.x * currentW - width / 2, logoY - height / 2, width, height);
         }
       }
 
@@ -2196,8 +2169,8 @@ export default function SocialFeedCreator({ posts, onBack }: Props) {
   function saveReelLogoScale(value: number) {
     setLogoScale(value);
     try { localStorage.setItem("viralizou_reel_logo_scale", String(value)); } catch {}
-    const logo = logoImageRef.current;
-    if (!logo?.naturalWidth) return;
+    const logo = logoImageRef.current || getRenderableLogo(null, logoColorStyle);
+    if (!logo || (!logo.naturalWidth && !logo.complete)) return;
     const { width, height } = getLogoSize(logo, "reel", value / 100);
     const position = {
       x: Math.min(1 - width / (2 * W), Math.max(width / (2 * W), logoPositionRef.current.x)),
@@ -2390,8 +2363,8 @@ export default function SocialFeedCreator({ posts, onBack }: Props) {
       }
     }
 
-    const logo = logoImageRef.current;
-    if (!logoData || !logo?.naturalWidth) return;
+    const logo = logoImageRef.current || getRenderableLogo(null, logoColorStyle);
+    if (!logo || (!logo.naturalWidth && !logo.complete)) return;
 
     const rect = event.currentTarget.getBoundingClientRect();
     const x = ((event.clientX - rect.left) / rect.width) * currentW;
@@ -2567,7 +2540,10 @@ async function fixWebmDuration(blob: Blob, durationSec: number): Promise<Blob> {
 
     // MOTOR 1: Tenta renderização FFmpeg ultrarrápida no Servidor (Zero perda de frames)
     let serverRenderSuccess = false;
-    if (sourceFile && overlayBlob) {
+    const isCloudHost = typeof window !== "undefined" && window.location.hostname !== "localhost" && window.location.hostname !== "127.0.0.1";
+    const exceedsCloudPayload = isCloudHost && sourceFile && sourceFile.size > 4.2 * 1024 * 1024;
+
+    if (sourceFile && overlayBlob && !exceedsCloudPayload) {
       addLog(`🚀 Tentando renderização FFmpeg nativa no servidor (${(sourceFile.size / 1024 / 1024).toFixed(2)} MB)...`);
       isRecordingRef.current = true;
       setRecording(true);
@@ -2591,8 +2567,18 @@ async function fixWebmDuration(blob: Blob, durationSec: number): Promise<Blob> {
         });
 
         if (!res.ok) {
-          const errData = await res.json().catch(() => ({}));
-          throw new Error(errData.error || `Erro HTTP ${res.status}`);
+          const errText = await res.text().catch(() => "");
+          let errMsg = "";
+          try {
+            const parsed = JSON.parse(errText);
+            errMsg = parsed.error || "";
+          } catch {}
+          if (!errMsg) {
+            errMsg = res.status === 413
+              ? "Limite de envio HTTP 413 excedido no servidor"
+              : `Erro HTTP ${res.status}`;
+          }
+          throw new Error(errMsg);
         }
 
         addLog("📥 Processamento FFmpeg concluído! Baixando MP4 otimizado...");
@@ -2613,15 +2599,18 @@ async function fixWebmDuration(blob: Blob, durationSec: number): Promise<Blob> {
         serverRenderSuccess = true;
         return;
       } catch (serverErr: any) {
-        addLog(`⚠️ Servidor FFmpeg indisponível (${serverErr?.message || "falha"}).`);
+        addLog(`ℹ️ Servidor FFmpeg (${serverErr?.message || "falha"}). Alternando para gravação GPU local...`);
         addLog("🎬 Ativando Sistema de Gravação Local com Sincronismo GPU de Hardware...");
-        setMessage("Aviso: Servidor FFmpeg indisponível. Iniciando gravação local com GPU...");
+        setMessage("Aviso: Iniciando gravação local com aceleração GPU...");
       } finally {
         if (serverRenderSuccess) {
           isRecordingRef.current = false;
           setRecording(false);
         }
       }
+    } else if (exceedsCloudPayload && sourceFile) {
+      addLog(`ℹ️ Vídeo (${(sourceFile.size / 1024 / 1024).toFixed(2)} MB) acima do limite de envio na nuvem (4.5 MB). Usando gravação acelerada por GPU local.`);
+      addLog("🎬 Ativando Sistema de Gravação Local com Sincronismo GPU de Hardware...");
     }
     // MOTOR 2: Gravação Local por Hardware com Monitor Ativo (Nunca suspende no Chromium)
     if (!canvas.captureStream || typeof MediaRecorder === "undefined") {
@@ -2844,31 +2833,55 @@ async function fixWebmDuration(blob: Blob, durationSec: number): Promise<Blob> {
 
       let finalBlob = blob;
 
-      // 1. Corrige metadados de duracao no cabecalho EBML (elimina bug 26113:19 no Windows Media Player)
-      finalBlob = await fixWebmDuration(finalBlob, duration);
+      // 1. Se o navegador já gravou em MP4 nativo (Chrome/Edge), o arquivo já é um MP4 oficial compatível!
+      const isAlreadyMp4 = mimeType.toLowerCase().includes("mp4");
 
-      // 2. Converte no backend com FFmpeg para MP4 oficial (H.264 / AAC / 30 FPS / +faststart)
-      setMessage("⚡ Gravado com sucesso! Convertendo para MP4 padrão (H.264 / AAC) para Instagram, TikTok e WhatsApp...");
-      addLog("🔄 Convertendo vídeo para MP4 padrão WhatsApp (H.264 + AAC + faststart)...");
-      try {
-        const formData = new FormData();
-        formData.append("file", finalBlob, `${basename}.webm`);
-        formData.append("filename", `${basename}-${formatLabel}.mp4`);
+      if (isAlreadyMp4) {
+        addLog("✨ Vídeo gerado diretamente em MP4 nativo (H.264 + AAC) com sincronismo perfeito de hardware!");
+        addLog("🎉 Processamento concluído! Arquivo 100% pronto para WhatsApp, Instagram e TikTok.");
+      } else {
+        // Corrige metadados de duracao WebM (se gravado em navegadores como Firefox)
+        finalBlob = await fixWebmDuration(finalBlob, duration);
 
-        const convRes = await fetch("/api/admin/convert-video", {
-          method: "POST",
-          body: formData,
-        });
+        const isCloudEnv = typeof window !== "undefined" && window.location.hostname !== "localhost" && window.location.hostname !== "127.0.0.1";
+        const canSendToServer = !isCloudEnv || finalBlob.size <= 4.2 * 1024 * 1024;
 
-        if (convRes.ok) {
-          finalBlob = await convRes.blob();
-          addLog("🎉 Conversão concluída com sucesso! MP4 pronto para WhatsApp e Instagram!");
+        if (canSendToServer) {
+          setMessage("⚡ Convertendo WebM para MP4 padrão oficial...");
+          addLog("🔄 Convertendo vídeo para MP4 padrão WhatsApp (H.264 + AAC + faststart)...");
+          try {
+            const formData = new FormData();
+            formData.append("file", finalBlob, `${basename}.webm`);
+            formData.append("filename", `${basename}-${formatLabel}.mp4`);
+
+            const convRes = await fetch("/api/admin/convert-video", {
+              method: "POST",
+              body: formData,
+            });
+
+            if (convRes.ok) {
+              finalBlob = await convRes.blob();
+              addLog("🎉 Conversão concluída com sucesso! MP4 pronto para WhatsApp e Instagram!");
+            } else {
+              const errText = await convRes.text().catch(() => "");
+              let errMsg = "";
+              try {
+                const parsed = JSON.parse(errText);
+                errMsg = parsed.error || "";
+              } catch {}
+              if (!errMsg) {
+                errMsg = convRes.status === 413
+                  ? "Arquivo excede limite de envio HTTP 413 do servidor"
+                  : `HTTP ${convRes.status}${convRes.statusText ? ` (${convRes.statusText})` : ""}`;
+              }
+              addLog(`ℹ️ Servidor de conversão (${errMsg}). Mantendo vídeo de alta resolução gerado.`);
+            }
+          } catch (convErr: any) {
+            addLog(`ℹ️ Servidor de conversão (${convErr?.message || "offline"}). Mantendo vídeo gerado.`);
+          }
         } else {
-          const errData = await convRes.json().catch(() => ({}));
-          addLog(`⚠️ Servidor de conversão retornou: ${errData.error || convRes.statusText}`);
+          addLog(`ℹ️ Gravação WebM (${(finalBlob.size / 1024 / 1024).toFixed(1)} MB) finalizada com sucesso.`);
         }
-      } catch (convErr: any) {
-        addLog(`⚠️ Falha ao contatar endpoint de conversão: ${convErr?.message || "falha"}`);
       }
 
       setVideoExport({
@@ -3613,70 +3626,81 @@ async function fixWebmDuration(blob: Blob, durationSec: number): Promise<Blob> {
               Alterne acima entre <b>Letras Brancas ⚪</b> (ideal p/ Reels/Vídeos) e <b>Letras Pretas ⚫</b> (ideal p/ Fundo Claro).
             </small>
 
-            {logoData && (
-              <>
+            {/* Cartão de visualização da logo ativa (Oficial transparente ou Customizada) */}
+            <div
+              className="adminFeedLogoSaved"
+              style={{
+                background: logoColorStyle === "white" ? "#0f172a" : "#f8fafc",
+                border: "1px solid #cbd5e1",
+                padding: "10px 14px",
+                borderRadius: 10,
+                display: "flex",
+                alignItems: "center",
+                justifyContent: "space-between",
+                marginTop: 8,
+              }}
+            >
+              <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
                 <div
-                  className="adminFeedLogoSaved"
                   style={{
-                    background: logoColorStyle === "white" ? "#0f172a" : "#f8fafc",
-                    border: "1px solid #cbd5e1",
-                    padding: "10px 14px",
-                    borderRadius: 10,
-                    display: "flex",
-                    alignItems: "center",
-                    justifyContent: "space-between",
-                    marginTop: 8,
+                    background: logoColorStyle === "white" ? "#1e293b" : "#f1f5f9",
+                    padding: "4px 8px",
+                    borderRadius: 6,
+                    border: logoColorStyle === "white" ? "1px solid #334155" : "1px solid #e2e8f0",
                   }}
                 >
-                  <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
-                    <div
-                      style={{
-                        background: logoColorStyle === "white" ? "transparent" : "#f1f5f9",
-                        padding: "4px 8px",
-                        borderRadius: 6,
-                      }}
-                    >
-                      <img
-                        src={logoData}
-                        alt="Logo escolhida"
-                        style={{
-                          maxHeight: 34,
-                          display: "block",
-                          filter:
-                            logoColorStyle === "white"
-                              ? "drop-shadow(0 0 1px #fff) invert(1) hue-rotate(180deg)"
-                              : undefined,
-                        }}
-                      />
-                    </div>
-                    <span
-                      style={{
-                        fontSize: 11,
-                        fontWeight: 700,
-                        color: logoColorStyle === "white" ? "#f8fafc" : "#0f172a",
-                      }}
-                    >
-                      {logoColorStyle === "white"
-                        ? "⚪ Letras Brancas (Fundo Escuro)"
-                        : logoColorStyle === "dark"
-                        ? "⚫ Letras Pretas (Fundo Claro)"
-                        : "Cores Originais"}
-                    </span>
-                  </div>
-                  <button type="button" className="btn secondary" onClick={removeLogo} style={{ fontSize: 11, padding: "3px 8px" }}>
-                    Remover
-                  </button>
+                  <img
+                    src={logoData || (logoColorStyle === "dark" ? "/logos/logo-viralizou-preta.png" : "/logos/logo-viralizou-branca.png")}
+                    alt="Logo ativa"
+                    style={{
+                      maxHeight: 34,
+                      display: "block",
+                    }}
+                  />
                 </div>
-                <div className="adminFeedActions" style={{ marginTop: 8 }}>
-                  <button type="button" className="btn secondary" onClick={centerLogo}>🎯 Centralizar logo</button>
-                  <small>Arraste a logo na prévia. A posição fica salva no painel.</small>
+                <div>
+                  <span
+                    style={{
+                      fontSize: 12,
+                      fontWeight: 700,
+                      display: "block",
+                      color: logoColorStyle === "white" ? "#f8fafc" : "#0f172a",
+                    }}
+                  >
+                    {logoData
+                      ? "Logo Personalizada"
+                      : logoColorStyle === "white"
+                      ? "⚪ Logo Oficial (Letras Brancas - Sem Fundo)"
+                      : logoColorStyle === "dark"
+                      ? "⚫ Logo Oficial (Letras Pretas - Sem Fundo)"
+                      : "Logo Oficial Original"}
+                  </span>
+                  <small style={{ color: logoColorStyle === "white" ? "#94a3b8" : "#64748b", fontSize: 10 }}>
+                    {logoData ? "Arquivo customizado enviado" : "Imagem PNG nativa original e transparente"}
+                  </small>
                 </div>
-                <div style={{ marginTop: 8 }}>
-                  <label style={{ fontSize: 11, fontWeight: 700 }}>🔎 Tamanho da logo · {logoScale}%</label>
-                  <input type="range" min="50" max="150" step="5" value={logoScale} onChange={(e) => saveReelLogoScale(Number(e.target.value))} />
-                </div>
-              </>
-            )}
+              </div>
+              {logoData && (
+                <button
+                  type="button"
+                  className="btn secondary"
+                  onClick={removeLogo}
+                  style={{ fontSize: 11, padding: "3px 8px" }}
+                  title="Voltar a usar as logos originais oficiais"
+                >
+                  Restaurar Oficial
+                </button>
+              )}
+            </div>
+
+            <div className="adminFeedActions" style={{ marginTop: 8 }}>
+              <button type="button" className="btn secondary" onClick={centerLogo}>🎯 Centralizar logo</button>
+              <small>Arraste a logo na prévia para reposicionar livremente.</small>
+            </div>
+            <div style={{ marginTop: 8 }}>
+              <label style={{ fontSize: 11, fontWeight: 700 }}>🔎 Tamanho da logo · {logoScale}%</label>
+              <input type="range" min="50" max="150" step="5" value={logoScale} onChange={(e) => saveReelLogoScale(Number(e.target.value))} />
+            </div>
           </div>
 
 

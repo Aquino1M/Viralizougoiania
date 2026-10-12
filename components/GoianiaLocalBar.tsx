@@ -115,7 +115,7 @@ export default function GoianiaLocalBar() {
               </div>
             </div>
 
-            <Link href="/categoria/esportes" className="teamHubLink">
+            <Link href="/futebol" className="teamHubLink">
               Tabela Completa & Notícias ➔
             </Link>
           </div>

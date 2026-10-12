@@ -5,7 +5,7 @@ import { slugify } from "@/lib/slug";
 import type { PostStatus } from "@/lib/types";
 
 function normalizePublishing(status: unknown, publishedAt: unknown, currentPublishedAt: string | null) {
-  let nextStatus: PostStatus = status === "draft" ? "draft" : status === "scheduled" ? "scheduled" : "published";
+  let nextStatus: PostStatus = status === "draft" ? "draft" : status === "scheduled" ? "scheduled" : status === "archived" ? "archived" : "published";
   if (nextStatus === "draft") return { status: nextStatus, published_at: null };
   const iso = publishedAt ? new Date(String(publishedAt)).toISOString() : currentPublishedAt || new Date().toISOString();
   if (nextStatus === "scheduled" && new Date(iso).getTime() <= Date.now()) nextStatus = "published";
