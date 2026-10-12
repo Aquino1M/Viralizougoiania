@@ -1,7 +1,7 @@
 import Header from "@/components/Header";
 import Footer from "@/components/Footer";
 import NewsCard from "@/components/NewsCard";
-import GoianiaBairrosSection from "@/components/GoianiaBairrosSection";
+
 import { getCategories, getPosts } from "@/lib/storage";
 import { inferLocation, isGoiasOrigin } from "@/lib/category-classifier";
 import Link from "next/link";
@@ -67,7 +67,7 @@ export default async function Home(){
 
   {agora.length>0&&<section className="nowSection"><div className="container nowGrid"><div className="nowTitle"><span className="liveDot"></span><b>GOIÂNIA<br/>AGORA</b></div>{agora.map(p=><Link key={p.id} href={`/noticia/${p.slug}`} className="nowItem"><time>{fmt(p.published_at)}</time><span>{p.title}</span></Link>)}</div></section>}
 
-  <GoianiaBairrosSection posts={bairroPosts.length ? bairroPosts : goiasPosts} />
+
 
   <section className="section spotlightSection"><div className="container"><div className="sectionHead lightHead"><div><span className="sectionLabel">Cidade em pauta</span><h2>O assunto que movimenta Goiânia</h2></div></div><div className="spotlightGrid">{(cityPosts.length?cityPosts:posts.slice(0,3)).map((p,i)=><Link key={p.id} href={`/noticia/${p.slug}`} className={`spotlightCard ${i===0?"spotlightMain":""}`}><img src={p.image_url} alt="" loading="lazy" decoding="async" fetchPriority="low"/><div className="spotlightShade"/><div className="spotlightContent"><span>{p.category}</span><h3>{p.title}</h3><small>{p.city} • {fmt(p.published_at)}</small></div></Link>)}</div></div></section>
 
