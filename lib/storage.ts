@@ -7,20 +7,37 @@ try {
   if (!fsSync.existsSync(publicLogosDir)) {
     fsSync.mkdirSync(publicLogosDir, { recursive: true });
   }
-  const userUploadedDir = "C:\\Users\\Aquino\\.gemini\\antigravity-ide\\brain\\d93440ff-fe58-40ed-94a4-6ff085a0a199\\.user_uploaded";
-  const whiteSrc = path.join(userUploadedDir, "media_1791812215943.png");
-  const darkSrc = path.join(userUploadedDir, "media_1791812270897.png");
+  const possibleUploadDirs = [
+    "C:\\Users\\Aquino\\.gemini\\antigravity-ide\\brain\\d5396812-fe0c-45aa-9024-57e5752b1e04\\.user_uploaded",
+    "C:\\Users\\Aquino\\.gemini\\antigravity-ide\\brain\\d93440ff-fe58-40ed-94a4-6ff085a0a199\\.user_uploaded",
+  ];
+
+  let whiteSrc = "";
+  let darkSrc = "";
+
+  for (const dir of possibleUploadDirs) {
+    const w1 = path.join(dir, "media_1791847748374.png");
+    const w2 = path.join(dir, "media_1791812215943.png");
+    if (!whiteSrc && fsSync.existsSync(w1)) whiteSrc = w1;
+    else if (!whiteSrc && fsSync.existsSync(w2)) whiteSrc = w2;
+
+    const d1 = path.join(dir, "media_1791847748387.png");
+    const d2 = path.join(dir, "media_1791812270897.png");
+    if (!darkSrc && fsSync.existsSync(d1)) darkSrc = d1;
+    else if (!darkSrc && fsSync.existsSync(d2)) darkSrc = d2;
+  }
+
   const whiteDst = path.join(publicLogosDir, "logo-viralizou-branca.png");
   const darkDst = path.join(publicLogosDir, "logo-viralizou-preta.png");
-  if (fsSync.existsSync(whiteSrc)) {
-    if (!fsSync.existsSync(whiteDst)) fsSync.copyFileSync(whiteSrc, whiteDst);
+  if (whiteSrc && fsSync.existsSync(whiteSrc)) {
+    fsSync.copyFileSync(whiteSrc, whiteDst);
     const pubWhite = path.join(process.cwd(), "public", "logo-viralizou-branca.png");
-    if (!fsSync.existsSync(pubWhite)) fsSync.copyFileSync(whiteSrc, pubWhite);
+    fsSync.copyFileSync(whiteSrc, pubWhite);
   }
-  if (fsSync.existsSync(darkSrc)) {
-    if (!fsSync.existsSync(darkDst)) fsSync.copyFileSync(darkSrc, darkDst);
+  if (darkSrc && fsSync.existsSync(darkSrc)) {
+    fsSync.copyFileSync(darkSrc, darkDst);
     const pubDark = path.join(process.cwd(), "public", "logo-viralizou-preta.png");
-    if (!fsSync.existsSync(pubDark)) fsSync.copyFileSync(darkSrc, pubDark);
+    fsSync.copyFileSync(darkSrc, pubDark);
   }
 } catch {}
 import { randomUUID } from "node:crypto";

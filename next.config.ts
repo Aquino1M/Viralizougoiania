@@ -9,18 +9,34 @@ try {
     fs.mkdirSync(publicLogosDir, { recursive: true });
   }
 
-  const userUploadedDir = "C:\\Users\\Aquino\\.gemini\\antigravity-ide\\brain\\d93440ff-fe58-40ed-94a4-6ff085a0a199\\.user_uploaded";
-  const whiteSrc = path.join(userUploadedDir, "media_1791812215943.png");
-  const darkSrc = path.join(userUploadedDir, "media_1791812270897.png");
+  const possibleUploadDirs = [
+    "C:\\Users\\Aquino\\.gemini\\antigravity-ide\\brain\\d5396812-fe0c-45aa-9024-57e5752b1e04\\.user_uploaded",
+    "C:\\Users\\Aquino\\.gemini\\antigravity-ide\\brain\\d93440ff-fe58-40ed-94a4-6ff085a0a199\\.user_uploaded",
+  ];
+
+  let whiteSrc = "";
+  let darkSrc = "";
+
+  for (const dir of possibleUploadDirs) {
+    const w1 = path.join(dir, "media_1791847748374.png");
+    const w2 = path.join(dir, "media_1791812215943.png");
+    if (!whiteSrc && fs.existsSync(w1)) whiteSrc = w1;
+    else if (!whiteSrc && fs.existsSync(w2)) whiteSrc = w2;
+
+    const d1 = path.join(dir, "media_1791847748387.png");
+    const d2 = path.join(dir, "media_1791812270897.png");
+    if (!darkSrc && fs.existsSync(d1)) darkSrc = d1;
+    else if (!darkSrc && fs.existsSync(d2)) darkSrc = d2;
+  }
 
   const whiteDst = path.join(publicLogosDir, "logo-viralizou-branca.png");
   const darkDst = path.join(publicLogosDir, "logo-viralizou-preta.png");
 
-  if (fs.existsSync(whiteSrc)) {
+  if (whiteSrc && fs.existsSync(whiteSrc)) {
     fs.copyFileSync(whiteSrc, whiteDst);
     fs.copyFileSync(whiteSrc, path.join(process.cwd(), "public", "logo-viralizou-branca.png"));
   }
-  if (fs.existsSync(darkSrc)) {
+  if (darkSrc && fs.existsSync(darkSrc)) {
     fs.copyFileSync(darkSrc, darkDst);
     fs.copyFileSync(darkSrc, path.join(process.cwd(), "public", "logo-viralizou-preta.png"));
   }
