@@ -409,10 +409,10 @@ const getArchivedPostIndexCached = unstable_cache(
       try {
         const encodedQuery = encodeURIComponent(`%${safeQuery}%`);
         const cutoff = encodeURIComponent(new Date(Date.now() - 30 * 24 * 60 * 60 * 1000).toISOString());
-        const fields = "select=id,slug,title,excerpt,category,city,author,image_url,featured,status,published_at,created_at,updated_at&status=eq.published";
+        const fields = "select=id,slug,title,excerpt,category,city,author,image_url,featured,status,published_at,created_at,updated_at";
         const searchable = `&or=(title.ilike.${encodedQuery},excerpt.ilike.${encodedQuery},category.ilike.${encodedQuery},city.ilike.${encodedQuery})`;
         const [publishedRows, createdRows] = await Promise.all([
-          sb(`posts?${fields}&published_at=lt.${cutoff}${searchable}&order=published_at.desc.nullslast&limit=30`),
+          sb(`posts?${fields}&status=eq.archived${searchable}&order=published_at.desc.nullslast,created_at.desc&limit=40`),
           sb(`posts?${fields}&published_at=is.null&created_at=lt.${cutoff}${searchable}&order=created_at.desc&limit=30`),
         ]);
         const rows = [...(Array.isArray(publishedRows) ? publishedRows : []), ...(Array.isArray(createdRows) ? createdRows : [])];
