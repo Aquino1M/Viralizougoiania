@@ -5,11 +5,12 @@ import Footer from "@/components/Footer";
 import FootballHub from "@/components/FootballHub";
 import { getPosts } from "@/lib/storage";
 import { getLiveFootballData } from "@/lib/football-sync";
+import type { Post } from "@/lib/types";
 
 export const revalidate = 60;
 
 const getFootballPosts = unstable_cache(
-  async () => getPosts({ category: "Futebol", limit: 24 }),
+  async () => getPosts({ category: "Futebol", limit: 24, summaryOnly: true }),
   ["public-football-posts-v2"],
   { revalidate: 60 }
 );
@@ -26,7 +27,7 @@ export const metadata: Metadata = {
 };
 
 export default async function FutebolPage() {
-  const [allPosts, liveFootballData] = await Promise.all([
+  const [allPosts, liveFootballData]: [Post[], any] = await Promise.all([
     getFootballPosts(),
     getCachedFootballData(),
   ]);

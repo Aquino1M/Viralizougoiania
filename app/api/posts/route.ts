@@ -1,4 +1,5 @@
 import { NextResponse } from "next/server";
+import { revalidatePath, revalidateTag } from "next/cache";
 import { createPost, getPosts, storageMode } from "@/lib/storage";
 import { isAdmin } from "@/lib/session";
 import { slugify } from "@/lib/slug";
@@ -43,7 +44,7 @@ export async function POST(req: Request) {
       content: b.content,
       category: b.category,
       // Evita que o valor antigo/padrão "Goiânia" rotule notícias de outras cidades de Goiás.
-      city: !b.city || b.city === "Goiânia" ? inferredLocation.city : b.city,
+      city: b.city ? b.city : (inferredLocation.isGoias ? inferredLocation.city : "Goiânia"),
       author: b.author || "Redação Viralizougoiania",
       image_url: b.image_url || "",
       image_credit: b.image_credit || "",
@@ -59,6 +60,7 @@ export async function POST(req: Request) {
       seo_description: b.seo_description || "",
       seo_keywords: b.seo_keywords || "",
     });
+    try { revalidatePath("/"); revalidatePath("/categoria/[categoria]", "page"); revalidateTag("public-home-posts-v5"); revalidateTag("public-home-posts-v6"); } catch {}
     return NextResponse.json(post, { status: 201 });
   } catch (e) {
     return NextResponse.json({ error: e instanceof Error ? e.message : "Erro ao publicar" }, { status: 500 });

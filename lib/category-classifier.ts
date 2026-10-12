@@ -47,15 +47,19 @@ export const GOIAS_TERMS_REGEX =
 
 // Detecta se a matéria é genuinamente de Goiás / Goiânia
 export function isGoiasOrigin(input: CategoryInput): boolean {
-  // 1. Se a cidade salva for explicitamente de fora de Goiás ou nacional
+  // 1. Matérias criadas diretamente pela redação do portal (sem fonte externa) ou por autores locais
+  const author = normalize(input.author || "");
+  const isInternalAuthor = !input.source_name && !input.source_url;
+  const isPortalStaff = author.includes("aquino") || author.includes("viralizou") || author.includes("redacao");
+
   const city = normalize(input.city || "");
-  const outsideCities = [
-    "brasil", "mundo", "estados unidos", "europa", "sao paulo", "rio de janeiro",
+  const outsideExplicitCities = [
+    "mundo", "estados unidos", "europa", "sao paulo", "rio de janeiro",
     "belo horizonte", "brasilia", "curitiba", "porto alegre", "salvador", "recife",
     "fortaleza", "manaus", "minas gerais", "bahia", "ceara", "parana", "rio grande do sul",
     "para", "xangai", "china", "pequim"
   ];
-  if (outsideCities.includes(city)) {
+  if (outsideExplicitCities.includes(city)) {
     return false;
   }
 
@@ -83,29 +87,39 @@ export function isGoiasOrigin(input: CategoryInput): boolean {
     return true;
   }
 
+  // 4. Se foi escrita diretamente pela equipe do portal Viralizou Goiânia
+  if ((isInternalAuthor || isPortalStaff) && city !== "brasil") {
+    return true;
+  }
+
   const text = normalize(
     `${input.title || ""} ${input.excerpt || ""} ${input.city || ""}`
   );
 
-  // 4. Termos e bairros goianos no texto
+  // 5. Termos e bairros goianos no texto
   const hasGoiasTerm = GOIAS_TERMS_REGEX.test(text) || GOIANIA_BAIRROS_REGEX.test(text);
   if (hasGoiasTerm) {
     return true;
   }
 
-  // 5. Se não tiver termos de Goiás no texto e tiver assuntos esportivos ou celebridades nacionais/internacionais
+  // 6. Se tiver assuntos estritamente externos/nacionais sem menção local
   const hasOutsideSubject = /\b(atletico-mg|atletico mineiro|santos fc|duelo entre atletico|santos nao terminou|flamengo|palmeiras|corinthians|sao paulo fc|vasco|botafogo|gremio|internacional|cruzeiro|luisa stefani|dabrowski|pequim|wta 1000|wta|atp|formula 1|f1|champions league|real madrid|barcelona|stf|lula|bolsonaro|trump|biden)\b/i.test(text);
   if (hasOutsideSubject) {
     return false;
   }
 
-  // 6. Fontes locais goianas apenas se não for pauta nacional de futebol ou fofocas
+  // 7. Fontes locais goianas apenas se não for pauta nacional de futebol ou fofocas
   const sourceName = input.source_name || "";
   const sourceUrl = input.source_url || "";
   if (GOIAS_SOURCES_REGEX.test(sourceName) || GOIAS_SOURCES_REGEX.test(sourceUrl)) {
     if (category === "fofocas" || category === "futebol") {
       return false;
     }
+    return true;
+  }
+
+  // 8. Se for matéria do portal sem fonte externa, é matéria local da redação
+  if (isInternalAuthor || isPortalStaff) {
     return true;
   }
 
@@ -187,10 +201,20 @@ export function inferLocation(input: CategoryInput): {
   // Internacional
   if (/\b(trump|biden|eua|estados unidos|florida|nova york|washington)\b/.test(titleAndExcerpt)) return { city: "Estados Unidos", isGoias: false, isGoiania: false, isBairro: false };
   if (/\b(ucrania|russia|putin|zelensky)\b/.test(titleAndExcerpt)) return { city: "Mundo", isGoias: false, isGoiania: false, isBairro: false };
-  if (/\b(xangai|china|pequim)\b/.test(titleAndExcerpt)) return { city: "Xangai", isGoias: false, isGoiania: false, isBairro: false };
   if (/\b(champions|europa|espanha|inglaterra|madrid|londres|paris|alemanha|berlim)\b/.test(titleAndExcerpt)) return { city: "Europa", isGoias: false, isGoiania: false, isBairro: false };
 
-  return { city: "Brasil", isGoias: false, isGoiania: false, isBairro: false };
+  // Se for matéria da própria redação sem marcadores externos de outros estados
+  if (!input.source_name && !input.source_url) {
+    return { city: input.city || "Goiânia", isGoias: true, isGoiania: true, isBairro: false };
+  }
+
+  // Se o autor já definiu explicitamente uma cidade goiana
+  const initialCity = normalize(input.city || "");
+  if (initialCity === "goiania" || initialCity.includes("aparecida") || initialCity.includes("anapolis") || initialCity.includes("setor ")) {
+    return { city: input.city || "Goiânia", isGoias: true, isGoiania: initialCity === "goiania", isBairro: initialCity.includes("setor ") };
+  }
+
+  return { city: input.city || "Brasil", isGoias: false, isGoiania: false, isBairro: false };
 }
 
 function dedicatedVertical(sourceName = "", sourceUrl = "", title = ""): EditorialCategory | null {

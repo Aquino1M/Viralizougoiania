@@ -7,20 +7,22 @@ import { getCategories, getPosts } from "@/lib/storage";
 import { getLiveFootballData } from "@/lib/football-sync";
 import { inferLocation, isGoiasOrigin } from "@/lib/category-classifier";
 import { slugify } from "@/lib/slug";
+import type { Category, Post } from "@/lib/types";
 
 export const revalidate = 60;
 
 const getCachedCategories = unstable_cache(
-  async () => getCategories({ includeInactive: true }),
+  async (): Promise<Category[]> => getCategories({ includeInactive: true }),
   ["public-category-list-v3"],
   { revalidate: 300 }
 );
 
 const getCachedCategoryPosts = unstable_cache(
   async (category: string) => {
-    const posts = await getPosts({ category, limit: 120 });
+    const posts = await getPosts({ category, limit: 120, summaryOnly: true });
     const cutoff = Date.now() - 30 * 24 * 60 * 60 * 1000;
-    return posts.filter((post) => new Date(post.published_at || post.created_at).getTime() >= cutoff).slice(0, 60);
+    const recent = posts.filter((post) => new Date(post.published_at || post.created_at).getTime() >= cutoff);
+    return (recent.length > 0 ? recent : posts).slice(0, 60);
   },
   ["public-category-posts-v4"],
   { revalidate: 60 }
@@ -28,9 +30,10 @@ const getCachedCategoryPosts = unstable_cache(
 
 const getCachedAllPosts = unstable_cache(
   async () => {
-    const posts = await getPosts({ limit: 200 });
+    const posts = await getPosts({ limit: 200, summaryOnly: true });
     const cutoff = Date.now() - 30 * 24 * 60 * 60 * 1000;
-    return posts.filter((post) => new Date(post.published_at || post.created_at).getTime() >= cutoff).slice(0, 120);
+    const recent = posts.filter((post) => new Date(post.published_at || post.created_at).getTime() >= cutoff);
+    return (recent.length > 0 ? recent : posts).slice(0, 120);
   },
   ["public-category-all-posts-v4"],
   { revalidate: 60 }
@@ -48,7 +51,7 @@ export default async function CategoryPage({
   params: Promise<{ categoria: string }>;
 }) {
   const { categoria } = await params;
-  const categories = await getCachedCategories();
+  const categories: Category[] = await getCachedCategories();
 
   const requested = decodeURIComponent(categoria).toLowerCase().trim();
   const configured = categories.find(
@@ -70,7 +73,7 @@ export default async function CategoryPage({
 
   const queryCategory = isFutebol ? "Futebol" : isFofocas ? "Fofocas" : canonical;
 
-  let [rawPosts, allPosts, liveFootballData] = await Promise.all([
+  let [rawPosts, allPosts, liveFootballData]: [Post[], Post[], any] = await Promise.all([
     getCachedCategoryPosts(queryCategory),
     isGoiania || isBairros ? getCachedAllPosts() : Promise.resolve([]),
     isFutebol ? getCachedFootballData() : Promise.resolve(null),
@@ -81,7 +84,7 @@ export default async function CategoryPage({
     rawPosts = await getCachedCategoryPosts("Fofoca");
   }
 
-  let posts: typeof rawPosts = [];
+  let posts: Post[] = [];
 
   if (isGoiania) {
     // Na aba Goiânia: APENAS notícias de Goiânia e Goiás! Nunca coisas de outros estados ou países!

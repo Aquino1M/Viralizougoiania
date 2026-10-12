@@ -6,6 +6,8 @@ import type { Post } from "@/lib/types";
 type Props = {
   posts: Post[];
   onBack: () => void;
+  initialPost?: Post | null;
+  onOpenCompressor?: () => void;
 };
 
 type FeedPost = Pick<Post, "slug" | "title" | "image_url" | "category" | "city" | "created_at" | "updated_at">;
@@ -1405,7 +1407,7 @@ function buildReelOverlayCanvas(
   return canvas;
 }
 
-export default function SocialFeedCreator({ posts, onBack }: Props) {
+export default function SocialFeedCreator({ posts, onBack, initialPost, onOpenCompressor }: Props) {
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
   const videoPreviewRef = useRef<HTMLVideoElement | null>(null);
   const videoFileRef = useRef<File | Blob | null>(null);
@@ -1479,6 +1481,14 @@ export default function SocialFeedCreator({ posts, onBack }: Props) {
   useEffect(() => () => { if (videoUrl) URL.revokeObjectURL(videoUrl); }, [videoUrl]);
   useEffect(() => () => { if (videoExport?.url) URL.revokeObjectURL(videoExport.url); }, [videoExport?.url]);
   useEffect(() => () => { audioContextRef.current?.close().catch(() => {}); }, []);
+  useEffect(() => {
+    if (initialPost) {
+      setSelectedPost(initialPost);
+      setTitle(initialPost.title);
+      setArticleUrl(`/noticia/${initialPost.slug}`);
+      setMessage(`✅ Notícia "${initialPost.title}" selecionada para a arte social.`);
+    }
+  }, [initialPost]);
 
   // Carrega configurações locais e busca logo salva no Supabase
   useEffect(() => {
@@ -2934,55 +2944,37 @@ async function fixWebmDuration(blob: Blob, durationSec: number): Promise<Blob> {
 
       let finalBlob = blob;
 
-      // 1. Se o navegador já gravou em MP4 nativo (Chrome/Edge), o arquivo já é um MP4 oficial compatível!
-      const isAlreadyMp4 = mimeType.toLowerCase().includes("mp4");
-
-      if (isAlreadyMp4) {
-        addLog("✨ Vídeo gerado diretamente em MP4 nativo (H.264 + AAC) com sincronismo perfeito de hardware!");
-        addLog("🎉 Processamento concluído! Arquivo 100% pronto para WhatsApp, Instagram e TikTok.");
-      } else {
-        // Corrige metadados de duracao WebM (se gravado em navegadores como Firefox)
+      if (!mimeType.toLowerCase().includes("mp4")) {
         finalBlob = await fixWebmDuration(finalBlob, duration);
+      }
 
-        const isCloudEnv = typeof window !== "undefined" && window.location.hostname !== "localhost" && window.location.hostname !== "127.0.0.1";
-        const canSendToServer = !isCloudEnv || finalBlob.size <= 4.2 * 1024 * 1024;
+      setMessage("⚡ Otimizando e comprimindo vídeo para o WhatsApp (H.264 + Faststart)...");
+      addLog("🔄 Executando compressão oficial WhatsApp (H.264 Main, YUV420P, Faststart e AAC)...");
 
-        if (canSendToServer) {
-          setMessage("⚡ Convertendo WebM para MP4 padrão oficial...");
-          addLog("🔄 Convertendo vídeo para MP4 padrão WhatsApp (H.264 + AAC + faststart)...");
-          try {
-            const formData = new FormData();
-            formData.append("file", finalBlob, `${basename}.webm`);
-            formData.append("filename", `${basename}-${formatLabel}.mp4`);
+      try {
+        const formData = new FormData();
+        const ext = mimeType.toLowerCase().includes("mp4") ? "mp4" : "webm";
+        formData.append("file", finalBlob, `${basename}.${ext}`);
+        formData.append("filename", `${basename}-${formatLabel}.mp4`);
+        formData.append("preset", "whatsapp_standard");
 
-            const convRes = await fetch("/api/admin/convert-video", {
-              method: "POST",
-              body: formData,
-            });
+        const convRes = await fetch("/api/admin/convert-video", {
+          method: "POST",
+          body: formData,
+        });
 
-            if (convRes.ok) {
-              finalBlob = await convRes.blob();
-              addLog("🎉 Conversão concluída com sucesso! MP4 pronto para WhatsApp e Instagram!");
-            } else {
-              const errText = await convRes.text().catch(() => "");
-              let errMsg = "";
-              try {
-                const parsed = JSON.parse(errText);
-                errMsg = parsed.error || "";
-              } catch {}
-              if (!errMsg) {
-                errMsg = convRes.status === 413
-                  ? "Arquivo excede limite de envio HTTP 413 do servidor"
-                  : `HTTP ${convRes.status}${convRes.statusText ? ` (${convRes.statusText})` : ""}`;
-              }
-              addLog(`ℹ️ Servidor de conversão (${errMsg}). Mantendo vídeo de alta resolução gerado.`);
-            }
-          } catch (convErr: any) {
-            addLog(`ℹ️ Servidor de conversão (${convErr?.message || "offline"}). Mantendo vídeo gerado.`);
-          }
+        if (convRes.ok) {
+          const compBlob = await convRes.blob();
+          const origMb = (finalBlob.size / 1024 / 1024).toFixed(1);
+          const compMb = (compBlob.size / 1024 / 1024).toFixed(1);
+          const reduction = convRes.headers.get("X-Reduction-Percent");
+          finalBlob = compBlob;
+          addLog(`🎉 Compressão WhatsApp concluída com sucesso! De ${origMb} MB para ${compMb} MB${reduction ? ` (-${reduction}%)` : ""}. 100% compatível com o WhatsApp!`);
         } else {
-          addLog(`ℹ️ Gravação WebM (${(finalBlob.size / 1024 / 1024).toFixed(1)} MB) finalizada com sucesso.`);
+          addLog(`ℹ️ Servidor de compressão retornou código ${convRes.status}. Mantendo arquivo gravado.`);
         }
+      } catch (convErr: any) {
+        addLog(`ℹ️ Servidor de compressão indisponível (${convErr?.message || "offline"}). Mantendo vídeo gravado.`);
       }
 
       setVideoExport({
@@ -3150,7 +3142,19 @@ async function fixWebmDuration(blob: Blob, durationSec: number): Promise<Blob> {
             <div className="field">
               <label>🎬 Vídeo para o Reel ou Story</label>
               <input type="file" accept="video/*" onChange={onVideoChange} />
-              <small>{videoFileName ? `${videoFileName}${videoReady ? " · pronto para prévia" : " · carregando"}` : "Escolha um vídeo de até 250 MB ou cole o link da rede social acima."}</small>
+              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginTop: 4, flexWrap: "wrap", gap: 6 }}>
+                <small>{videoFileName ? `${videoFileName}${videoReady ? " · pronto para prévia" : " · carregando"}` : "Escolha um vídeo de até 250 MB ou cole o link da rede social acima."}</small>
+                {onOpenCompressor && (
+                  <button
+                    type="button"
+                    onClick={onOpenCompressor}
+                    style={{ background: "#fef3c7", border: "1px solid #fde68a", color: "#92400e", borderRadius: 6, padding: "2px 8px", fontSize: 11, fontWeight: 700, cursor: "pointer" }}
+                    title="Abre o Compressor de Vídeo para WhatsApp"
+                  >
+                    🗜️ Compressor WhatsApp
+                  </button>
+                )}
+              </div>
 
               {videoUrl && (
                 <div style={{ background: "#f8fafc", borderRadius: 10, padding: "12px", marginTop: 10, border: "1px solid #cbd5e1" }}>
@@ -3907,8 +3911,15 @@ async function fixWebmDuration(blob: Blob, durationSec: number): Promise<Blob> {
           {videoExport && (
             <div className="adminFeedVideoResult">
               <video src={videoExport.url} controls playsInline />
-              <small>Arquivo gerado: <b>MP4 (H.264 · Instagram / TikTok / WhatsApp)</b></small>
-              <a className="btn" href={videoExport.url} download={videoExport.filename}>⬇️ Baixar Vídeo MP4</a>
+              <div style={{ display: "flex", alignItems: "center", gap: 6, margin: "8px 0" }}>
+                <span style={{ background: "#16a34a", color: "#fff", fontSize: 10, fontWeight: 800, padding: "3px 8px", borderRadius: 4 }}>
+                  ✅ 100% WhatsApp & Instagram
+                </span>
+                <small style={{ color: "#475569" }}>MP4 H.264 Main + AAC + Faststart</small>
+              </div>
+              <a className="btn" href={videoExport.url} download={videoExport.filename} style={{ background: "#16a34a", textDecoration: "none" }}>
+                ⬇️ Baixar Vídeo MP4 (WhatsApp Pronto)
+              </a>
             </div>
           )}
         </div>

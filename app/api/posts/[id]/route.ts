@@ -1,4 +1,5 @@
 import { NextResponse } from "next/server";
+import { revalidatePath, revalidateTag } from "next/cache";
 import { deletePost, getPostById, updatePost } from "@/lib/storage";
 import { isAdmin } from "@/lib/session";
 import { slugify } from "@/lib/slug";
@@ -55,6 +56,7 @@ export async function PATCH(req: Request, { params }: { params: Promise<{ id: st
       seo_description: b.seo_description !== undefined ? b.seo_description : current.seo_description,
       seo_keywords: b.seo_keywords !== undefined ? b.seo_keywords : current.seo_keywords,
     });
+    try { revalidatePath("/"); revalidatePath("/categoria/[categoria]", "page"); revalidatePath(`/noticia/${post?.slug}`); revalidateTag("public-home-posts-v5"); revalidateTag("public-home-posts-v6"); } catch {}
     return NextResponse.json(post);
   } catch (e) {
     return NextResponse.json({ error: e instanceof Error ? e.message : "Erro ao atualizar" }, { status: 500 });
@@ -66,6 +68,7 @@ export async function DELETE(_: Request, { params }: { params: Promise<{ id: str
   try {
     const { id } = await params;
     await deletePost(id);
+    try { revalidatePath("/"); revalidatePath("/categoria/[categoria]", "page"); revalidateTag("public-home-posts-v5"); revalidateTag("public-home-posts-v6"); } catch {}
     return NextResponse.json({ ok: true });
   } catch (e) {
     return NextResponse.json({ error: e instanceof Error ? e.message : "Erro ao excluir" }, { status: 500 });

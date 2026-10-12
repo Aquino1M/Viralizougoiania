@@ -1,8 +1,13 @@
 import { NextResponse } from "next/server";
+import { runFfmpeg } from "@/lib/ffmpeg";
+import fs from "node:fs/promises";
+import path from "node:path";
+import os from "node:os";
+import crypto from "node:crypto";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
-export const maxDuration = 120;
+export const maxDuration = 180;
 
 function isAllowedMediaHost(hostname: string, platform: string) {
   const host = hostname.toLowerCase().replace(/\.$/, "");
@@ -28,6 +33,7 @@ export async function GET(request: Request) {
   const mediaUrl = (searchParams.get("url") || "").trim();
   const rawFilename = (searchParams.get("filename") || "viralizou-video.mp4").trim();
   const platform = (searchParams.get("platform") || "").toLowerCase();
+  const isWhatsapp = searchParams.get("whatsapp") === "1" || searchParams.get("compress") === "1";
 
   if (!mediaUrl) {
     return NextResponse.json({ error: "Parâmetro de URL obrigatório." }, { status: 400 });
@@ -80,6 +86,64 @@ export async function GET(request: Request) {
     }
     if (contentLength && Number(contentLength) > 300_000_000) {
       return NextResponse.json({ error: "O vídeo ultrapassa o limite de 300 MB." }, { status: 413 });
+    }
+
+    // Se solicitado formato WhatsApp, comprime e adiciona Faststart + YUV420P via FFmpeg
+    if (isWhatsapp) {
+      const tmpDir = os.tmpdir();
+      const id = crypto.randomBytes(8).toString("hex");
+      const inPath = path.join(tmpDir, `viralizou-dl-in-${id}.mp4`);
+      const outPath = path.join(tmpDir, `viralizou-dl-out-${id}.mp4`);
+
+      try {
+        const arrayBuf = await response.arrayBuffer();
+        await fs.writeFile(inPath, Buffer.from(arrayBuf));
+
+        const ffmpegArgs = [
+          "-y",
+          "-threads", "0",
+          "-i", inPath,
+          "-vf", "scale=trunc(iw/2)*2:trunc(ih/2)*2",
+          "-map", "0:v:0",
+          "-map", "0:a?",
+          "-c:v", "libx264",
+          "-pix_fmt", "yuv420p",
+          "-profile:v", "main",
+          "-level", "4.0",
+          "-preset", "veryfast",
+          "-crf", "26",
+          "-maxrate", "2800k",
+          "-bufsize", "5600k",
+          "-r", "30",
+          "-c:a", "aac",
+          "-b:a", "128k",
+          "-ar", "44100",
+          "-ac", "2",
+          "-movflags", "+faststart",
+          "-max_muxing_queue_size", "1024",
+          outPath,
+        ];
+
+        const res = await runFfmpeg(ffmpegArgs);
+        if (res.code === 0) {
+          const compBuffer = await fs.readFile(outPath);
+          const outName = safeFilename.replace(/\.mp4$/i, "") + "-whatsapp.mp4";
+          return new NextResponse(compBuffer, {
+            status: 200,
+            headers: {
+              "Content-Type": "video/mp4",
+              "Content-Disposition": `attachment; filename="${outName}"`,
+              "Content-Length": String(compBuffer.length),
+              "Cache-Control": "no-store",
+            },
+          });
+        }
+      } catch (e) {
+        console.warn("[download] Falha na compressão WhatsApp, entregando original:", e);
+      } finally {
+        await fs.unlink(inPath).catch(() => {});
+        await fs.unlink(outPath).catch(() => {});
+      }
     }
 
     const responseHeaders = new Headers();

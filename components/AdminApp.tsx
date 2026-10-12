@@ -9,8 +9,9 @@ import { inferLocation } from "@/lib/category-classifier";
 import SocialFeedCreator from "@/components/SocialFeedCreator";
 import InstagramVideoDownloader from "@/components/InstagramVideoDownloader";
 import AudienceAnalytics from "@/components/AudienceAnalytics";
+import VideoCompressor from "@/components/VideoCompressor";
 
-type View = "list" | "form" | "import" | "categories" | "socials" | "queue" | "admins" | "feedCreator" | "instagramDownloader" | "analytics";
+type View = "list" | "form" | "import" | "categories" | "socials" | "queue" | "admins" | "feedCreator" | "instagramDownloader" | "analytics" | "videoCompressor";
 type FormState = {
   id?: string;
   title: string;
@@ -168,6 +169,7 @@ export default function AdminApp() {
   const [socialMessage, setSocialMessage] = useState("");
   const [mode, setMode] = useState("");
   const [view, setView] = useState<View>("list");
+  const [selectedSocialPost, setSelectedSocialPost] = useState<Post | null>(null);
   const [form, setForm] = useState<FormState>(blank);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
@@ -186,7 +188,7 @@ export default function AdminApp() {
   const [postStats, setPostStats] = useState({ total: 0, published: 0, scheduled: 0, draft: 0, archived: 0 });
   const [statusFilter, setStatusFilter] = useState<"all" | "published" | "archived" | "scheduled" | "draft">("all");
   const [archiving, setArchiving] = useState(false);
-  const [archiveLoopActive, setArchiveLoopActive] = useState<boolean>(true);
+  const [archiveLoopActive, setArchiveLoopActive] = useState<boolean>(false);
   const [archiveLoopCountdown, setArchiveLoopCountdown] = useState<number>(10);
   const [lastArchiveCheckAt, setLastArchiveCheckAt] = useState<string>("");
   const [archiveLoopChecking, setArchiveLoopChecking] = useState<boolean>(false);
@@ -230,6 +232,44 @@ export default function AdminApp() {
   const [passwordModal, setPasswordModal] = useState<{ id: string; name: string; newPassword: string } | null>(null);
   const [passwordModalSaving, setPasswordModalSaving] = useState(false);
   const router = useRouter();
+  const [hasSavedDraft, setHasSavedDraft] = useState<boolean>(false);
+
+  useEffect(() => {
+    if (typeof window !== "undefined") {
+      const d = localStorage.getItem("viralizou_admin_post_draft");
+      if (d) setHasSavedDraft(true);
+    }
+  }, []);
+
+  useEffect(() => {
+    if (typeof window !== "undefined" && view === "form" && !form.id && (form.title || form.content || form.excerpt)) {
+      const timer = setTimeout(() => {
+        try {
+          localStorage.setItem("viralizou_admin_post_draft", JSON.stringify(form));
+          setHasSavedDraft(true);
+        } catch {}
+      }, 1000);
+      return () => clearTimeout(timer);
+    }
+  }, [form, view]);
+
+  function restoreDraft() {
+    try {
+      const raw = localStorage.getItem("viralizou_admin_post_draft");
+      if (raw) {
+        setForm(JSON.parse(raw));
+        setMessage("Rascunho recuperado com sucesso!");
+      }
+    } catch {}
+  }
+
+  function clearDraft() {
+    try {
+      localStorage.removeItem("viralizou_admin_post_draft");
+      setHasSavedDraft(false);
+      setMessage("Rascunho descartado.");
+    } catch {}
+  }
 
   // Matérias agendadas na fila, ordenadas por horário de publicação
   const queuedPosts = useMemo(
@@ -1306,8 +1346,9 @@ export default function AdminApp() {
     setMessage("");
     const payload = {
       ...form,
+      city: form.city || "Goiânia",
       slug: form.slug || slugify(form.title),
-      published_at: form.published_at ? new Date(form.published_at).toISOString() : undefined,
+      published_at: form.published_at ? new Date(form.published_at).toISOString() : (form.status === "published" ? new Date().toISOString() : undefined),
     };
     const r = await fetch(form.id ? `/api/posts/${form.id}` : "/api/posts", {
       method: form.id ? "PATCH" : "POST",
@@ -1320,7 +1361,8 @@ export default function AdminApp() {
       setMessage(d.error || "Erro ao salvar");
       return;
     }
-    setMessage(form.status === "scheduled" ? "Notícia agendada com sucesso." : "Notícia publicada com sucesso.");
+    clearDraft();
+    setMessage(form.status === "scheduled" ? "Notícia agendada com sucesso." : "Notícia publicada com sucesso no portal e na capa!");
     await load();
     setView("list");
     router.refresh();
@@ -1684,6 +1726,7 @@ export default function AdminApp() {
             <a href="#" onClick={(e) => { e.preventDefault(); setView("socials"); setSocialMessage(""); }}>📱 Redes Sociais</a>
             <a href="#" onClick={(e) => { e.preventDefault(); setView("feedCreator"); setMessage(""); }}>🎨 Criador de Post Feed</a>
             <a href="#" onClick={(e) => { e.preventDefault(); setView("instagramDownloader"); setMessage(""); }}>⬇️ Baixar Vídeos (Insta / TikTok / X)</a>
+            <a href="#" onClick={(e) => { e.preventDefault(); setView("videoCompressor"); setMessage(""); }} style={{ background: view === "videoCompressor" ? "rgba(255,255,255,0.12)" : undefined }}>🗜️ Compressor Vídeo WhatsApp</a>
             <a href="#" onClick={(e) => { e.preventDefault(); setView("analytics"); setMessage(""); }}>📊 Audiência & Patrocínio</a>
             <a
               href="#"
@@ -1930,7 +1973,23 @@ export default function AdminApp() {
                           <td><span className={`status ${p.status}`}>{statusLabel(p.status)}</span></td>
                           <td>{p.published_at ? new Date(p.published_at).toLocaleString("pt-BR") : "—"}</td>
                           <td>{p.featured ? "⭐ Sim" : "—"}</td>
-                          <td><div className="actions"><button className="btn secondary" onClick={() => edit(p)}>Editar</button><button className="btn danger" onClick={() => remove(p.id)}>Excluir</button></div></td>
+                          <td>
+                            <div className="actions">
+                              <button
+                                className="btn secondary"
+                                style={{ padding: "4px 8px", fontSize: 11, background: "#fef3c7", color: "#92400e", border: "1px solid #fde68a" }}
+                                onClick={() => {
+                                  setSelectedSocialPost(p);
+                                  setView("feedCreator");
+                                }}
+                                title="Criar card do feed ou reels para as redes sociais a partir desta notícia"
+                              >
+                                🎨 Social
+                              </button>
+                              <button className="btn secondary" onClick={() => edit(p)}>Editar</button>
+                              <button className="btn danger" onClick={() => remove(p.id)}>Excluir</button>
+                            </div>
+                          </td>
                         </tr>
                       ))}
                     </tbody>
@@ -2742,12 +2801,25 @@ export default function AdminApp() {
 
             {/* Criador de arte para o feed — somente no painel administrativo */}
             {view === "feedCreator" && (
-              <SocialFeedCreator posts={posts} onBack={() => setView("list")} />
+              <SocialFeedCreator
+                posts={posts}
+                initialPost={selectedSocialPost}
+                onBack={() => {
+                  setSelectedSocialPost(null);
+                  setView("list");
+                }}
+                onOpenCompressor={() => setView("videoCompressor")}
+              />
             )}
 
             {/* Downloader de vídeos públicos do Instagram — somente no painel administrativo */}
             {view === "instagramDownloader" && (
               <InstagramVideoDownloader onBack={() => setView("list")} />
+            )}
+
+            {/* Compressor de Vídeo Oficial para WhatsApp */}
+            {view === "videoCompressor" && (
+              <VideoCompressor onBack={() => setView("list")} />
             )}
 
             {/* Redes Sociais */}
@@ -3123,8 +3195,31 @@ export default function AdminApp() {
                     <h1>{form.id ? "Editar notícia" : "Nova notícia"}</h1>
                     <div style={{ color: "#68736e", fontSize: 13 }}>Publique agora, salve como rascunho ou programe.</div>
                   </div>
-                  <button type="button" className="btn secondary" onClick={() => setView("list")}>Voltar</button>
+                  <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
+                    <button
+                      type="button"
+                      className="btn"
+                      style={{ background: "#7c3aed", color: "#fff", padding: "8px 12px", fontSize: 11, fontWeight: 800 }}
+                      onClick={() => setView("feedCreator")}
+                      title="Gerar banner visual para Instagram, Stories ou Reels"
+                    >
+                      🎨 Criar Post Social
+                    </button>
+                    <button type="button" className="btn secondary" onClick={() => setView("list")}>Voltar</button>
+                  </div>
                 </div>
+
+                {hasSavedDraft && !form.id && (
+                  <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", padding: "10px 14px", background: "#fef3c7", border: "1px solid #fde68a", borderRadius: 10, margin: "14px 0" }}>
+                    <span style={{ fontSize: 12, fontWeight: 700, color: "#92400e" }}>
+                      📝 Há um rascunho anterior salvo automaticamente neste computador.
+                    </span>
+                    <div style={{ display: "flex", gap: 6 }}>
+                      <button type="button" className="btn" style={{ padding: "4px 10px", fontSize: 11 }} onClick={restoreDraft}>Restaurar</button>
+                      <button type="button" className="btn secondary" style={{ padding: "4px 10px", fontSize: 11 }} onClick={clearDraft}>Descartar</button>
+                    </div>
+                  </div>
+                )}
 
                 <div className="formGrid">
                   <div className="field full">
@@ -3165,7 +3260,32 @@ export default function AdminApp() {
 
                   <div className="field">
                     <label>Bairro / Região</label>
-                    <input value={form.city} onChange={(e) => setForm({ ...form, city: e.target.value })} />
+                    <input
+                      value={form.city}
+                      onChange={(e) => setForm({ ...form, city: e.target.value })}
+                      placeholder="Ex.: Goiânia, Setor Bueno, Anápolis..."
+                    />
+                    <div style={{ display: "flex", flexWrap: "wrap", gap: 4, marginTop: 6 }}>
+                      {["Goiânia", "Setor Bueno", "Setor Marista", "Setor Central", "Jardim Goiás", "Campinas", "Aparecida de Goiânia", "Anápolis", "Goiás"].map((loc) => (
+                        <button
+                          key={loc}
+                          type="button"
+                          onClick={() => setForm({ ...form, city: loc })}
+                          style={{
+                            fontSize: 10,
+                            fontWeight: 700,
+                            padding: "3px 7px",
+                            borderRadius: 6,
+                            border: form.city === loc ? "1.5px solid #ff6a13" : "1px solid #cbd5e1",
+                            background: form.city === loc ? "#fff0e6" : "#f8fafc",
+                            color: form.city === loc ? "#d94f00" : "#475569",
+                            cursor: "pointer",
+                          }}
+                        >
+                          {loc}
+                        </button>
+                      ))}
+                    </div>
                   </div>
 
                   <div className="field">
@@ -3393,19 +3513,19 @@ export default function AdminApp() {
                     </div>
                   )}
 
-                  <div className="field">
-                    <label>Destaque principal</label>
-                    <div className="checkRow" style={{ marginTop: 8 }}>
-                      <input
-                        id="featured"
-                        type="checkbox"
-                        checked={form.featured}
-                        onChange={(e) => setForm({ ...form, featured: e.target.checked })}
-                      />
-                      <label htmlFor="featured">Mostrar como manchete principal na Home</label>
+                  <div className="field full" style={{ marginTop: 10 }}>
+                    <div style={{ padding: "12px 16px", borderRadius: 12, background: form.featured ? "#fff7ed" : "#f8fafc", border: form.featured ? "1.5px solid #fdba74" : "1px solid #e2e8f0", display: "flex", alignItems: "center", justifyContent: "space-between", gap: 12, cursor: "pointer" }} onClick={() => setForm({ ...form, featured: !form.featured })}><div><b style={{ color: form.featured ? "#c2410c" : "#1e293b", fontSize: 13, display: "flex", alignItems: "center", gap: 6 }}>⭐ {form.featured ? "Destaque Principal Ativado (Manchete da Home)" : "Destacar como Manchete Principal na Home"}</b><span style={{ fontSize: 11, color: "#64748b", display: "block", marginTop: 2 }}>{form.featured ? "Esta notícia aparecerá com a maior foto no topo da página inicial (Hero)." : "Marque para posicionar esta notícia no topo do portal com a maior foto da capa."}</span></div>
+                    <input id="featured" type="checkbox" checked={form.featured} onChange={(e) => setForm({ ...form, featured: e.target.checked })} style={{ width: 22, height: 22, cursor: "pointer", accentColor: "#ff6a13" }} onClick={(e) => e.stopPropagation()} /></div>
+
+
+
+
+
+
+
                     </div>
                   </div>
-                </div>
+
 
                 <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: 10, marginTop: 24, flexWrap: "wrap" }}>
                   <div>

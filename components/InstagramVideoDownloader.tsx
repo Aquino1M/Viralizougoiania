@@ -378,11 +378,21 @@ export default function InstagramVideoDownloader({ onBack }: Props) {
             <div style={{ display: "flex", gap: 10, flexWrap: "wrap", alignItems: "center" }}>
               <a
                 className="btn"
+                href={result.downloadUrl.includes("?") ? `${result.downloadUrl}&whatsapp=1` : `${result.downloadUrl}?whatsapp=1`}
+                download
+                style={{ background: "#16a34a", color: "#fff", textDecoration: "none", padding: "9px 18px", display: "inline-flex", alignItems: "center", gap: 6 }}
+                title="Converte para H.264 Main + AAC + Faststart e comprime para WhatsApp (evita erro de arquivo incompatível)"
+              >
+                <span>💬</span> Baixar para WhatsApp (Comprimido)
+              </a>
+
+              <a
+                className="btn secondary"
                 href={result.downloadUrl}
                 download
-                style={{ background: "#ff5a1f", color: "#fff", textDecoration: "none", padding: "9px 16px" }}
+                style={{ textDecoration: "none", padding: "9px 14px", fontSize: 13 }}
               >
-                ⬇️ Baixar Vídeo MP4
+                ⬇️ Baixar Original
               </a>
 
               {result.directUrl && (

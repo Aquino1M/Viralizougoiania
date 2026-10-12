@@ -368,8 +368,8 @@ export async function publishDuePosts(): Promise<Post[]> {
 
 let hasAutoReclassified = false;
 
-export async function getPosts(opts: { includeDrafts?: boolean; category?: string; limit?: number; status?: string } = {}) {
-  const { includeDrafts = false, category, limit, status } = opts;
+export async function getPosts(opts: { includeDrafts?: boolean; category?: string; limit?: number; status?: string; summaryOnly?: boolean } = {}) {
+  const { includeDrafts = false, category, limit, status, summaryOnly = false } = opts;
 
   if (!hasAutoReclassified && hasSupabaseConfig()) {
     hasAutoReclassified = true;
@@ -385,7 +385,8 @@ export async function getPosts(opts: { includeDrafts?: boolean; category?: strin
 
   if (hasSupabaseConfig()) {
     try {
-      const filters = ["select=*", "order=published_at.desc.nullslast,created_at.desc"];
+      const selectFields = summaryOnly ? "id,slug,title,excerpt,category,city,author,image_url,image_credit,video_url,featured,status,published_at,created_at,updated_at" : "*";
+      const filters = [`select=${selectFields}`, "order=published_at.desc.nullslast,created_at.desc"];
       if (status) filters.push(`status=eq.${encodeURIComponent(status)}`); else if (!includeDrafts) filters.push("status=eq.published");
       if (category) filters.push(`category=eq.${encodeURIComponent(category)}`);
       if (limit) filters.push(`limit=${limit}`);
@@ -510,7 +511,7 @@ export async function createPost(input: PostInput) {
   }
   const autoCategory = (input.source_name || input.source_url) ? classifyEditorial(input) : input.category;
   const loc = inferLocation(input);
-  const city = input.city && input.city !== "Goiânia" ? input.city : (loc.isGoias ? (loc.city || "Goiânia") : loc.city);
+  const city = input.city && input.city !== "Brasil" ? input.city : (loc.city || "Goiânia");
   const post: Post = { ...input, category: autoCategory, city, author, id: randomUUID(), created_at: now, updated_at: now };
   if (hasSupabaseConfig()) {
     try {
@@ -668,11 +669,11 @@ export async function reclassifyExternalPosts(): Promise<{ checked: number; chan
     const loc = inferLocation(post);
     const targetCategory = classifyEditorial(post);
 
-    let targetCity = loc.city;
+    let targetCity = post.city || loc.city;
     if (post.city === "Goiânia" && !loc.isGoiania) {
       // Se era "Goiânia" mas a notícia é estadual de Goiás ou interior, muda para "Goiás" ou para a cidade correta
       targetCity = loc.city;
-    } else if (!post.city || (post.city === "Goiânia" && !isGoias)) {
+    } else if (!post.city) {
       targetCity = loc.city;
     } else if (post.city && post.city !== "Goiânia" && loc.isGoias) {
       targetCity = post.city;

@@ -4,23 +4,29 @@ import NewsCard from "@/components/NewsCard";
 
 import { getCategories, getPosts } from "@/lib/storage";
 import { isGoiasOrigin } from "@/lib/category-classifier";
+import type { Category, Post } from "@/lib/types";
 import Link from "next/link";
 import { unstable_cache } from "next/cache";
 
 export const revalidate = 60;
 
 const getHomePosts = unstable_cache(
-  async () => getPosts({ limit: 80 }).then((posts) => {
-    const cutoff = Date.now() - 30 * 24 * 60 * 60 * 1000;
-    return posts.filter((post) => new Date(post.published_at || post.created_at).getTime() >= cutoff);
-  }),
-  ["public-home-posts-v5"],
-  { revalidate: 60 }
+  async (): Promise<Post[]> => {
+    const posts = await getPosts({ limit: 80, summaryOnly: true });
+    const cutoff = Date.now() - 60 * 24 * 60 * 60 * 1000;
+    const recent = posts.filter((post: Post) => {
+      const t = new Date(post.published_at || post.created_at).getTime();
+      return !Number.isNaN(t) && t >= cutoff;
+    });
+    return (recent.length > 0 ? recent : posts) as Post[];
+  },
+  ["public-home-posts-v7"],
+  { revalidate: 60, tags: ["public-home-posts", "public-home-posts-v7"] }
 );
 
 const getHomeCategories = unstable_cache(
-  async () => getCategories(),
-  ["public-home-categories-v3"],
+  async (): Promise<Category[]> => getCategories(),
+  ["public-home-categories-v4"],
   { revalidate: 300 }
 );
 
@@ -33,35 +39,49 @@ function fmt(v: string | null) {
 }
 
 export default async function Home() {
-  const [posts, categories] = await Promise.all([getHomePosts(), getHomeCategories()]);
+  const [posts, categories]: [Post[], Category[]] = await Promise.all([getHomePosts(), getHomeCategories()]);
 
-  // Filtra ESTRITAMENTE notícias de Goiânia e Goiás (somente notícias desses 2 temas na aba Início)
+  // Filtra notícias de Goiânia e Goiás com prioridade máxima
   const goiasPosts = posts.filter((p) => isGoiasOrigin(p));
+  const otherPosts = posts.filter((p) => !goiasPosts.some((gp) => gp.id === p.id));
 
-  // Destaque principal do Hero: estritamente Goiânia/Goiás
-  const featured = goiasPosts.find((p) => p.featured) || goiasPosts[0];
+  // Pipeline inteligente: prioriza pautas locais; se a lista for curta ou vazia, complementa com as demais publicadas
+  // Isso garante que o portal NUNCA fique em branco ou com seções vazias.
+  const displayPosts = goiasPosts.length >= 6 ? goiasPosts : [...goiasPosts, ...otherPosts];
 
-  // Secundárias do Hero: notícias de Goiânia/Goiás
-  const secondary = goiasPosts.filter((p) => p.id !== featured?.id).slice(0, 2);
+  // Destaque principal do Hero: prioriza o destaque marcado ou primeira matéria disponível
+  const featured =
+    goiasPosts.find((p) => p.featured) ||
+    displayPosts.find((p) => p.featured) ||
+    goiasPosts[0] ||
+    displayPosts[0];
 
+  // Secundárias do Hero
+  const secondary = displayPosts.filter((p) => p.id !== featured?.id).slice(0, 2);
   const heroIds = new Set([featured?.id, ...secondary.map((s) => s.id)].filter(Boolean));
 
-  // Goiânia Agora: pautas locais de Goiás/Goiânia
-  const agora = goiasPosts.filter((p) => !heroIds.has(p.id)).slice(0, 4);
+  // Goiânia Agora: pautas dinâmicas
+  const agoraCandidates = goiasPosts.filter((p) => !heroIds.has(p.id));
+  const agora = (agoraCandidates.length > 0 ? agoraCandidates : displayPosts.filter((p) => !heroIds.has(p.id))).slice(0, 4);
 
-  // Últimas notícias: estritamente de Goiânia e Goiás
-  const latest = goiasPosts.filter((p) => !heroIds.has(p.id)).slice(0, 7);
-  const trending = goiasPosts.slice(0, 6);
+  // Últimas notícias: matérias recentes da capital e do estado
+  const latestCandidates = displayPosts.filter((p) => !heroIds.has(p.id));
+  const latest = (latestCandidates.length > 0 ? latestCandidates : displayPosts).slice(0, 7);
+  const trending = displayPosts.slice(0, 6);
 
   // Cidade em pauta: O assunto que movimenta Goiânia (política local, segurança, bairros)
-  const cityCandidates = goiasPosts.filter(
+  const cityCandidates = displayPosts.filter(
     (p) => !heroIds.has(p.id) && ["Goiânia", "Política", "Segurança", "Bairros"].includes(p.category)
   );
-  const cityPosts = (cityCandidates.length >= 3 ? cityCandidates : goiasPosts.filter((p) => !heroIds.has(p.id))).slice(0, 3);
+  const cityPosts = (
+    cityCandidates.length >= 3
+      ? cityCandidates
+      : displayPosts.filter((p) => !heroIds.has(p.id))
+  ).slice(0, 3);
 
   return (
     <>
-      <Header breakingTitle={featured?.title || goiasPosts[0]?.title} />
+      <Header breakingTitle={featured?.title || displayPosts[0]?.title} />
       <main>
         <section className="heroSection">
           <div className="container">
@@ -71,7 +91,12 @@ export default async function Home() {
             {featured ? (
               <div className="leadGrid">
                 <Link href={`/noticia/${featured.slug}`} className="leadStory">
-                  <img src={featured.image_url} alt="" fetchPriority="high" />
+                  <img
+                    src={featured.image_url}
+                    alt={featured.title}
+                    fetchPriority="high"
+                    decoding="async"
+                  />
                   <div className="leadOverlay" />
                   <div className="leadContent">
                     <div className="storyTag">{featured.category}</div>
@@ -86,7 +111,13 @@ export default async function Home() {
                   {secondary.map((p, i) => (
                     <Link href={`/noticia/${p.slug}`} key={p.id} className="miniLead">
                       <div className="miniImage">
-                        <img src={p.image_url} alt="" loading="lazy" decoding="async" fetchPriority="low" />
+                        <img
+                          src={p.image_url}
+                          alt={p.title}
+                          loading="lazy"
+                          decoding="async"
+                          fetchPriority="low"
+                        />
                         <span>{i === 0 ? "Destaque" : "Mais lida"}</span>
                       </div>
                       <div className="storyTag">{p.category}</div>
@@ -101,7 +132,14 @@ export default async function Home() {
                 </div>
               </div>
             ) : (
-              <div className="empty">Nenhuma notícia de Goiânia ou Goiás publicada ainda.</div>
+              <div className="empty" style={{ padding: "48px 24px", background: "#f8fafc", borderRadius: 16 }}>
+                <p style={{ margin: 0, fontSize: 16, fontWeight: 700, color: "#475569" }}>
+                  Nenhuma notícia publicada ainda.
+                </p>
+                <p style={{ margin: "6px 0 0", fontSize: 13, color: "#94a3b8" }}>
+                  Acesse o painel administrativo para criar ou importar matérias para a capa.
+                </p>
+              </div>
             )}
           </div>
         </section>
@@ -136,13 +174,19 @@ export default async function Home() {
               </div>
             </div>
             <div className="spotlightGrid">
-              {(cityPosts.length ? cityPosts : goiasPosts.slice(0, 3)).map((p, i) => (
+              {(cityPosts.length ? cityPosts : displayPosts.slice(0, 3)).map((p, i) => (
                 <Link
                   key={p.id}
                   href={`/noticia/${p.slug}`}
                   className={`spotlightCard ${i === 0 ? "spotlightMain" : ""}`}
                 >
-                  <img src={p.image_url} alt="" loading="lazy" decoding="async" fetchPriority="low" />
+                  <img
+                    src={p.image_url}
+                    alt={p.title}
+                    loading="lazy"
+                    decoding="async"
+                    fetchPriority="low"
+                  />
                   <div className="spotlightShade" />
                   <div className="spotlightContent">
                     <span>{p.category}</span>
@@ -170,7 +214,13 @@ export default async function Home() {
                 {latest.map((p) => (
                   <article className="latestItem" key={p.id}>
                     <Link href={`/noticia/${p.slug}`} className="latestThumb">
-                      <img src={p.image_url} alt="" loading="lazy" decoding="async" fetchPriority="low" />
+                      <img
+                        src={p.image_url}
+                        alt={p.title}
+                        loading="lazy"
+                        decoding="async"
+                        fetchPriority="low"
+                      />
                     </Link>
                     <div>
                       <div className="storyTag">{p.category}</div>
