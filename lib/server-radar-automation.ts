@@ -1,4 +1,4 @@
-import { createPost, getCategories, getPostIdentityIndex, getPosts, publishAllScheduledNow, publishDuePostsBatch, reclassifyExternalPosts, updatePost } from "@/lib/storage";
+import { archiveOldExternalPosts, createPost, getCategories, getPostIdentityIndex, getPosts, publishAllScheduledNow, publishDuePostsBatch, reclassifyExternalPosts, updatePost } from "@/lib/storage";
 import { buildEditorialExcerpt, formatViralizouArticle, needsEditorialRepair } from "@/lib/rewrite";
 import { slugify } from "@/lib/slug";
 import type { ImportedNews, Post, PostStatus } from "@/lib/types";
@@ -237,7 +237,7 @@ export async function runServerRadarAutomation(options:{force?:boolean}={}):Prom
   await saveAutomationState({running_until:new Date(Date.now()+8*60000).toISOString(),last_run_at:startedAt,last_error:""});
   const errors:string[]=[];let found=0,newItems=0,added=0,published=0,resetPublished=0,reclassified=0;const sourceCounts:Record<string,number>={goias:0,brasil:0,futebol:0,fofocas:0};let football=emptyFootball;let audience:null|{updatedAt:string;pageviewsToday:number;articleViewsToday:number}=null;
   try{
-    const recat=await reclassifyExternalPosts();reclassified=recat.changed;
+    const recat=await reclassifyExternalPosts();reclassified=recat.changed; try{ await archiveOldExternalPosts(7); }catch{}
 
     // Publica toda a fila antiga uma única vez para começar do zero.
     if(Number(state.queue_reset_version||0)<1){

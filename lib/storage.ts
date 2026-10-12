@@ -390,7 +390,7 @@ export async function getPosts(opts: { includeDrafts?: boolean; category?: strin
   });
 
   let result = postsList;
-  if (!includeDrafts) {
+  if (status) { result = result.filter((p) => p.status === status); } else if (!includeDrafts) {
     result = result
       .filter((p) => p.status === "published")
       .map(normalizePublicEditorial);
@@ -741,6 +741,109 @@ export async function reclassifyExternalPosts(): Promise<{ checked: number; chan
   } catch {}
 
   return { checked: rawPosts.length, changed: changes.length, byCategory };
+}
+
+export async function archiveOldExternalPosts(days = 7): Promise<{
+  checked: number;
+  archived: number;
+  totalArchived?: number;
+}> {
+  const cutoffMs = Date.now() - days * 24 * 60 * 60 * 1000;
+  const cutoffIso = new Date(cutoffMs).toISOString();
+
+  let archivedCount = 0;
+  let checkedCount = 0;
+
+  if (hasSupabaseConfig()) {
+    try {
+      const pageSize = 1000;
+      const idsToArchive: string[] = [];
+
+      for (let offset = 0; offset < 50000; offset += pageSize) {
+        const rows = await sb(
+          `posts?select=id,title,excerpt,city,category,published_at,created_at&status=eq.published&published_at=lt.${encodeURIComponent(
+            cutoffIso
+          )}&order=published_at.asc&limit=${pageSize}&offset=${offset}`
+        );
+
+        if (!Array.isArray(rows) || rows.length === 0) break;
+        checkedCount += rows.length;
+
+        for (const post of rows as Post[]) {
+          if (!isGoiasOrigin(post)) {
+            idsToArchive.push(post.id);
+          }
+        }
+
+        if (rows.length < pageSize) break;
+      }
+
+      try {
+        const nullPubRows = await sb(
+          `posts?select=id,title,excerpt,city,category,published_at,created_at&status=eq.published&published_at=is.null&created_at=lt.${encodeURIComponent(
+            cutoffIso
+          )}&limit=1000`
+        );
+        if (Array.isArray(nullPubRows)) {
+          for (const post of nullPubRows as Post[]) {
+            if (!isGoiasOrigin(post) && !idsToArchive.includes(post.id)) {
+              idsToArchive.push(post.id);
+            }
+          }
+        }
+      } catch {}
+
+      const updatedAt = new Date().toISOString();
+      for (let i = 0; i < idsToArchive.length; i += 75) {
+        const chunk = idsToArchive.slice(i, i + 75);
+        const filter = chunk.map((id) => `"${id.replace(/"/g, "")}"`).join(",");
+        try {
+          await sb(`posts?id=in.(${filter})`, {
+            method: "PATCH",
+            headers: { Prefer: "return=minimal" },
+            body: JSON.stringify({
+              status: "archived",
+              updated_at: updatedAt,
+            }),
+          });
+          archivedCount += chunk.length;
+        } catch (err: any) {
+          console.warn("Erro ao salvar lote arquivado no Supabase:", err.message);
+        }
+      }
+    } catch (err: any) {
+      console.warn("Erro no processo de arquivamento no Supabase:", err.message);
+    }
+  }
+
+  try {
+    const local = await readLocal();
+    let localChanged = false;
+    for (const post of local) {
+      if (post.status === "published") {
+        const postDate = new Date(post.published_at || post.created_at).getTime();
+        if (postDate < cutoffMs && !isGoiasOrigin(post)) {
+          post.status = "archived";
+          post.updated_at = new Date().toISOString();
+          localChanged = true;
+          if (!hasSupabaseConfig()) {
+            archivedCount++;
+          }
+        }
+      }
+    }
+    if (localChanged) {
+      await writeLocal(local);
+    }
+  } catch {}
+
+  const stats = await getPostStats().catch(() => null);
+
+  return {
+    checked: checkedCount,
+    archived: archivedCount,
+    totalArchived: stats?.archived ?? 0,
+  };
 }
 
 export function storageMode() {
