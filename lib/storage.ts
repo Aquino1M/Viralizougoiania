@@ -345,8 +345,8 @@ export async function publishDuePosts(): Promise<Post[]> {
 
 let hasAutoReclassified = false;
 
-export async function getPosts(opts: { includeDrafts?: boolean; category?: string; limit?: number } = {}) {
-  const { includeDrafts = false, category, limit } = opts;
+export async function getPosts(opts: { includeDrafts?: boolean; category?: string; limit?: number; status?: string } = {}) {
+  const { includeDrafts = false, category, limit, status } = opts;
 
   if (!hasAutoReclassified && hasSupabaseConfig()) {
     hasAutoReclassified = true;
@@ -363,7 +363,7 @@ export async function getPosts(opts: { includeDrafts?: boolean; category?: strin
   if (hasSupabaseConfig()) {
     try {
       const filters = ["select=*", "order=published_at.desc.nullslast,created_at.desc"];
-      if (!includeDrafts) filters.push("status=eq.published");
+      if (status) filters.push(`status=eq.${encodeURIComponent(status)}`); else if (!includeDrafts) filters.push("status=eq.published");
       if (category) filters.push(`category=eq.${encodeURIComponent(category)}`);
       if (limit) filters.push(`limit=${limit}`);
       const posts: Post[] = await sb(`posts?${filters.join("&")}`);
