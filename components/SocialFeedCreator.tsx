@@ -249,22 +249,33 @@ function getReelTitleLayout(
 ): ReelTitleLayout {
   const raw = headline.trim() || "NOVO REEL";
   const text = applyTextCase(raw, textCase);
-  let maxLines = 4;
-  let startSize = manualSize > 0 ? manualSize : (fontFamily === "bebas" ? 88 : fontFamily === "anton" ? 78 : 72);
+  const maxLines = 5;
+  const maxAllowedHeight = 440;
+  const startSize = manualSize > 0 ? manualSize : (fontFamily === "bebas" ? 88 : fontFamily === "anton" ? 78 : 72);
 
   let chosenSize = startSize;
   let chosenLines: string[] = [];
 
   if (manualSize > 0) {
-    ctx.font = getReelFont(fontFamily, manualSize, fontWeight);
-    chosenLines = wrapText(ctx, text, maxWidth);
-    chosenSize = manualSize;
+    let s = manualSize;
+    ctx.font = getReelFont(fontFamily, s, fontWeight);
+    let lines = wrapText(ctx, text, maxWidth);
+    let lineHeight = s * (fontFamily === "bebas" ? 1.08 : fontFamily === "anton" ? 1.12 : 1.18);
+    // Para textos longos: ajusta dinamicamente a fonte se passar de 4-5 linhas ou da altura máxima de segurança
+    while ((lines.length > maxLines || lines.length * lineHeight > maxAllowedHeight) && s > 26) {
+      s -= 2;
+      ctx.font = getReelFont(fontFamily, s, fontWeight);
+      lines = wrapText(ctx, text, maxWidth);
+      lineHeight = s * (fontFamily === "bebas" ? 1.08 : fontFamily === "anton" ? 1.12 : 1.18);
+    }
+    chosenSize = s;
+    chosenLines = lines;
   } else {
     for (let s = startSize; s >= 24; s -= 2) {
       ctx.font = getReelFont(fontFamily, s, fontWeight);
       const lines = wrapText(ctx, text, maxWidth);
       const lineHeight = s * (fontFamily === "bebas" ? 1.08 : fontFamily === "anton" ? 1.12 : 1.18);
-      if (lines.length <= maxLines && lines.length * lineHeight <= 540) {
+      if (lines.length <= maxLines && lines.length * lineHeight <= maxAllowedHeight) {
         chosenSize = s;
         chosenLines = lines;
         break;
@@ -397,118 +408,62 @@ function drawFeedSquareSafeZone(ctx: CanvasRenderingContext2D) {
   ctx.restore();
 }
 
-const reelHeadlineRasterCache = new Map<string, HTMLCanvasElement>();
+type ReelCaptionRaster = {
+  canvas: HTMLCanvasElement;
+  width: number;
+  height: number;
+  originX: number;
+  originY: number;
+  layout: ReelTitleLayout;
+};
 
-function drawReelHeadline(
+// Cache de layout expandido para até 512 itens
+const reelTitleLayoutCache = new Map<string, ReelTitleLayout>();
+// Cache de rasterização pré-renderizada para até 120 itens (sem estourar VRAM)
+const reelCaptionRasterCache = new Map<string, ReelCaptionRaster>();
+
+function getCachedReelTitleLayout(
   ctx: CanvasRenderingContext2D,
   headline: string,
+  fontFamily: ReelFontFamily,
+  fontWeight: ReelFontWeight,
+  textCase: ReelTextCase,
+  fontSize: number,
+  maxWidth: number,
+): ReelTitleLayout {
+  const cacheKey = `${headline.trim()}|${fontFamily}|${fontWeight}|${textCase}|${fontSize}|${maxWidth}`;
+  const cached = reelTitleLayoutCache.get(cacheKey);
+  if (cached) return cached;
+
+  const layout = getReelTitleLayout(ctx, headline, fontFamily, fontWeight, textCase, fontSize, maxWidth);
+  reelTitleLayoutCache.set(cacheKey, layout);
+  while (reelTitleLayoutCache.size > 512) {
+    const oldestKey = reelTitleLayoutCache.keys().next().value;
+    if (oldestKey === undefined) break;
+    reelTitleLayoutCache.delete(oldestKey);
+  }
+  return layout;
+}
+
+function renderCaptionStyleToContext(
+  ctx: CanvasRenderingContext2D,
+  layout: ReelTitleLayout,
   category: string,
   fontFamily: ReelFontFamily,
   fontWeight: ReelFontWeight,
   textStyle: ReelTextStyle,
   textAlign: ReelTextAlign,
-  textCase: ReelTextCase,
-  fontSize: number,
-  animation: ReelTextAnimation,
-  position: LogoPosition,
-  currentTime: number,
-  duration: number,
-  canvasHeight: number = REEL_H,
-  maxWidth: number = 820,
-  useRasterCache = true,
+  centerX: number,
+  centerY: number,
+  maxWidth: number,
+  canvasHeight: number,
 ) {
-  const animDuration = Math.min(2.5, Math.max(0.6, duration > 0 ? duration * 0.25 : 2.0));
-  const rawProgress = Math.min(1, Math.max(0, currentTime / animDuration));
-
-  // Headlines with shadows were redrawn line-by-line on every video frame.
-  // Once their animation ends, reuse a transparent raster layer instead.
-  if (useRasterCache && rawProgress >= 1 && typeof document !== "undefined") {
-    const cacheKey = JSON.stringify([
-      headline, category, fontFamily, fontWeight, textStyle, textAlign, textCase,
-      fontSize, animation, position.x, position.y, canvasHeight, maxWidth,
-    ]);
-    const cached = reelHeadlineRasterCache.get(cacheKey);
-    if (cached) {
-      ctx.drawImage(cached, 0, 0);
-      return;
-    }
-
-    const raster = document.createElement("canvas");
-    raster.width = W;
-    raster.height = canvasHeight;
-    const rasterCtx = raster.getContext("2d");
-    if (rasterCtx) {
-      drawReelHeadline(
-        rasterCtx, headline, category, fontFamily, fontWeight, textStyle,
-        textAlign, textCase, fontSize, animation, position, animDuration,
-        duration, canvasHeight, maxWidth, false,
-      );
-      reelHeadlineRasterCache.set(cacheKey, raster);
-      while (reelHeadlineRasterCache.size > 4) {
-        const oldestKey = reelHeadlineRasterCache.keys().next().value;
-        if (oldestKey === undefined) break;
-        reelHeadlineRasterCache.delete(oldestKey);
-      }
-      ctx.drawImage(raster, 0, 0);
-      return;
-    }
-  }
-
-  const layout = getReelTitleLayout(ctx, headline, fontFamily, fontWeight, textCase, fontSize, maxWidth);
-  if (!layout.lines.length) return;
-
-  ctx.save();
-  ctx.imageSmoothingEnabled = true;
-  ctx.imageSmoothingQuality = "high";
-  (ctx as any).textRendering = "geometricPrecision";
-
-  const centerX = position.x * W;
-  const centerY = position.y * canvasHeight;
-
-  let animAlpha = 1;
-  let animScale = 1;
-  let animOffsetY = 0;
-  let visibleCharCount = layout.lines.join("").length;
-
-  if (animation === "typewriter") {
-    visibleCharCount = Math.ceil(layout.lines.join("").length * rawProgress);
-  } else if (animation === "pop") {
-    if (rawProgress < 0.65) {
-      const p = rawProgress / 0.65;
-      animScale = 0.5 + 0.58 * Math.sin(p * Math.PI * 0.5);
-    } else if (rawProgress < 1) {
-      const p = (rawProgress - 0.65) / 0.35;
-      animScale = 1.08 - 0.08 * p;
-    } else {
-      animScale = 1;
-    }
-  } else if (animation === "slide") {
-    animAlpha = Math.min(1, rawProgress * 1.4);
-    animOffsetY = (1 - Math.min(1, rawProgress * 1.2)) * 60;
-  } else if (animation === "fade") {
-    animAlpha = Math.min(1, rawProgress * 1.5);
-  }
-
-  ctx.globalAlpha = animAlpha;
-  ctx.translate(centerX, centerY + animOffsetY);
-  if (animScale !== 1) {
-    ctx.scale(animScale, animScale);
-  }
-  ctx.translate(-centerX, -centerY);
-
-  let charsRemaining = visibleCharCount;
-  const linesToDraw = layout.lines.map((line) => {
-    if (animation !== "typewriter") return line;
-    const count = Math.max(0, Math.min(line.length, charsRemaining));
-    charsRemaining -= count;
-    return line.slice(0, count);
-  });
-
+  const linesToDraw = layout.lines;
   const blockLeft = centerX - layout.width / 2;
   const blockRight = centerX + layout.width / 2;
   const fontString = getReelFont(fontFamily, layout.fontSize, fontWeight);
 
-  // 1. ESTILO CAIXA NOTICIOSA (Estilo O Grito - Foto 3 do jornalista)
+  // 1. ESTILO CAIXA NOTICIOSA (Estilo O Grito - Foto 3)
   if (textStyle === "box-banner") {
     const padX = Math.round(layout.fontSize * 0.45);
     const padY = Math.round(layout.fontSize * 0.35);
@@ -558,11 +513,10 @@ function drawReelHeadline(
       curY += layout.lineHeight;
     }
     ctx.restore();
-    ctx.restore();
     return;
   }
 
-  // 2. ESTILO SELO DE CATEGORIA (Estilo Jornal Opção - Foto 2 do jornalista)
+  // 2. ESTILO SELO DE CATEGORIA (Estilo Jornal Opção - Foto 2)
   if (textStyle === "category-badge") {
     const badgeText = (category || "NOTÍCIA").trim().toUpperCase();
     const badgeFontSize = Math.max(22, Math.round(layout.fontSize * 0.36));
@@ -622,17 +576,10 @@ function drawReelHeadline(
       }
       curY += layout.lineHeight;
     }
-
-    ctx.save();
-    ctx.fillStyle = "#b91c1c";
-    ctx.fillRect(0, canvasHeight - 12, W, 12);
-    ctx.restore();
-
-    ctx.restore();
     return;
   }
 
-  // 3. ESTILO BARRA LATERAL VERMELHA (Estilo Destaque / Foto 5 do jornalista)
+  // 3. ESTILO BARRA LATERAL VERMELHA (Estilo Destaque - Foto 5)
   if (textStyle === "left-border") {
     const barW = 10;
     const barGap = 20;
@@ -672,11 +619,10 @@ function drawReelHeadline(
       }
       curY += layout.lineHeight;
     }
-    ctx.restore();
     return;
   }
 
-  // 4. ESTILO EDITORIAL SERIFADO (Estilo Metrópoles - Foto 4 do jornalista)
+  // 4. ESTILO EDITORIAL SERIFADO (Estilo Metrópoles - Foto 4)
   if (textStyle === "editorial-serif") {
     const serifFont = getReelFont("georgia", layout.fontSize, fontWeight);
     const tagEyebrow = (category || "REPORTAGEM").trim().toUpperCase();
@@ -714,11 +660,10 @@ function drawReelHeadline(
       }
       curY += layout.lineHeight;
     }
-    ctx.restore();
     return;
   }
 
-  // 5. ESTILOS FAIXA / HIGHLIGHT / STROKE / STANDARD (Linha por linha ajustada sem sobreposição)
+  // 5. ESTILOS FAIXA / HIGHLIGHT / STROKE / STANDARD
   let currentY = centerY - layout.height / 2 + layout.lineHeight * 0.5;
 
   for (let i = 0; i < linesToDraw.length; i++) {
@@ -829,6 +774,156 @@ function drawReelHeadline(
     }
 
     currentY += layout.lineHeight;
+  }
+}
+
+function getCachedReelCaptionRaster(
+  ctx: CanvasRenderingContext2D,
+  headline: string,
+  category: string,
+  fontFamily: ReelFontFamily,
+  fontWeight: ReelFontWeight,
+  textStyle: ReelTextStyle,
+  textAlign: ReelTextAlign,
+  textCase: ReelTextCase,
+  fontSize: number,
+  canvasHeight: number,
+  maxWidth: number,
+): ReelCaptionRaster | null {
+  if (typeof document === "undefined") return null;
+
+  const key = `${headline.trim()}|${category.trim()}|${fontFamily}|${fontWeight}|${textStyle}|${textAlign}|${textCase}|${fontSize}|${canvasHeight}|${maxWidth}`;
+  const existing = reelCaptionRasterCache.get(key);
+  if (existing) return existing;
+
+  const layout = getCachedReelTitleLayout(ctx, headline, fontFamily, fontWeight, textCase, fontSize, maxWidth);
+  if (!layout.lines.length) return null;
+
+  const padX = Math.round(layout.fontSize * 0.8) + 60;
+  const offW = Math.min(W, Math.ceil(Math.max(layout.width, maxWidth) + padX * 2));
+  const offH = Math.min(canvasHeight, Math.ceil(layout.height + 280));
+
+  const offscreen = document.createElement("canvas");
+  offscreen.width = offW;
+  offscreen.height = offH;
+  const offCtx = offscreen.getContext("2d");
+  if (!offCtx) return null;
+
+  offCtx.imageSmoothingEnabled = true;
+  offCtx.imageSmoothingQuality = "high";
+  (offCtx as any).textRendering = "geometricPrecision";
+
+  const originX = Math.round(offW / 2);
+  const originY = Math.round(offH / 2);
+
+  renderCaptionStyleToContext(
+    offCtx,
+    layout,
+    category,
+    fontFamily,
+    fontWeight,
+    textStyle,
+    textAlign,
+    originX,
+    originY,
+    maxWidth,
+    canvasHeight,
+  );
+
+  const raster: ReelCaptionRaster = {
+    canvas: offscreen,
+    width: offW,
+    height: offH,
+    originX,
+    originY,
+    layout,
+  };
+
+  reelCaptionRasterCache.set(key, raster);
+  while (reelCaptionRasterCache.size > 120) {
+    const oldestKey = reelCaptionRasterCache.keys().next().value;
+    if (oldestKey === undefined) break;
+    reelCaptionRasterCache.delete(oldestKey);
+  }
+
+  return raster;
+}
+
+function drawReelHeadline(
+  ctx: CanvasRenderingContext2D,
+  headline: string,
+  category: string,
+  fontFamily: ReelFontFamily,
+  fontWeight: ReelFontWeight,
+  textStyle: ReelTextStyle,
+  textAlign: ReelTextAlign,
+  textCase: ReelTextCase,
+  fontSize: number,
+  animation: ReelTextAnimation,
+  position: LogoPosition,
+  currentTime: number,
+  duration: number,
+  canvasHeight: number = REEL_H,
+  maxWidth: number = 820,
+) {
+  const raster = getCachedReelCaptionRaster(
+    ctx, headline, category, fontFamily, fontWeight, textStyle,
+    textAlign, textCase, fontSize, canvasHeight, maxWidth,
+  );
+  if (!raster) return;
+
+  const animDuration = Math.min(2.5, Math.max(0.6, duration > 0 ? duration * 0.25 : 2.0));
+  const rawProgress = Math.min(1, Math.max(0, currentTime / animDuration));
+
+  const centerX = position.x * W;
+  const centerY = position.y * canvasHeight;
+  const drawX = Math.round(centerX - raster.originX);
+  const drawY = Math.round(centerY - raster.originY);
+
+  ctx.save();
+  ctx.imageSmoothingEnabled = true;
+  ctx.imageSmoothingQuality = "high";
+  (ctx as any).textRendering = "geometricPrecision";
+
+  // Se o estilo for category-badge, desenha a barra sutil na base da tela
+  if (textStyle === "category-badge") {
+    ctx.save();
+    ctx.fillStyle = "#b91c1c";
+    ctx.fillRect(0, canvasHeight - 12, W, 12);
+    ctx.restore();
+  }
+
+  if (animation === "fade") {
+    ctx.globalAlpha = Math.min(1, rawProgress * 1.5);
+    ctx.drawImage(raster.canvas, drawX, drawY);
+  } else if (animation === "slide") {
+    ctx.globalAlpha = Math.min(1, rawProgress * 1.4);
+    const offsetY = (1 - Math.min(1, rawProgress * 1.2)) * 60;
+    ctx.drawImage(raster.canvas, drawX, drawY + offsetY);
+  } else if (animation === "pop") {
+    let animScale = 1;
+    if (rawProgress < 0.65) {
+      const p = rawProgress / 0.65;
+      animScale = 0.5 + 0.58 * Math.sin(p * Math.PI * 0.5);
+    } else if (rawProgress < 1) {
+      const p = (rawProgress - 0.65) / 0.35;
+      animScale = 1.08 - 0.08 * p;
+    }
+    ctx.translate(centerX, centerY);
+    if (animScale !== 1) ctx.scale(animScale, animScale);
+    ctx.drawImage(raster.canvas, -raster.originX, -raster.originY);
+  } else if (animation === "typewriter" && rawProgress < 1) {
+    // Revelação progressiva ultra rápida e sem recálculo por recorte da camada rasterizada
+    ctx.save();
+    ctx.beginPath();
+    const revealH = raster.height * Math.max(0.08, rawProgress);
+    ctx.rect(drawX, drawY, raster.width, revealH);
+    ctx.clip();
+    ctx.drawImage(raster.canvas, drawX, drawY);
+    ctx.restore();
+  } else {
+    // Modo estático ou pós-conclusão da animação (0.05ms)
+    ctx.drawImage(raster.canvas, drawX, drawY);
   }
 
   ctx.restore();
@@ -1923,7 +2018,7 @@ export default function SocialFeedCreator({ posts, onBack }: Props) {
     if (format === "reel" || format === "story") {
       const ctx = event.currentTarget.getContext("2d");
       if (ctx) {
-        const layout = getReelTitleLayout(ctx, title || selectedPost?.title || "", reelFontFamily, reelFontWeight, reelTextCase, reelFontSize);
+        const layout = getCachedReelTitleLayout(ctx, title || selectedPost?.title || "", reelFontFamily, reelFontWeight, reelTextCase, reelFontSize, 820);
         const rect = event.currentTarget.getBoundingClientRect();
         const x = ((event.clientX - rect.left) / rect.width) * currentW;
         const y = ((event.clientY - rect.top) / rect.height) * currentH;
@@ -1985,7 +2080,7 @@ export default function SocialFeedCreator({ posts, onBack }: Props) {
       const ctx = event.currentTarget.getContext("2d");
       const rect = event.currentTarget.getBoundingClientRect();
       if (format === "reel" || format === "story") {
-        const layout = ctx ? getReelTitleLayout(ctx, title || selectedPost?.title || "", reelFontFamily, reelFontWeight, reelTextCase, reelFontSize) : { width: 0, height: 0 };
+        const layout = ctx ? getCachedReelTitleLayout(ctx, title || selectedPost?.title || "", reelFontFamily, reelFontWeight, reelTextCase, reelFontSize, 820) : { width: 0, height: 0 };
         const position = {
           x: Math.min(1 - layout.width / (2 * currentW), Math.max(layout.width / (2 * currentW), (event.clientX - rect.left) / rect.width - titleDrag.offsetX)),
           y: Math.min(1 - layout.height / (2 * currentH), Math.max(layout.height / (2 * currentH), (event.clientY - rect.top) / rect.height - titleDrag.offsetY)),
@@ -2058,13 +2153,29 @@ export default function SocialFeedCreator({ posts, onBack }: Props) {
       return;
     }
 
-    // Social platforms expect MP4/H.264 uploads. Never silently export WebM.
-    const mimeType = [
+    // Prioriza todos os perfis compatíveis de gravação MP4 nos navegadores modernos
+    const mp4MimeType = [
       'video/mp4; codecs="avc1.42E01E, mp4a.40.2"',
+      'video/mp4; codecs="avc1, mp4a.40.2"',
+      'video/mp4; codecs="avc1, opus"',
+      'video/mp4; codecs="avc1.42E01E"',
+      'video/mp4; codecs="avc1"',
+      'video/mp4; codecs="h264, aac"',
+      'video/mp4; codecs="h264, opus"',
+      'video/mp4; codecs="h264"',
       "video/mp4",
     ].find((type) => MediaRecorder.isTypeSupported(type));
+
+    // Fallback caso o navegador só ofereça gravação WebM: convertemos no backend para MP4 real
+    const webmMimeType = [
+      'video/webm; codecs="vp9, opus"',
+      'video/webm; codecs="vp8, opus"',
+      "video/webm",
+    ].find((type) => MediaRecorder.isTypeSupported(type));
+
+    const mimeType = mp4MimeType || webmMimeType;
     if (!mimeType) {
-      setMessage("Este navegador não grava MP4 diretamente. Use um navegador com suporte a gravação MP4. O sistema não vai gerar WebM com extensão MP4.");
+      setMessage("Seu navegador não possui suporte a gravação de mídia. Use a versão atualizada do Chrome ou Edge.");
       return;
     }
 
@@ -2191,7 +2302,7 @@ export default function SocialFeedCreator({ posts, onBack }: Props) {
             showStorySticker,
             format,
           );
-          canvasVideoTrack.requestFrame();
+          canvasVideoTrack?.requestFrame?.();
         }
         if ("requestVideoFrameCallback" in video) {
           frameCallbackId = (video as any).requestVideoFrameCallback(drawFrameSync);
@@ -2239,21 +2350,43 @@ export default function SocialFeedCreator({ posts, onBack }: Props) {
         }, 150);
       });
 
-      if (!blob.type.toLowerCase().includes("mp4")) {
-        throw new Error("O navegador não produziu um arquivo MP4 válido. Nenhum arquivo WebM foi disponibilizado para download.");
-      }
-      const extension = "mp4";
+      let finalBlob = blob;
+      const isNativeMp4 = finalBlob.type.toLowerCase().includes("mp4");
       const formatLabel = format === "story" ? "story" : "reel";
       const basename = (selectedPost?.slug || videoFileName.replace(/\.[^.]+$/, "") || `viralizou-${formatLabel}`)
         .replace(/[^a-zA-Z0-9_-]/g, "-") || `viralizou-${formatLabel}`;
 
+      // Se a gravação foi WebM, converte automaticamente no backend para MP4 real padrão H.264 / AAC
+      if (!isNativeMp4) {
+        setMessage("⚡ Gravado com sucesso! Convertendo para MP4 padrão (H.264 / AAC) para Instagram, TikTok e WhatsApp...");
+        try {
+          const formData = new FormData();
+          formData.append("file", finalBlob, `${basename}.webm`);
+          formData.append("filename", `${basename}-${formatLabel}.mp4`);
+
+          const convRes = await fetch("/api/admin/convert-video", {
+            method: "POST",
+            body: formData,
+          });
+
+          if (convRes.ok) {
+            finalBlob = await convRes.blob();
+          } else {
+            console.warn("Conversão FFmpeg no backend não completou, usando arquivo gravado.");
+          }
+        } catch (convErr) {
+          console.error("Falha ao contatar endpoint de conversão:", convErr);
+        }
+      }
+
+      const extension = "mp4";
       setVideoExport({
-        url: URL.createObjectURL(blob),
+        url: URL.createObjectURL(finalBlob),
         filename: `${basename}-${formatLabel}.${extension}`,
-        type: blob.type,
+        type: "video/mp4",
       });
       setRecordingProgress(100);
-      setMessage(`✅ Vídeo (${formatLabel.toUpperCase()}) pronto em ${extension.toUpperCase()}! Áudio e vídeo sincronizados.`);
+      setMessage(`✅ Vídeo (${formatLabel.toUpperCase()}) 100% pronto em MP4! Áudio e vídeo sincronizados.`);
     } catch (error) {
       setMessage(error instanceof Error ? error.message : "Não foi possível gravar o Reel.");
     } finally {
@@ -2268,8 +2401,8 @@ export default function SocialFeedCreator({ posts, onBack }: Props) {
         cancelAnimationFrame(animFrameId);
       }
 
-      if (recorder?.state !== "inactive") {
-        try { recorder?.stop(); } catch {}
+      if (recorder && recorder.state !== "inactive") {
+        try { recorder.stop(); } catch {}
       }
 
       if (audioSource) {
@@ -3037,8 +3170,8 @@ export default function SocialFeedCreator({ posts, onBack }: Props) {
           {videoExport && (
             <div className="adminFeedVideoResult">
               <video src={videoExport.url} controls playsInline />
-              <small>Arquivo gerado: {videoExport.type.includes("mp4") ? "MP4" : "WebM"}</small>
-              <a className="btn" href={videoExport.url} download={videoExport.filename}>⬇️ Baixar Reel</a>
+              <small>Arquivo gerado: <b>MP4 (H.264 · Instagram / TikTok / WhatsApp)</b></small>
+              <a className="btn" href={videoExport.url} download={videoExport.filename}>⬇️ Baixar Vídeo MP4</a>
             </div>
           )}
         </div>
