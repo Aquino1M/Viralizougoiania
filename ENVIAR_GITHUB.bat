@@ -28,7 +28,7 @@ echo [1/3] Adicionando arquivos modificados (git add -A)...
 git add -A
 
 set COMMIT_MSG=%*
-if "%COMMIT_MSG%"=="" set COMMIT_MSG=feat: exibir video e mini IA apenas em Reels e Stories e manter Feed limpo para fotos
+if "%COMMIT_MSG%"=="" set COMMIT_MSG=fix: desacoplar mini-ia-constants do bundle cliente para eliminar erro Turbopack child_process
 
 echo.
 echo [2/3] Criando commit...

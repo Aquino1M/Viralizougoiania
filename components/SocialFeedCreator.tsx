@@ -2,7 +2,7 @@
 
 import { ChangeEvent, PointerEvent as ReactPointerEvent, useEffect, useRef, useState } from "react";
 import type { Post } from "@/lib/types";
-import { type MiniIaEditLevel, MINI_IA_LEVELS } from "@/lib/mini-ia-editor";
+import { type MiniIaEditLevel, MINI_IA_LEVELS } from "@/lib/mini-ia-constants";
 
 type Props = {
   posts: Post[];
