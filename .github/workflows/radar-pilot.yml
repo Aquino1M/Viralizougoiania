@@ -2,7 +2,7 @@ name: Ciclo Unico 24x7
 
 on:
   schedule:
-    - cron: "*/10 * * * *"
+    - cron: "4,14,24,34,44,54 * * * *"
   workflow_dispatch:
 
 permissions:
@@ -44,7 +44,7 @@ jobs:
             -H "x-vercel-trusted-oidc-idp-token: $OIDC_TOKEN" \
             -H "x-automation-secret: viralizou-radar-secret-2026" \
             -H "Content-Type: application/json" \
-            "https://viralizougoiania.vercel.app/api/automation/radar-cycle")"
+            "https://viralizougoiania.vercel.app/api/automation/radar-cycle?secret=viralizou-radar-secret-2026")"
           cat "$BODY_FILE"
           echo
           if [ "$HTTP_CODE" -lt 200 ] || [ "$HTTP_CODE" -ge 300 ]; then

@@ -28,7 +28,7 @@ echo [1/3] Adicionando arquivos modificados (git add -A)...
 git add -A
 
 set COMMIT_MSG=%*
-if "%COMMIT_MSG%"=="" set COMMIT_MSG=fix: remover cron vercel.json para desbloquear deploy na Vercel e restaurar logos originais
+if "%COMMIT_MSG%"=="" set COMMIT_MSG=feat: exibir video e mini IA apenas em Reels e Stories e manter Feed limpo para fotos
 
 echo.
 echo [2/3] Criando commit...

@@ -3460,72 +3460,78 @@ async function fixWebmDuration(blob: Blob, durationSec: number): Promise<Blob> {
               </label>
               <input ref={imageInputRef} type="file" accept="image/png,image/jpeg,image/webp" onChange={onImageChange} />
               <small style={{ color: "#64748b", display: "block", marginTop: 2 }}>
-                Perfeito para montar post do Feed (4:5 e 1:1), Capas e Stories diretamente.
+                {format === "reel" || format === "story"
+                  ? "Envie uma foto caso queira usar imagem estática de fundo nos Stories ou Reels."
+                  : "Perfeito para montar post do Feed (4:5 e 1:1) e Capas diretamente."}
               </small>
             </div>
 
-            {/* 2. UPLOAD DE VÍDEO */}
-            <div style={{ marginBottom: 12 }}>
-              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 4 }}>
-                <label style={{ fontSize: 12, fontWeight: 600, color: "#334155" }}>
-                  🎬 Enviar Vídeo do seu dispositivo (MP4, MOV, WebM)
-                </label>
-                {onOpenCompressor && (
-                  <button
-                    type="button"
-                    onClick={onOpenCompressor}
-                    style={{ background: "#fef3c7", border: "1px solid #fde68a", color: "#92400e", borderRadius: 6, padding: "2px 8px", fontSize: 11, fontWeight: 700, cursor: "pointer" }}
-                    title="Abre o Compressor de Vídeo para WhatsApp"
-                  >
-                    🗜️ Compressor WhatsApp
-                  </button>
-                )}
-              </div>
-              <input ref={videoInputRef} type="file" accept="video/*" onChange={onVideoChange} />
-              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginTop: 3 }}>
-                <small style={{ color: "#64748b" }}>
-                  {videoFileName ? `${videoFileName}${videoReady ? " · pronto para prévia" : " · carregando..."}` : "Vídeo de até 250 MB para Reel, Story ou Feed."}
-                </small>
-                {videoUrl && (
-                  <button
-                    type="button"
-                    onClick={removeVideo}
-                    style={{ background: "transparent", border: "none", color: "#dc2626", fontSize: 11, fontWeight: 700, cursor: "pointer", textDecoration: "underline" }}
-                  >
-                    Remover vídeo
-                  </button>
-                )}
-              </div>
-            </div>
+            {/* 2. UPLOAD DE VÍDEO E IMPORTADOR DE LINK (APENAS REELS E STORIES) */}
+            {(format === "reel" || format === "story") && (
+              <>
+                <div style={{ marginBottom: 12 }}>
+                  <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 4 }}>
+                    <label style={{ fontSize: 12, fontWeight: 600, color: "#334155" }}>
+                      🎬 Enviar Vídeo do seu dispositivo (MP4, MOV, WebM)
+                    </label>
+                    {onOpenCompressor && (
+                      <button
+                        type="button"
+                        onClick={onOpenCompressor}
+                        style={{ background: "#fef3c7", border: "1px solid #fde68a", color: "#92400e", borderRadius: 6, padding: "2px 8px", fontSize: 11, fontWeight: 700, cursor: "pointer" }}
+                        title="Abre o Compressor de Vídeo para WhatsApp"
+                      >
+                        🗜️ Compressor WhatsApp
+                      </button>
+                    )}
+                  </div>
+                  <input ref={videoInputRef} type="file" accept="video/*" onChange={onVideoChange} />
+                  <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginTop: 3 }}>
+                    <small style={{ color: "#64748b" }}>
+                      {videoFileName ? `${videoFileName}${videoReady ? " · pronto para prévia" : " · carregando..."}` : "Vídeo de até 250 MB para Reels ou Stories."}
+                    </small>
+                    {videoUrl && (
+                      <button
+                        type="button"
+                        onClick={removeVideo}
+                        style={{ background: "transparent", border: "none", color: "#dc2626", fontSize: 11, fontWeight: 700, cursor: "pointer", textDecoration: "underline" }}
+                      >
+                        Remover vídeo
+                      </button>
+                    )}
+                  </div>
+                </div>
 
-            {/* 3. BAIXAR VÍDEO DIRETO DE LINK (TikTok, Instagram, Twitter/X) */}
-            <div style={{ background: "#ffffff", border: "1.5px dashed #4f46e5", borderRadius: 10, padding: "10px 12px", marginBottom: 12 }}>
-              <label style={{ color: "#312e81", fontWeight: 700, fontSize: 12, display: "flex", alignItems: "center", gap: 6, marginBottom: 4 }}>
-                <span>📥 Baixar mídia direto de link (TikTok, Instagram Reels, Twitter/X)</span>
-              </label>
-              <div style={{ display: "flex", gap: 8 }}>
-                <input
-                  type="url"
-                  placeholder="Cole o link do TikTok, Reels ou Twitter/X..."
-                  value={importVideoUrl}
-                  onChange={(e) => setImportVideoUrl(e.target.value)}
-                  onKeyDown={(e) => { if (e.key === "Enter") { e.preventDefault(); handleImportVideoFromUrl(); } }}
-                  style={{ flex: 1, fontSize: 12 }}
-                />
-                <button
-                  type="button"
-                  className="btn"
-                  onClick={handleImportVideoFromUrl}
-                  disabled={importingVideo}
-                  style={{ background: "#4f46e5", whiteSpace: "nowrap", fontSize: 12, padding: "6px 12px" }}
-                >
-                  {importingVideo ? "Importando..." : "Importar"}
-                </button>
-              </div>
-              <small style={{ color: "#64748b", marginTop: 4, display: "block", fontSize: 10.5 }}>
-                🔒 O vídeo é baixado temporariamente em proxy direto na memória do navegador e apagado ao sair.
-              </small>
-            </div>
+                {/* 3. BAIXAR VÍDEO DIRETO DE LINK (TikTok, Instagram Reels, Twitter/X) */}
+                <div style={{ background: "#ffffff", border: "1.5px dashed #4f46e5", borderRadius: 10, padding: "10px 12px", marginBottom: 12 }}>
+                  <label style={{ color: "#312e81", fontWeight: 700, fontSize: 12, display: "flex", alignItems: "center", gap: 6, marginBottom: 4 }}>
+                    <span>📥 Baixar mídia direto de link (TikTok, Instagram Reels, Twitter/X)</span>
+                  </label>
+                  <div style={{ display: "flex", gap: 8 }}>
+                    <input
+                      type="url"
+                      placeholder="Cole o link do TikTok, Reels ou Twitter/X..."
+                      value={importVideoUrl}
+                      onChange={(e) => setImportVideoUrl(e.target.value)}
+                      onKeyDown={(e) => { if (e.key === "Enter") { e.preventDefault(); handleImportVideoFromUrl(); } }}
+                      style={{ flex: 1, fontSize: 12 }}
+                    />
+                    <button
+                      type="button"
+                      className="btn"
+                      onClick={handleImportVideoFromUrl}
+                      disabled={importingVideo}
+                      style={{ background: "#4f46e5", whiteSpace: "nowrap", fontSize: 12, padding: "6px 12px" }}
+                    >
+                      {importingVideo ? "Importando..." : "Importar"}
+                    </button>
+                  </div>
+                  <small style={{ color: "#64748b", marginTop: 4, display: "block", fontSize: 10.5 }}>
+                    🔒 O vídeo é baixado temporariamente em proxy direto na memória do navegador e apagado ao sair.
+                  </small>
+                </div>
+              </>
+            )}
 
             {/* 4. ENQUADRAMENTO E AJUSTE VERTICAL DA MÍDIA (FOTO OU VÍDEO) */}
             {(customImageUrl || selectedPost?.image_url || videoUrl) && (
@@ -3604,8 +3610,8 @@ async function fixWebmDuration(blob: Blob, durationSec: number): Promise<Blob> {
             )}
           </div>
 
-          {/* 5. MINI IA DE EDIÇÃO ANTI-DIRETRIZES DO INSTAGRAM (ORIGINALIDADE & ALCANCE) */}
-          {(format === "reel" || format === "story" || Boolean(videoUrl)) && (
+          {/* 5. MINI IA DE EDIÇÃO ANTI-DIRETRIZES DO INSTAGRAM (ORIGINALIDADE & ALCANCE - APENAS REELS E STORIES) */}
+          {(format === "reel" || format === "story") && (
             <div className="miniIaStudioField">
               <div className="miniIaHeader">
                 <div style={{ display: "flex", alignItems: "center", gap: 10 }}>

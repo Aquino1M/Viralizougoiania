@@ -106,8 +106,8 @@ export async function POST(request: Request) {
       "-ac", "2",
       "-movflags", "+faststart",
       "-max_muxing_queue_size", "1024",
-      outputPath,
-    ];
+      outputPath
+    );
 
     console.log(`[convert-video] Iniciando compressão WhatsApp: preset=${preset}, crf=${crf}, inSize=${(originalSize / 1024 / 1024).toFixed(2)} MB`);
     const result = await runFfmpeg(ffmpegArgs);

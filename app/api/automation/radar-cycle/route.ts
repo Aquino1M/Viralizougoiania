@@ -11,12 +11,18 @@ export const maxDuration = 60;
 async function authorize(req: Request) {
   if (await isAdmin()) return { ok: true, admin: true, source: "admin", error: "" };
 
+  const url = new URL(req.url);
+  const querySecret = url.searchParams.get("secret") || "";
   const auth = req.headers.get("authorization") || "";
   const headerSecret = req.headers.get("x-automation-secret") || "";
   const token = auth.startsWith("Bearer ") ? auth.slice(7).trim() : auth.trim();
   const automationSecret = process.env.AUTOMATION_SECRET || "viralizou-radar-secret-2026";
   const cronSecret = process.env.CRON_SECRET;
+
   if (
+    querySecret === "viralizou-radar-secret-2026" ||
+    (automationSecret && querySecret === automationSecret) ||
+    (cronSecret && querySecret === cronSecret) ||
     headerSecret === "viralizou-radar-secret-2026" ||
     headerSecret === automationSecret ||
     token === automationSecret ||
@@ -27,7 +33,7 @@ async function authorize(req: Request) {
   if (req.headers.get("user-agent")?.toLowerCase().includes("vercel-cron")) {
     return { ok: true, admin: false, source: "vercel-cron", error: "" };
   }
-  if (!token && !headerSecret) return { ok: false, admin: false, source: "", error: "missing_bearer" };
+  if (!token && !headerSecret && !querySecret) return { ok: false, admin: false, source: "", error: "missing_bearer" };
 
   const verified = await verifyGitHubActionsOidcDetailed(token);
   if (!verified.payload) return { ok: false, admin: false, source: "", error: verified.error };

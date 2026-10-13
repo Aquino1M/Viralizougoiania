@@ -913,10 +913,13 @@ export default function AdminApp() {
         setQueueInterval(10);
         try { localStorage.setItem("viralizou_radar_schedule_mode", normalizedMode); } catch {}
       }
-      setAutomationLastRun(state.last_success_at || state.last_run_at || "");
+      const lastRun = state.last_run_at ? new Date(state.last_run_at).getTime() : 0;
+      const lastSuccess = state.last_success_at ? new Date(state.last_success_at).getTime() : 0;
+      const effectiveLastRun = lastRun > lastSuccess ? (state.last_run_at || "") : (state.last_success_at || state.last_run_at || "");
+      setAutomationLastRun(effectiveLastRun);
       if (state.next_run_at) {
-        const seconds = Math.max(0, Math.ceil((new Date(state.next_run_at).getTime() - Date.now()) / 1000));
-        setAutoPilotCountdown(seconds || 600);
+        const diff = Math.ceil((new Date(state.next_run_at).getTime() - Date.now()) / 1000);
+        setAutoPilotCountdown(diff > 0 && diff <= 600 ? diff : 600);
       }
     } catch {}
   }

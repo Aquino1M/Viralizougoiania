@@ -90,7 +90,7 @@ export async function POST(request: Request) {
 
     if (animatedLogo) {
       for (const cand of candidateLogoPaths) {
-        if (await fs.stat(cand).then(() => true).catch(() => false)) {
+        if (await fs.stat(/*turbopackIgnore: true*/ cand).then(() => true).catch(() => false)) {
           animatedLogoPath = cand;
           break;
         }

@@ -1,4 +1,4 @@
-import { archiveOldExternalPosts, createPost, getCategories, getPostIdentityIndex, getPosts, publishAllScheduledNow, publishDuePostsBatch, reclassifyExternalPosts, updatePost } from "@/lib/storage";
+import { archiveOldExternalPosts, createPost, getCategories, getPostIdentityIndex, getPosts, getScheduledPostsAll, publishAllScheduledNow, publishDuePostsBatch, reclassifyExternalPosts, updatePost } from "@/lib/storage";
 import { buildEditorialExcerpt, formatViralizouArticle, needsEditorialRepair } from "@/lib/rewrite";
 import { slugify } from "@/lib/slug";
 import type { ImportedNews, Post, PostStatus } from "@/lib/types";
@@ -68,13 +68,13 @@ function canonicalUrl(raw:string){try{const u=new URL(raw);u.hash="";["utm_sourc
 function titleTokens(title:string){return slugify(title).split("-").filter(w=>w.length>2&&!STOP.has(w));}
 function titleSimilarity(a:string,b:string){const aa=new Set(titleTokens(a)),bb=new Set(titleTokens(b));if(!aa.size||!bb.size)return 0;let common=0;aa.forEach(w=>{if(bb.has(w))common++;});return common/Math.max(aa.size,bb.size);}
 function isAllowedArticleUrl(raw:string,source:RadarSource){try{const u=new URL(raw);if(u.protocol!=="http:"&&u.protocol!=="https:")return false;const host=u.hostname.toLowerCase();return source.hosts.some(h=>{const base=h.replace(/^www\./,"");return host===h||host===base||host.endsWith("."+base);});}catch{return false;}}
-async function fetchText(url:string,timeout=4500){const res=await fetch(url,{cache:"no-store",signal:AbortSignal.timeout(timeout),headers:{"User-Agent":"Mozilla/5.0 (compatible; ViralizougoianiaBot/2.0; +https://viralizougoiania.vercel.app)","Accept-Language":"pt-BR,pt;q=0.9",Accept:"text/html,application/xhtml+xml,application/xml,text/xml;q=0.9,*/*;q=0.7"}});if(!res.ok)throw new Error("HTTP "+res.status);return await readResponseTextSmart(res,3000000);}
+async function fetchText(url:string,timeout=3000){const res=await fetch(url,{cache:"no-store",signal:AbortSignal.timeout(timeout),headers:{"User-Agent":"Mozilla/5.0 (compatible; ViralizougoianiaBot/2.0; +https://viralizougoiania.vercel.app)","Accept-Language":"pt-BR,pt;q=0.9",Accept:"text/html,application/xhtml+xml,application/xml,text/xml;q=0.9,*/*;q=0.7"}});if(!res.ok)throw new Error("HTTP "+res.status);return await readResponseTextSmart(res,3000000);}
 
 async function fetchSource(source:RadarSource):Promise<ImportedNews[]>{
-  const xml=await fetchText(source.feedUrl,4500);
+  const xml=await fetchText(source.feedUrl,3000);
   const blocks=xml.match(/<item\b[\s\S]*?<\/item>/gi)||xml.match(/<entry\b[\s\S]*?<\/entry>/gi)||[];
   const items:ImportedNews[]=[];
-  for(const block of blocks.slice(0,30)){
+  for(const block of blocks.slice(0,20)){
     const title=cleanText(tag(block,"title"));const link=absoluteUrl(feedLink(block),source.feedUrl);
     if(!title||!link||!isAllowedArticleUrl(link,source))continue;
     const desc=cleanText(tag(block,"description")||tag(block,"summary"));
@@ -248,10 +248,17 @@ export async function runServerRadarAutomation(options:{force?:boolean}={}):Prom
   // O ciclo pode levar vários minutos (feeds, banco, futebol e agendamento).
   // Um lease curto deixava o painel afirmar que o próximo ciclo estava livre
   // antes que o anterior realmente terminasse.
-  await saveAutomationState({running_until:new Date(Date.now()+150*1000).toISOString(),last_run_at:startedAt,last_error:""});
+  await saveAutomationState({running_until:new Date(Date.now()+60*1000).toISOString(),last_run_at:startedAt,last_error:""});
   const errors:string[]=[];let found=0,newItems=0,added=0,published=0,resetPublished=0,reclassified=0;const sourceCounts:Record<string,number>={goias:0,brasil:0,futebol:0,fofocas:0};let football=emptyFootball;let audience:null|{updatedAt:string;pageviewsToday:number;articleViewsToday:number}=null;
   try{
-    const recat=await reclassifyExternalPosts();reclassified=recat.changed; try{ await archiveOldExternalPosts(7, { allOlderThanDays: true }); }catch{}
+    const now = Date.now();
+    const lastArchiveAt = (state as any).last_archive_at ? new Date((state as any).last_archive_at).getTime() : 0;
+    if (options.force || !lastArchiveAt || (now - lastArchiveAt > 6 * 3600 * 1000)) {
+      try { await archiveOldExternalPosts(7, { allOlderThanDays: true }); (state as any).last_archive_at = new Date().toISOString(); } catch {}
+    }
+    if (options.force) {
+      try { const recat = await reclassifyExternalPosts(); reclassified = recat.changed; } catch {}
+    }
 
     // Publica toda a fila antiga uma única vez para começar do zero.
     if(Number(state.queue_reset_version||0)<1){
@@ -286,8 +293,8 @@ export async function runServerRadarAutomation(options:{force?:boolean}={}):Prom
       return true; // Modo Geral: todas as fontes de Goiás e do Brasil
     });
 
-    const [posts,postIdentityIndex,categories,sourceResults,footballResult]=await Promise.all([
-      getPosts({includeDrafts:true}),
+    const [scheduledPosts,postIdentityIndex,categories,sourceResults,footballResult]=await Promise.all([
+      getScheduledPostsAll(),
       getPostIdentityIndex(),
       getCategories({includeInactive:false}),
       Promise.allSettled(activeSources.map(fetchSource)),
@@ -323,8 +330,9 @@ export async function runServerRadarAutomation(options:{force?:boolean}={}):Prom
     // Corrige acentuação e formatação quando executado via botão Forçar
     let formattedRepairs = 0;
     if (options.force) {
-      await repairSavedEncoding(posts,all,errors);
-      formattedRepairs = await repairSavedEditorialFormatting(posts,errors);
+      const allPosts = await getPosts({includeDrafts:true});
+      await repairSavedEncoding(allPosts,all,errors);
+      formattedRepairs = await repairSavedEditorialFormatting(allPosts,errors);
     }
 
     try {
@@ -356,7 +364,7 @@ export async function runServerRadarAutomation(options:{force?:boolean}={}):Prom
     // Prioriza matérias de Goiás para agendamento em destaque
     unseen.sort((a,b) => (isGoiasOrigin(b)?1:0) - (isGoiasOrigin(a)?1:0));
     newItems=unseen.length;
-    const toSchedule = unseen.slice(0, 30);
+    const toSchedule = unseen.slice(0, 15);
     await Promise.allSettled(
       toSchedule.filter((it) => !it.image_url && it.source_url).slice(0, 8).map(async (item) => {
         try {
@@ -367,8 +375,8 @@ export async function runServerRadarAutomation(options:{force?:boolean}={}):Prom
         } catch {}
       })
     );
-    const planned=planSchedule(toSchedule,posts,intervalMinutes,queueMode);
-    const created=await parallelMap(planned,6,async plannedItem=>{
+    const planned=planSchedule(toSchedule,scheduledPosts,intervalMinutes,queueMode);
+    const created=await parallelMap(planned,8,async plannedItem=>{
       const item=plannedItem.item;const sourceText=item.source_content||item.excerpt||item.title;
       const content=formatViralizouArticle({title:item.title,excerpt:item.excerpt,sourceText,sourceName:item.source_name,category:item.category});
       const loc=inferLocation(item);
@@ -391,11 +399,11 @@ export async function runServerRadarAutomation(options:{force?:boolean}={}):Prom
     const sourceFailures = errors.filter((error) => SOURCES.some((source) => error.startsWith(source.name + ":"))).length;
     const hasUsableFeed = Object.values(sourceCounts).some((count) => count > 0);
     const ok = hasUsableFeed && sourceFailures < activeSources.length && (planned.length === 0 || added > 0);
-    await saveAutomationState({running_until:null,last_success_at:ok?finishedAt:state.last_success_at,next_run_at:new Date(Date.now()+10*60000).toISOString(),last_found:found,last_added:added,last_published:published,last_hydrated:formattedRepairs,last_reclassified:reclassified,last_football_sync:football.updatedAt,last_round:football.round,last_fixtures:football.fixtures,last_source_counts:sourceCounts,last_error:errors.join(" | ").slice(0,1500)});
+    await saveAutomationState({running_until:null,last_success_at:ok?finishedAt:(state.last_success_at||finishedAt),next_run_at:new Date(Date.now()+10*60000).toISOString(),last_found:found,last_added:added,last_published:published,last_hydrated:formattedRepairs,last_reclassified:reclassified,last_football_sync:football.updatedAt||state.last_football_sync,last_round:football.round||state.last_round,last_fixtures:football.fixtures||state.last_fixtures,last_source_counts:sourceCounts,last_error:errors.join(" | ").slice(0,1500)});
     return{ok,found,newItems,added,published,resetPublished,reclassified,audience,football,sourceCounts,errors,startedAt,finishedAt};
   }catch(e){
     const message=e instanceof Error?e.message:"Erro inesperado";errors.push(message);const finishedAt=new Date().toISOString();
-    try{await saveAutomationState({running_until:null,next_run_at:new Date(Date.now()+10*60000).toISOString(),last_error:errors.join(" | ").slice(0,1500)});}catch{}
+    try{await saveAutomationState({running_until:null,last_run_at:startedAt,next_run_at:new Date(Date.now()+10*60000).toISOString(),last_error:errors.join(" | ").slice(0,1500)});}catch{}
     return{ok:false,found,newItems,added,published,resetPublished,reclassified,audience,football,sourceCounts,errors,startedAt,finishedAt};
   }
 }
