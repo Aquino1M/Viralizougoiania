@@ -1,0 +1,29 @@
+{
+  "name": "copia-mini-ia",
+  "version": "1.0.0",
+  "description": "Mini IA de Edição de Vídeo com Memória de Aprendizado, SFX, Planos de Edição e Acoplador para Feed e Reels (FFmpeg)",
+  "type": "module",
+  "main": "pipeline/index.mjs",
+  "scripts": {
+    "test": "node examples/testar-mini-ia.mjs",
+    "exemplo:reels": "node examples/exemplo-gerar-reels.mjs",
+    "exemplo:feed": "node examples/exemplo-gerar-feed.mjs",
+    "exemplo:postagem": "node examples/exemplo-acoplar-postagem.mjs",
+    "gerar-zip": "powershell -NoProfile -ExecutionPolicy Bypass -Command \"Compress-Archive -Path '.*' -DestinationPath '..\\COPIA MINI IA.zip' -Force\""
+  },
+  "engines": {
+    "node": ">=20"
+  },
+  "keywords": [
+    "video-editing",
+    "mini-ia",
+    "ffmpeg",
+    "instagram-reels",
+    "instagram-feed",
+    "subtitles",
+    "sfx",
+    "active-learning"
+  ],
+  "author": "Real Hub / Mini IA",
+  "license": "MIT"
+}

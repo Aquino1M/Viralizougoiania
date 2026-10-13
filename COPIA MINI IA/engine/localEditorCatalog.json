@@ -1,0 +1,168 @@
+{
+  "music": {
+    "chill": {
+      "duration_s": 214.45,
+      "file": "_library/music/cc0-chill-roof-tops.mp3",
+      "lufs": -14.88,
+      "mood": "chill",
+      "url": "https://cdn.realoficial.com.br/auto-edit-library/music/cc0-chill-roof-tops.mp3"
+    },
+    "cinematic": {
+      "duration_s": 120,
+      "file": "_library/music/ai-cinematic-epic-build.mp3",
+      "lufs": -14.39,
+      "mood": "cinematic",
+      "url": "https://cdn.realoficial.com.br/auto-edit-library/music/ai-cinematic-epic-build.mp3"
+    },
+    "emotional": {
+      "duration_s": 120,
+      "file": "_library/music/ai-emotional-strings.mp3",
+      "lufs": -14.42,
+      "mood": "emotional",
+      "url": "https://cdn.realoficial.com.br/auto-edit-library/music/ai-emotional-strings.mp3"
+    },
+    "energetic": {
+      "duration_s": 169.48,
+      "file": "_library/music/cc0-energetic-phonk-remix.mp3",
+      "lufs": -11.72,
+      "mood": "energetic",
+      "url": "https://cdn.realoficial.com.br/auto-edit-library/music/cc0-energetic-phonk-remix.mp3"
+    },
+    "podcast": {
+      "duration_s": 120,
+      "file": "_library/music/ai-podcast-news-bed.mp3",
+      "lufs": -14.44,
+      "mood": "podcast",
+      "url": "https://cdn.realoficial.com.br/auto-edit-library/music/ai-podcast-news-bed.mp3"
+    },
+    "upbeat": {
+      "duration_s": 179.8,
+      "file": "_library/music/cc0-upbeat-dangerous-voyage-music-box.mp3",
+      "lufs": -15.94,
+      "mood": "upbeat",
+      "url": "https://cdn.realoficial.com.br/auto-edit-library/music/cc0-upbeat-dangerous-voyage-music-box.mp3"
+    }
+  },
+  "sfx": {
+    "camera_shutter": [
+      {
+        "duration_s": 1.49,
+        "file": "_library/sfx/camera-shutter-1.mp3",
+        "lufs": -25.1,
+        "url": "https://cdn.realoficial.com.br/auto-edit-library/sfx/camera-shutter-1.mp3"
+      }
+    ],
+    "click": [
+      {
+        "duration_s": 0.09,
+        "file": "_library/sfx/click-1.mp3",
+        "lufs": -11.6,
+        "url": "https://cdn.realoficial.com.br/auto-edit-library/sfx/click-1.mp3"
+      },
+      {
+        "duration_s": 0.15,
+        "file": "_library/sfx/click-2.mp3",
+        "lufs": -34.3,
+        "url": "https://cdn.realoficial.com.br/auto-edit-library/sfx/click-2.mp3"
+      }
+    ],
+    "ding": [
+      {
+        "duration_s": 2.46,
+        "file": "_library/sfx/ding-1.mp3",
+        "lufs": -14.6,
+        "url": "https://cdn.realoficial.com.br/auto-edit-library/sfx/ding-1.mp3"
+      }
+    ],
+    "impact": [
+      {
+        "duration_s": 0.23,
+        "file": "_library/sfx/impact-1.mp3",
+        "lufs": -14.6,
+        "url": "https://cdn.realoficial.com.br/auto-edit-library/sfx/impact-1.mp3"
+      },
+      {
+        "duration_s": 2.79,
+        "file": "_library/sfx/impact-2.mp3",
+        "lufs": -8.9,
+        "url": "https://cdn.realoficial.com.br/auto-edit-library/sfx/impact-2.mp3"
+      }
+    ],
+    "pop": [
+      {
+        "duration_s": 0.46,
+        "file": "_library/sfx/pop-1.mp3",
+        "lufs": -21.9,
+        "url": "https://cdn.realoficial.com.br/auto-edit-library/sfx/pop-1.mp3"
+      },
+      {
+        "duration_s": 0.27,
+        "file": "_library/sfx/pop-2.mp3",
+        "lufs": -13.4,
+        "url": "https://cdn.realoficial.com.br/auto-edit-library/sfx/pop-2.mp3"
+      },
+      {
+        "duration_s": 0.17,
+        "file": "_library/sfx/pop-3.mp3",
+        "lufs": -18.3,
+        "url": "https://cdn.realoficial.com.br/auto-edit-library/sfx/pop-3.mp3"
+      }
+    ],
+    "record_scratch": [
+      {
+        "duration_s": 1.82,
+        "file": "_library/sfx/record-scratch-1.mp3",
+        "lufs": -13,
+        "url": "https://cdn.realoficial.com.br/auto-edit-library/sfx/record-scratch-1.mp3"
+      }
+    ],
+    "riser": [
+      {
+        "duration_s": 2.46,
+        "file": "_library/sfx/riser-1.mp3",
+        "lufs": -21,
+        "url": "https://cdn.realoficial.com.br/auto-edit-library/sfx/riser-1.mp3"
+      },
+      {
+        "duration_s": 1.83,
+        "file": "_library/sfx/riser-2.mp3",
+        "lufs": -16.3,
+        "url": "https://cdn.realoficial.com.br/auto-edit-library/sfx/riser-2.mp3"
+      }
+    ],
+    "swipe": [
+      {
+        "duration_s": 0.59,
+        "file": "_library/sfx/swipe-1.mp3",
+        "lufs": -23.4,
+        "url": "https://cdn.realoficial.com.br/auto-edit-library/sfx/swipe-1.mp3"
+      },
+      {
+        "duration_s": 2.03,
+        "file": "_library/sfx/swipe-2.mp3",
+        "lufs": -16.1,
+        "url": "https://cdn.realoficial.com.br/auto-edit-library/sfx/swipe-2.mp3"
+      }
+    ],
+    "whoosh": [
+      {
+        "duration_s": 1.86,
+        "file": "_library/sfx/whoosh-1.mp3",
+        "lufs": -23.1,
+        "url": "https://cdn.realoficial.com.br/auto-edit-library/sfx/whoosh-1.mp3"
+      },
+      {
+        "duration_s": 2.13,
+        "file": "_library/sfx/whoosh-2.mp3",
+        "lufs": -18.1,
+        "url": "https://cdn.realoficial.com.br/auto-edit-library/sfx/whoosh-2.mp3"
+      },
+      {
+        "duration_s": 1.82,
+        "file": "_library/sfx/whoosh-3.mp3",
+        "lufs": -39.1,
+        "url": "https://cdn.realoficial.com.br/auto-edit-library/sfx/whoosh-3.mp3"
+      }
+    ]
+  }
+}

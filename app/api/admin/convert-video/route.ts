@@ -72,9 +72,21 @@ export async function POST(request: Request) {
       crf = String(customCrf);
     }
 
+    const trimStartParam = formData.get("trimStart");
+    const trimStart = trimStartParam !== null && trimStartParam !== undefined && trimStartParam !== ""
+      ? Math.max(0, Number(trimStartParam) || 0)
+      : 0;
+
     const ffmpegArgs = [
       "-y",
       "-threads", "0",
+    ];
+
+    if (trimStart > 0) {
+      ffmpegArgs.push("-ss", trimStart.toFixed(2));
+    }
+
+    ffmpegArgs.push(
       "-i", inputPath,
       "-vf", scaleFilter,
       "-map", "0:v:0",

@@ -3,7 +3,7 @@
 import { FormEvent, useEffect, useState } from "react";
 import { DownloadPlatform, detectPlatform } from "@/lib/universal-video-downloader";
 
-type Props = { onBack: () => void };
+type Props = { onBack: () => void; onOpenCreator?: (videoUrl?: string) => void };
 
 type ResolveResult = {
   platform: DownloadPlatform;
@@ -19,7 +19,7 @@ type ResolveResult = {
 
 type HelperStatus = "unknown" | "ready" | "starting" | "opened" | "error";
 
-export default function InstagramVideoDownloader({ onBack }: Props) {
+export default function InstagramVideoDownloader({ onBack, onOpenCreator }: Props) {
   const [url, setUrl] = useState("");
   const [selectedPlatform, setSelectedPlatform] = useState<"auto" | "tiktok" | "instagram" | "twitter">("auto");
   const [loading, setLoading] = useState(false);
@@ -376,6 +376,34 @@ export default function InstagramVideoDownloader({ onBack }: Props) {
             </h3>
 
             <div style={{ display: "flex", gap: 10, flexWrap: "wrap", alignItems: "center" }}>
+              <button
+                type="button"
+                className="btn"
+                onClick={() => {
+                  try {
+                    localStorage.setItem("viralizou_import_video_url", result.downloadUrl);
+                  } catch {}
+                  if (onOpenCreator) onOpenCreator(result.downloadUrl);
+                  else onBack();
+                }}
+                style={{
+                  background: "linear-gradient(135deg, #1d4ed8 0%, #7c3aed 100%)",
+                  color: "#fff",
+                  padding: "9px 18px",
+                  fontSize: 13,
+                  fontWeight: 800,
+                  display: "inline-flex",
+                  alignItems: "center",
+                  gap: 6,
+                  border: "none",
+                  boxShadow: "0 4px 14px rgba(124, 58, 237, 0.35)",
+                  cursor: "pointer",
+                }}
+                title="Abre este vídeo diretamente no Criador de Reels com a Mini IA para aplicar cortes anti-diretrizes"
+              >
+                <span>🤖</span> Editar no Criador de Reels (Mini IA)
+              </button>
+
               <a
                 className="btn"
                 href={result.downloadUrl.includes("?") ? `${result.downloadUrl}&whatsapp=1` : `${result.downloadUrl}?whatsapp=1`}

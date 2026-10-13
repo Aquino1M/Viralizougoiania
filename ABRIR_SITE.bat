@@ -82,6 +82,19 @@ if errorlevel 1 (
   )
 )
 
+if exist "public\logos\Viralizou_Goiania_logo_animada_transparente.webm" (
+  if not exist "public\logos\logo-viralizou-animada.gif" (
+    echo [Gerando GIF a partir de Viralizou_Goiania_logo_animada_transparente.webm...]
+    tools\ffmpeg.exe -y -i "public\logos\Viralizou_Goiania_logo_animada_transparente.webm" -filter_complex "[0:v]fps=15,scale=480:-1:flags=lanczos,split[s0][s1];[s0]palettegen=reserve_transparent=on:transparency_color=00000000[p];[s1][p]paletteuse=alpha_threshold=128" "public\logos\logo-viralizou-animada.gif" >nul 2>nul
+  )
+) else if exist "logo em gif.mp4" (
+  if not exist "public\logos\logo-viralizou-animada.gif" (
+    echo [Convertendo logo em gif.mp4 para GIF transparente...]
+    if not exist "public\logos" mkdir "public\logos"
+    tools\ffmpeg.exe -y -i "logo em gif.mp4" -filter_complex "[0:v]colorkey=0x75e052:0.28:0.10,despill=type=green:mix=0.55,fps=15,scale=480:-1:flags=lanczos,split[s0][s1];[s0]palettegen=reserve_transparent=on:transparency_color=00ff00[p];[s1][p]paletteuse=alpha_threshold=128" "public\logos\logo-viralizou-animada.gif" >nul 2>nul
+  )
+)
+
 echo [2/2] Iniciando o Viralizougoiania...
 echo.
 echo Site:  http://localhost:3000

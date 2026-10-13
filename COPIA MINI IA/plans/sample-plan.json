@@ -1,0 +1,70 @@
+{
+  "engine": "local-rules-v6-real-replay",
+  "editor_profile": "viral",
+  "preset": "viral",
+  "fps": 30,
+  "duration": 28.5,
+  "hook_title": "COMO DOBRAR SUAS VIEWS NO REELS",
+  "caption_layout_policy": {
+    "detectedLayouts": ["single"],
+    "splitDetected": false,
+    "choqueiMovimentoDetected": false,
+    "ctaAllowed": true,
+    "single": {
+      "left": 160,
+      "top": 1480,
+      "width": 760,
+      "height": 252,
+      "fontSize": 70
+    }
+  },
+  "words": [
+    { "text": "COMO", "start": 0.1, "end": 0.4, "highlight": false },
+    { "text": "DOBRAR", "start": 0.4, "end": 0.8, "highlight": true, "emoji": "🚀" },
+    { "text": "SUAS", "start": 0.8, "end": 1.1, "highlight": false },
+    { "text": "VISUALIZAÇÕES", "start": 1.1, "end": 1.7, "highlight": true, "emoji": "📈" },
+    { "text": "NOS", "start": 1.7, "end": 1.9, "highlight": false },
+    { "text": "REELS", "start": 1.9, "end": 2.3, "highlight": true },
+    { "text": "EM", "start": 2.4, "end": 2.6, "highlight": false },
+    { "text": "7", "start": 2.6, "end": 2.8, "highlight": true, "emoji": "7️⃣" },
+    { "text": "DIAS.", "start": 2.8, "end": 3.2, "highlight": false }
+  ],
+  "transcript_beats": [
+    {
+      "id": "beat-01",
+      "index": 0,
+      "start": 0.1,
+      "end": 3.2,
+      "duration": 3.1,
+      "text": "Como dobrar suas visualizações nos reels em 7 dias.",
+      "keywords": ["dobrar", "visualizacoes", "reels", "7 dias"],
+      "energy": 0.85
+    }
+  ],
+  "keywords": [
+    { "text": "DOBRAR", "start": 0.4, "end": 0.8, "highlight": true, "beat_id": "beat-01" },
+    { "text": "VISUALIZAÇÕES", "start": 1.1, "end": 1.7, "highlight": true, "beat_id": "beat-01" },
+    { "text": "7", "start": 2.6, "end": 2.8, "highlight": true, "beat_id": "beat-01" }
+  ],
+  "zooms": [
+    { "start": 0.4, "editorialScore": 0.85, "reason": "Punch zoom inicial no hook" },
+    { "start": 2.6, "editorialScore": 0.90, "reason": "Enfatizar numero chave" }
+  ],
+  "scenes": [
+    { "start": 1.1, "end": 2.0, "type": "stat", "label": "VIEWS", "text": "100K+", "editorialScore": 0.82 }
+  ],
+  "reactions": [
+    { "start": 0.5, "end": 1.5, "emoji": "🔥" }
+  ],
+  "impact_flashes": [
+    { "start": 0.4 }
+  ],
+  "transitions": [
+    { "start": 3.2, "transitionId": "zoomIn" }
+  ],
+  "sfx_cues": [
+    { "start": 0.4, "type": "pop", "file": "sfx/pop-1.mp3", "volume": 0.3 },
+    { "start": 1.1, "type": "impact", "file": "sfx/impact-1.mp3", "volume": 0.4 },
+    { "start": 2.6, "type": "ding", "file": "sfx/ding-1.mp3", "volume": 0.35 }
+  ]
+}

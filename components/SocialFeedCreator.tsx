@@ -2,6 +2,7 @@
 
 import { ChangeEvent, PointerEvent as ReactPointerEvent, useEffect, useRef, useState } from "react";
 import type { Post } from "@/lib/types";
+import { type MiniIaEditLevel, MINI_IA_LEVELS } from "@/lib/mini-ia-editor";
 
 type Props = {
   posts: Post[];
@@ -57,7 +58,7 @@ type ReelTextAlign = "left" | "center" | "right";
 type ReelTextCase = "uppercase" | "lowercase" | "original";
 type ReelTagColor = "red" | "white" | "yellow" | "orange";
 type ReelTextAnimation = "typewriter" | "pop" | "slide" | "fade" | "static";
-type LogoColorStyle = "white" | "dark" | "original";
+type LogoColorStyle = "white" | "dark" | "gif" | "original";
 
 function slugFromInput(value: string) {
   const raw = value.trim();
@@ -175,8 +176,14 @@ function drawVideoWithFraming(
   w: number,
   h: number,
   framingMode: "cover" | "blur-fit",
-  vertical = 0
+  vertical = 0,
+  mirror = false
 ) {
+  if (mirror) {
+    ctx.save();
+    ctx.translate(w, 0);
+    ctx.scale(-1, 1);
+  }
   if (framingMode === "blur-fit") {
     // Desfoque em canvas reduzido (135x240): executa em < 0.5ms em vez de travar a CPU por 300ms a 1080x1920
     if (typeof document !== "undefined") {
@@ -197,6 +204,9 @@ function drawVideoWithFraming(
     drawContain(ctx, video, 0, 0, w, h, vertical);
   } else {
     drawCover(ctx, video, 0, 0, w, h, vertical);
+  }
+  if (mirror) {
+    ctx.restore();
   }
 }
 
@@ -230,9 +240,53 @@ function drawStoryStickerGuide(ctx: CanvasRenderingContext2D, canvasWidth: numbe
 
 let cachedOfficialWhiteLogo: HTMLImageElement | null = null;
 let cachedOfficialDarkLogo: HTMLImageElement | null = null;
+let cachedOfficialWebmLogo: HTMLVideoElement | null = null;
+let cachedOfficialGifLogo: HTMLImageElement | null = null;
 
-function getOfficialLogo(variant: "white" | "dark"): HTMLImageElement | null {
+function getOfficialLogo(variant: "white" | "dark" | "gif"): HTMLImageElement | HTMLVideoElement | null {
   if (typeof window === "undefined") return null;
+  if (variant === "gif") {
+    // 1. Tenta carregar o WebM transparente nativo (65 KB, qualidade perfeita e leve)
+    if (!cachedOfficialWebmLogo) {
+      try {
+        const vid = document.createElement("video");
+        vid.src = "/logos/Viralizou_Goiania_logo_animada_transparente.webm";
+        vid.autoplay = true;
+        vid.loop = true;
+        vid.muted = true;
+        vid.playsInline = true;
+        vid.crossOrigin = "anonymous";
+        vid.oncanplay = () => { vid.play().catch(() => {}); };
+        cachedOfficialWebmLogo = vid;
+        vid.play().catch(() => {});
+      } catch {}
+    }
+
+    if (cachedOfficialWebmLogo && isImageDrawable(cachedOfficialWebmLogo)) {
+      return cachedOfficialWebmLogo;
+    }
+
+    // 2. Fallback para GIF transparente
+    if (!cachedOfficialGifLogo || !isImageDrawable(cachedOfficialGifLogo)) {
+      const img = new Image();
+      img.src = "/logos/logo-viralizou-animada.gif";
+      img.onerror = () => {
+        // Tenta acionar a conversão da logo caso ainda não tenha sido gerada
+        fetch("/api/admin/convert-logo-gif", { method: "POST" })
+          .then((res) => res.json())
+          .then((data) => {
+            if (data.ok && data.url) {
+              img.src = `${data.url}?t=${Date.now()}`;
+            }
+          })
+          .catch(() => {});
+      };
+      cachedOfficialGifLogo = img;
+      return img;
+    }
+    return cachedOfficialGifLogo;
+  }
+
   const isWhite = variant === "white";
   let cached = isWhite ? cachedOfficialWhiteLogo : cachedOfficialDarkLogo;
 
@@ -254,15 +308,18 @@ function getOfficialLogo(variant: "white" | "dark"): HTMLImageElement | null {
 function getRenderableLogo(
   customLogo: HTMLImageElement | HTMLCanvasElement | null,
   colorStyle: LogoColorStyle,
-  defaultVariant: "white" | "dark" = "white"
-): HTMLImageElement | HTMLCanvasElement | null {
+  defaultVariant: "white" | "dark" | "gif" = "white"
+): HTMLImageElement | HTMLCanvasElement | HTMLVideoElement | null {
   // 1. Prioridade absoluta: Se o usuário enviou/possui uma logo personalizada válida, USA ELA!
   if (customLogo && isImageDrawable(customLogo)) {
     return customLogo;
   }
 
   // 2. Se não tem logo personalizada, usa a oficial correspondente ao estilo escolhido
-  if (colorStyle === "white") {
+  if (colorStyle === "gif") {
+    const gif = getOfficialLogo("gif");
+    if (isImageDrawable(gif)) return gif;
+  } else if (colorStyle === "white") {
     const white = getOfficialLogo("white");
     if (isImageDrawable(white)) return white;
   } else if (colorStyle === "dark") {
@@ -270,17 +327,17 @@ function getRenderableLogo(
     if (isImageDrawable(dark)) return dark;
   }
 
-  const def = getOfficialLogo(defaultVariant);
+  const def = getOfficialLogo(colorStyle === "gif" ? "gif" : defaultVariant);
   return isImageDrawable(def) ? def : null;
 }
 
 function getLogoSize(
-  logo: HTMLImageElement | HTMLCanvasElement,
+  logo: HTMLImageElement | HTMLCanvasElement | HTMLVideoElement,
   format: PublicationFormat,
   multiplier = 1
 ) {
-  const w = ("naturalWidth" in logo && logo.naturalWidth) ? logo.naturalWidth : (logo.width || 400);
-  const h = ("naturalHeight" in logo && logo.naturalHeight) ? logo.naturalHeight : (logo.height || 100);
+  const w = ("videoWidth" in logo && logo.videoWidth) ? logo.videoWidth : ("naturalWidth" in logo && logo.naturalWidth) ? logo.naturalWidth : (logo.width || 400);
+  const h = ("videoHeight" in logo && logo.videoHeight) ? logo.videoHeight : ("naturalHeight" in logo && logo.naturalHeight) ? logo.naturalHeight : (logo.height || 100);
   const maxWidth = format === "reel" || format === "story" ? 600 : format === "feed-square" ? 400 : 430;
   const maxHeight = format === "reel" || format === "story" ? 145 : format === "feed-square" ? 95 : 105;
   const scale = Math.min(maxWidth / (w || 1), maxHeight / (h || 1), 1) * multiplier;
@@ -1164,6 +1221,7 @@ function drawReelFrame(
   format: PublicationFormat = "reel",
   framingMode: "cover" | "blur-fit" = "cover",
   imageVertical: number = 0,
+  mirror: boolean = false,
 ) {
   ctx.save();
   ctx.imageSmoothingEnabled = true;
@@ -1173,7 +1231,7 @@ function drawReelFrame(
   ctx.fillStyle = "#050505";
   ctx.fillRect(0, 0, W, REEL_H);
   if (video && video.readyState >= 2) {
-    drawVideoWithFraming(ctx, video, W, REEL_H, framingMode, imageVertical);
+    drawVideoWithFraming(ctx, video, W, REEL_H, framingMode, imageVertical, mirror);
   }
 
   const maxAlpha = shadeOpacity / 100;
@@ -1486,6 +1544,25 @@ export default function SocialFeedCreator({ posts, onBack, initialPost, onOpenCo
   const [message, setMessage] = useState("");
   const [rendering, setRendering] = useState(false);
   const [renderLogs, setRenderLogs] = useState<string[]>([]);
+  const [miniIaLevel, setMiniIaLevel] = useState<MiniIaEditLevel>("media");
+  const [miniIaMirror, setMiniIaMirror] = useState<boolean>(false);
+  const [miniIaTrimSeconds, setMiniIaTrimSeconds] = useState<number>(3); // Padrão sempre corta 3 segundos
+
+  function chooseMiniIaLevel(lvl: MiniIaEditLevel) {
+    setMiniIaLevel(lvl);
+    try { localStorage.setItem("viralizou_mini_ia_level", lvl); } catch {}
+  }
+
+  function toggleMiniIaMirror(val: boolean) {
+    setMiniIaMirror(val);
+    try { localStorage.setItem("viralizou_mini_ia_mirror", String(val)); } catch {}
+  }
+
+  function chooseMiniIaTrimSeconds(sec: number) {
+    const val = Math.max(0, Math.min(60, Math.round(Number(sec) || 0)));
+    setMiniIaTrimSeconds(val);
+    try { localStorage.setItem("viralizou_mini_ia_trim_seconds", String(val)); } catch {}
+  }
 
   function addLog(msg: string) {
     const time = new Date().toLocaleTimeString("pt-BR");
@@ -1579,6 +1656,27 @@ export default function SocialFeedCreator({ posts, onBack, initialPost, onOpenCo
         const position = { x: Math.min(1, Math.max(0, savedTitlePosition.x)), y: Math.min(1, Math.max(0, savedTitlePosition.y)) };
         titlePositionRef.current = position;
         setTitlePosition(position);
+      }
+      const savedMiniIaLevel = localStorage.getItem("viralizou_mini_ia_level") as MiniIaEditLevel | null;
+      if (savedMiniIaLevel && (savedMiniIaLevel === "leve" || savedMiniIaLevel === "media" || savedMiniIaLevel === "alta")) {
+        setMiniIaLevel(savedMiniIaLevel);
+      }
+      const savedMiniIaMirror = localStorage.getItem("viralizou_mini_ia_mirror");
+      if (savedMiniIaMirror !== null) {
+        setMiniIaMirror(savedMiniIaMirror === "true");
+      }
+      const savedMiniIaTrim = localStorage.getItem("viralizou_mini_ia_trim_seconds");
+      if (savedMiniIaTrim !== null) {
+        const parsedTrim = Number(savedMiniIaTrim);
+        if (!isNaN(parsedTrim) && parsedTrim >= 0) {
+          setMiniIaTrimSeconds(parsedTrim);
+        }
+      }
+      const importedUrl = localStorage.getItem("viralizou_import_video_url");
+      if (importedUrl) {
+        setImportVideoUrl(importedUrl);
+        setFormat("reel");
+        try { localStorage.removeItem("viralizou_import_video_url"); } catch {}
       }
     } catch {}
 
@@ -1791,6 +1889,7 @@ export default function SocialFeedCreator({ posts, onBack, initialPost, onOpenCo
           format,
           videoFramingMode,
           imagePosition,
+          miniIaMirror,
         );
         setMessage("");
         return;
@@ -1968,7 +2067,7 @@ export default function SocialFeedCreator({ posts, onBack, initialPost, onOpenCo
   useEffect(() => {
     renderCard();
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [selectedPost?.slug, selectedPost?.updated_at, customImageUrl, title, logoData, handle, imagePosition, feedTitleFontSize, feedFontFamily, feedTitlePosition.x, feedTitlePosition.y, feedTitleOffsetY, format, logoPosition.x, logoPosition.y, titlePosition.x, titlePosition.y, reelTextStyle, reelFontFamily, reelFontWeight, reelTextAlign, reelTextCase, reelFontSize, tagColor, tagPositionY, showSafeZone, reelTextAnimation, showStrongSceneWarning, logoScale, handleFontSize, shadeOpacity, showOverlayLayer, showLogoLayer, showTitleLayer, showHandleLayer, showStorySticker, logoColorStyle]);
+  }, [selectedPost?.slug, selectedPost?.updated_at, customImageUrl, title, logoData, handle, imagePosition, feedTitleFontSize, feedFontFamily, feedTitlePosition.x, feedTitlePosition.y, feedTitleOffsetY, format, logoPosition.x, logoPosition.y, titlePosition.x, titlePosition.y, reelTextStyle, reelFontFamily, reelFontWeight, reelTextAlign, reelTextCase, reelFontSize, tagColor, tagPositionY, showSafeZone, reelTextAnimation, showStrongSceneWarning, logoScale, handleFontSize, shadeOpacity, showOverlayLayer, showLogoLayer, showTitleLayer, showHandleLayer, showStorySticker, logoColorStyle, miniIaMirror]);
 
   // MAX CACHE: Pré-renderiza todo o layout visual da legenda e sobreposições em 1080x1920
   // Isso zera 100% dos cálculos na CPU durante a reprodução do vídeo e evita travamentos
@@ -2136,14 +2235,30 @@ export default function SocialFeedCreator({ posts, onBack, initialPost, onOpenCo
       }
       frameId = requestAnimationFrame(draw);
     };
+
+    const handleTimeCheck = () => {
+      if (miniIaTrimSeconds > 0 && Number.isFinite(video.duration) && video.duration > miniIaTrimSeconds + 1) {
+        if (video.currentTime < miniIaTrimSeconds) {
+          video.currentTime = miniIaTrimSeconds;
+        }
+      }
+    };
+    video.addEventListener("timeupdate", handleTimeCheck);
+    if (miniIaTrimSeconds > 0 && Number.isFinite(video.duration) && video.duration > miniIaTrimSeconds + 1) {
+      if (video.currentTime < miniIaTrimSeconds) {
+        video.currentTime = miniIaTrimSeconds;
+      }
+    }
+
     video.loop = true;
     video.muted = true;
     video.play().catch(() => {});
     frameId = requestAnimationFrame(draw);
     return () => {
+      video.removeEventListener("timeupdate", handleTimeCheck);
       cancelAnimationFrame(frameId);
     };
-  }, [format, videoUrl, title, handle, logoData, selectedPost?.title, reelTextStyle, reelFontFamily, reelFontWeight, reelTextAlign, reelTextCase, reelFontSize, tagColor, tagPositionY, showSafeZone, reelTextAnimation, showStrongSceneWarning, logoScale, handleFontSize, shadeOpacity, showOverlayLayer, showLogoLayer, showTitleLayer, showHandleLayer, showStorySticker, logoColorStyle, recording, videoFramingMode, imagePosition]);
+  }, [format, videoUrl, title, handle, logoData, selectedPost?.title, reelTextStyle, reelFontFamily, reelFontWeight, reelTextAlign, reelTextCase, reelFontSize, tagColor, tagPositionY, showSafeZone, reelTextAnimation, showStrongSceneWarning, logoScale, handleFontSize, shadeOpacity, showOverlayLayer, showLogoLayer, showTitleLayer, showHandleLayer, showStorySticker, logoColorStyle, recording, videoFramingMode, imagePosition, miniIaTrimSeconds]);
 
   async function loadArticle() {
     const slug = slugFromInput(articleUrl);
@@ -2367,6 +2482,17 @@ export default function SocialFeedCreator({ posts, onBack, initialPost, onOpenCo
   function chooseLogoColorStyle(style: LogoColorStyle) {
     setLogoColorStyle(style);
     try { localStorage.setItem("viralizou_feed_logo_color_style", style); } catch {}
+    if (style === "gif") {
+      fetch("/api/admin/convert-logo-gif", { method: "POST" })
+        .then((r) => r.json())
+        .then((d) => {
+          if (d.ok) {
+            cachedOfficialGifLogo = null;
+            renderCard();
+          }
+        })
+        .catch(() => {});
+    }
     renderCard();
   }
 
@@ -2742,7 +2868,7 @@ async function fixWebmDuration(blob: Blob, durationSec: number): Promise<Blob> {
       logoColorStyle,
       shadeOpacity,
       showOverlayLayer,
-      showLogoLayer,
+      showLogoLayer && logoColorStyle !== "gif",
       showTitleLayer,
       showHandleLayer,
       false, // NUNCA desenha figurinha no overlay de vídeo
@@ -2788,6 +2914,30 @@ async function fixWebmDuration(blob: Blob, durationSec: number): Promise<Blob> {
         formData.append("filename", outFilename);
         formData.append("framingMode", videoFramingMode);
         formData.append("vertical", String(imagePosition));
+        formData.append("editLevel", miniIaLevel);
+        formData.append("mirror", String(miniIaMirror));
+        formData.append("trimStart", String(miniIaTrimSeconds));
+        formData.append("format", format);
+
+        if (logoColorStyle === "gif" && showLogoLayer) {
+          formData.append("animatedLogo", "true");
+          const logoW = Math.round(420 * logoScale / 100);
+          const logoH = Math.round(110 * logoScale / 100);
+          const logoX = Math.round(logoPosition.x * 1080 - logoW / 2);
+          const logoY = Math.round(logoPosition.y * 1920 - logoH / 2);
+          formData.append("logoX", String(logoX));
+          formData.append("logoY", String(logoY));
+          formData.append("logoW", String(logoW));
+          addLog("✨ Logo Animada (GIF sem fundo verde) ativada na composição FFmpeg...");
+        }
+
+        if (miniIaTrimSeconds > 0) {
+          addLog(`✂️ Anti-Detecção: Cortando os primeiros ${miniIaTrimSeconds}s do vídeo original para quebrar hash/duplicidade...`);
+        } else {
+          addLog("✂️ Anti-Detecção: Mantendo vídeo sem corte inicial (0s)...");
+        }
+
+        addLog(`🤖 Mini IA: Nível ${miniIaLevel.toUpperCase()} (${MINI_IA_LEVELS[miniIaLevel].name}) · Anti-Diretrizes Instagram ativadas...`);
 
         addLog("⏳ Enviando vídeo e arte em alta resolução (1080×1920)...");
         setRecordingProgress(45);
@@ -2906,12 +3056,13 @@ async function fixWebmDuration(blob: Blob, durationSec: number): Promise<Blob> {
       video.pause();
       video.loop = false;
 
-      // 2. Garante posicionamento no início exato (t = 0)
-      if (video.currentTime > 0) {
+      // 2. Garante posicionamento no início exato considerando o corte inicial
+      const startT = Math.min(miniIaTrimSeconds, Math.max(0, video.duration - 1));
+      if (Math.abs(video.currentTime - startT) > 0.05) {
         await new Promise<void>((resolve, reject) => {
           const timeout = window.setTimeout(() => reject(new Error("Não consegui reiniciar o vídeo para gravar.")), 8000);
           video.addEventListener("seeked", () => { window.clearTimeout(timeout); resolve(); }, { once: true });
-          video.currentTime = 0;
+          video.currentTime = startT;
         });
       }
 
@@ -2949,6 +3100,8 @@ async function fixWebmDuration(blob: Blob, durationSec: number): Promise<Blob> {
       // Desmuta para alimentar a decodificação do Web Audio
       video.muted = false;
       video.volume = 1;
+      const speedMultiplier = MINI_IA_LEVELS[miniIaLevel]?.speed || 1;
+      video.playbackRate = speedMultiplier;
 
       // Captura a 30 FPS contínuos sincronizados diretamente com o relógio do hardware/navegador.
       // captureStream(30) elimina descompasso de timestamps com o áudio e previne engasgos/congelamentos.
@@ -2979,7 +3132,7 @@ async function fixWebmDuration(blob: Blob, durationSec: number): Promise<Blob> {
           ctx.save();
           ctx.fillStyle = "#050505";
           ctx.fillRect(0, 0, W, REEL_H);
-          drawVideoWithFraming(ctx, video, W, REEL_H, videoFramingMode, imagePosition);
+          drawVideoWithFraming(ctx, video, W, REEL_H, videoFramingMode, imagePosition, miniIaMirror);
           ctx.drawImage(overlayCanvas, 0, 0, W, REEL_H);
           ctx.restore();
           renderedFramesCount++;
@@ -3075,8 +3228,8 @@ async function fixWebmDuration(blob: Blob, durationSec: number): Promise<Blob> {
         video.play().catch(reject);
 
         progressTimer = window.setInterval(() => {
-          if (duration > 0) {
-            const currentProgress = Math.min(100, Math.floor((video.currentTime / duration) * 100));
+          if (duration > startT) {
+            const currentProgress = Math.min(100, Math.max(0, Math.floor(((video.currentTime - startT) / Math.max(0.1, duration - startT)) * 100)));
             setRecordingProgress(currentProgress);
             if (video.currentTime >= duration && activeRecorder.state !== "inactive") {
               stopRecordingGracefully();
@@ -3172,6 +3325,7 @@ async function fixWebmDuration(blob: Blob, durationSec: number): Promise<Blob> {
       video.pause();
       video.muted = true;
       video.loop = true;
+      video.playbackRate = 1;
       video.currentTime = 0;
 
       setRecording(false);
@@ -3449,6 +3603,222 @@ async function fixWebmDuration(blob: Blob, durationSec: number): Promise<Blob> {
               </div>
             )}
           </div>
+
+          {/* 5. MINI IA DE EDIÇÃO ANTI-DIRETRIZES DO INSTAGRAM (ORIGINALIDADE & ALCANCE) */}
+          {(format === "reel" || format === "story" || Boolean(videoUrl)) && (
+            <div className="miniIaStudioField">
+              <div className="miniIaHeader">
+                <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+                  <span className="miniIaRobotIcon">🤖</span>
+                  <div>
+                    <h3 style={{ margin: 0, fontSize: 14, fontWeight: 800, color: "#f8fafc", display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap" }}>
+                      Mini IA de Edição · Proteção Instagram
+                      <span style={{ fontSize: 10, background: "#8b5cf6", color: "#fff", padding: "2px 7px", borderRadius: 999, fontWeight: 700 }}>
+                        Escudo Anti-Diretrizes Ativo
+                      </span>
+                    </h3>
+                    <p style={{ margin: "2px 0 0", fontSize: 11, color: "#94a3b8" }}>
+                      Transforma ritmo, cortes, pHash e metadados para o Instagram classificar seu conteúdo como 100% Original e manter as recomendações livres de punições.
+                    </p>
+                  </div>
+                </div>
+              </div>
+
+              <div className="miniIaLevelButtons">
+                {/* 1. LEVE */}
+                <button
+                  type="button"
+                  className={`miniIaLevelBtn leve ${miniIaLevel === "leve" ? "active" : ""}`}
+                  onClick={() => chooseMiniIaLevel("leve")}
+                  title="Ritmo 1.015x, equalização suave e limpeza de metadados"
+                >
+                  <div className="miniIaBtnTop">
+                    <span className="miniIaBtnDot leve" />
+                    <span className="miniIaBtnName">LEVE</span>
+                  </div>
+                  <div className="miniIaBtnTag">1.015x · Equalização Suave</div>
+                  <div className="miniIaBtnDesc">
+                    Ajuste fino de ritmo e áudio limpo com remoção de metadados de câmera.
+                  </div>
+                </button>
+
+                {/* 2. MÉDIA (RECOMENDADA) */}
+                <button
+                  type="button"
+                  className={`miniIaLevelBtn media ${miniIaLevel === "media" ? "active" : ""}`}
+                  onClick={() => chooseMiniIaLevel("media")}
+                  title="Ritmo 1.03x, cortes dinâmicos punch zoom a cada 4.5s, color grading e áudio normalizado"
+                >
+                  <div className="miniIaBtnTop">
+                    <span className="miniIaBtnDot media" />
+                    <span className="miniIaBtnName">MÉDIA</span>
+                    <span className="miniIaRecommendedStar">★ RECOMENDADA</span>
+                  </div>
+                  <div className="miniIaBtnTag">1.03x · Punch Zoom & Color</div>
+                  <div className="miniIaBtnDesc">
+                    Micro-cortes dinâmicos a cada 4.5s, color grading e áudio normalizado (-16 LUFS).
+                  </div>
+                </button>
+
+                {/* 3. ALTA */}
+                <button
+                  type="button"
+                  className={`miniIaLevelBtn alta ${miniIaLevel === "alta" ? "active" : ""}`}
+                  onClick={() => chooseMiniIaLevel("alta")}
+                  title="Ritmo 1.05x, quebra completa de pHash com micro-grão temporal e cortes a cada 3.8s"
+                >
+                  <div className="miniIaBtnTop">
+                    <span className="miniIaBtnDot alta" />
+                    <span className="miniIaBtnName">ALTA</span>
+                  </div>
+                  <div className="miniIaBtnTag">1.05x · Anti-pHash & Grão</div>
+                  <div className="miniIaBtnDesc">
+                    Quebra o algoritmo com zooms a cada 3.8s, ruído temporal e saturação viva.
+                  </div>
+                </button>
+              </div>
+
+              <div className="miniIaOptionsRow">
+                <label className="miniIaCheckbox">
+                  <input
+                    type="checkbox"
+                    checked={miniIaMirror}
+                    onChange={(e) => toggleMiniIaMirror(e.target.checked)}
+                  />
+                  <span>🪞 Espelhar vídeo horizontalmente (Mirror Anti-Detecção de Câmera)</span>
+                </label>
+              </div>
+
+              {/* CONTROLE DE CORTE INICIAL (ANTI-DETECÇÃO DE HASH & DUPLICIDADE) */}
+              <div
+                style={{
+                  background: "rgba(15, 23, 42, 0.75)",
+                  border: "1px solid rgba(139, 92, 246, 0.3)",
+                  borderRadius: 10,
+                  padding: "12px 14px",
+                  margin: "12px 0 10px",
+                }}
+              >
+                <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", flexWrap: "wrap", gap: 8, marginBottom: 10 }}>
+                  <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+                    <span style={{ fontSize: 16 }}>✂️</span>
+                    <div>
+                      <span style={{ fontSize: 13, fontWeight: 800, color: "#f8fafc" }}>
+                        Corte Inicial Anti-Detecção (Pular Início)
+                      </span>
+                      <span
+                        style={{
+                          marginLeft: 8,
+                          fontSize: 10,
+                          background: miniIaTrimSeconds === 3 ? "rgba(16, 185, 129, 0.25)" : "rgba(139, 92, 246, 0.25)",
+                          color: miniIaTrimSeconds === 3 ? "#34d399" : "#c084fc",
+                          border: `1px solid ${miniIaTrimSeconds === 3 ? "rgba(16, 185, 129, 0.5)" : "rgba(139, 92, 246, 0.5)"}`,
+                          padding: "2px 8px",
+                          borderRadius: 999,
+                          fontWeight: 800,
+                        }}
+                      >
+                        {miniIaTrimSeconds === 3 ? "⭐ Padrão Recomendado (3s)" : miniIaTrimSeconds === 0 ? "Desativado (0s)" : `${miniIaTrimSeconds}s Selecionado`}
+                      </span>
+                    </div>
+                  </div>
+
+                  <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
+                    <span style={{ fontSize: 11, color: "#94a3b8" }}>Personalizado:</span>
+                    <input
+                      type="number"
+                      min={0}
+                      max={30}
+                      step={1}
+                      value={miniIaTrimSeconds}
+                      onChange={(e) => chooseMiniIaTrimSeconds(Number(e.target.value))}
+                      style={{
+                        width: 58,
+                        padding: "4px 8px",
+                        fontSize: 12,
+                        fontWeight: 800,
+                        textAlign: "center",
+                        borderRadius: 6,
+                        border: "1px solid #475569",
+                        background: "#0f172a",
+                        color: "#f8fafc",
+                      }}
+                    />
+                    <span style={{ fontSize: 11, color: "#94a3b8" }}>seg</span>
+                  </div>
+                </div>
+
+                {/* Botões de atalho rápido */}
+                <div style={{ display: "flex", alignItems: "center", gap: 6, flexWrap: "wrap", marginBottom: 10 }}>
+                  {[
+                    { sec: 0, label: "0s (Sem corte)" },
+                    { sec: 1, label: "1s" },
+                    { sec: 2, label: "2s" },
+                    { sec: 3, label: "3s (Padrão ⭐)" },
+                    { sec: 4, label: "4s" },
+                    { sec: 5, label: "5s" },
+                    { sec: 10, label: "10s" },
+                  ].map((preset) => {
+                    const isSelected = miniIaTrimSeconds === preset.sec;
+                    return (
+                      <button
+                        key={preset.sec}
+                        type="button"
+                        onClick={() => chooseMiniIaTrimSeconds(preset.sec)}
+                        style={{
+                          padding: "5px 12px",
+                          fontSize: 11,
+                          fontWeight: isSelected ? 800 : 600,
+                          borderRadius: 6,
+                          border: isSelected ? "1.5px solid #8b5cf6" : "1px solid rgba(148, 163, 184, 0.25)",
+                          background: isSelected ? "linear-gradient(135deg, #7c3aed, #6d28d9)" : "rgba(30, 41, 59, 0.7)",
+                          color: isSelected ? "#ffffff" : "#cbd5e1",
+                          cursor: "pointer",
+                          transition: "all 0.15s ease",
+                          boxShadow: isSelected ? "0 2px 10px rgba(124, 58, 237, 0.35)" : "none",
+                        }}
+                      >
+                        {preset.label}
+                      </button>
+                    );
+                  })}
+                </div>
+
+                {/* Slider para ajuste fino */}
+                <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+                  <input
+                    type="range"
+                    min={0}
+                    max={15}
+                    step={1}
+                    value={miniIaTrimSeconds}
+                    onChange={(e) => chooseMiniIaTrimSeconds(Number(e.target.value))}
+                    style={{ flex: 1, accentColor: "#8b5cf6", cursor: "pointer" }}
+                  />
+                  <span style={{ fontSize: 12, color: "#cbd5e1", fontWeight: 800, minWidth: 32, textAlign: "right" }}>
+                    {miniIaTrimSeconds}s
+                  </span>
+                </div>
+
+                <small style={{ color: "#94a3b8", fontSize: 10.5, display: "block", marginTop: 8, lineHeight: 1.45 }}>
+                  💡 Cortar os primeiros segundos (padrão de 3s) quebra a impressão digital e o hash inicial do arquivo, elimina aberturas e logotipos originais de terceiros e impede que o algoritmo do Instagram ou TikTok puna o vídeo como repost duplicado.
+                </small>
+              </div>
+
+              <div className="miniIaDetailCard">
+                <div className="miniIaDetailHeader">
+                  <span>Modo Ativo: <b style={{ textTransform: "uppercase" }}>{MINI_IA_LEVELS[miniIaLevel].name}</b></span>
+                  <span>Velocidade: <b>{MINI_IA_LEVELS[miniIaLevel].speed}x</b> · Áudio: <b>{MINI_IA_LEVELS[miniIaLevel].loudnessTarget} LUFS</b></span>
+                  <span>Corte Inicial: <b>{miniIaTrimSeconds}s {miniIaTrimSeconds === 3 ? "(Padrão ⭐)" : ""}</b></span>
+                </div>
+                <p className="miniIaDetailText">
+                  {MINI_IA_LEVELS[miniIaLevel].description}
+                  {miniIaMirror ? " + Espelhamento horizontal ativo." : ""}
+                  {miniIaTrimSeconds > 0 ? ` + Cortando os primeiros ${miniIaTrimSeconds}s do vídeo original.` : " + Sem corte inicial."}
+                </p>
+              </div>
+            </div>
+          )}
 
           <div className="captionStudioBox">
             <div className="captionHeaderTitle">
@@ -3916,6 +4286,15 @@ async function fixWebmDuration(blob: Blob, durationSec: number): Promise<Blob> {
                 </button>
                 <button
                   type="button"
+                  className={`logoColorStyleBtn ${logoColorStyle === "gif" ? "active" : ""}`}
+                  onClick={() => chooseLogoColorStyle("gif")}
+                  title="Logo Oficial Animada em GIF (Sem fundo verde, com efeito de brilho)"
+                  style={logoColorStyle === "gif" ? { borderColor: "#8b5cf6", color: "#c084fc", background: "rgba(139, 92, 246, 0.15)" } : {}}
+                >
+                  ✨ Animada (GIF)
+                </button>
+                <button
+                  type="button"
                   className={`logoColorStyleBtn ${logoColorStyle === "original" ? "active" : ""}`}
                   onClick={() => chooseLogoColorStyle("original")}
                   title="Manter cores originais da imagem enviada"
@@ -3925,16 +4304,16 @@ async function fixWebmDuration(blob: Blob, durationSec: number): Promise<Blob> {
               </div>
             </div>
 
-            <input type="file" accept="image/png,image/jpeg,image/webp,image/svg+xml" onChange={onLogoChange} />
+            <input type="file" accept="image/png,image/jpeg,image/webp,image/svg+xml,image/gif" onChange={onLogoChange} />
             <small>
-              Alterne acima entre <b>Letras Brancas ⚪</b> (ideal p/ Reels/Vídeos) e <b>Letras Pretas ⚫</b> (ideal p/ Fundo Claro).
+              Alterne acima entre <b>Letras Brancas ⚪</b>, <b>Letras Pretas ⚫</b> ou <b>Animada (GIF) ✨</b> (sem fundo verde).
             </small>
 
             {/* Cartão de visualização da logo ativa (Oficial transparente ou Customizada) */}
             <div
               className="adminFeedLogoSaved"
               style={{
-                background: logoColorStyle === "white" ? "#0f172a" : "#f8fafc",
+                background: logoColorStyle === "white" || logoColorStyle === "gif" ? "#0f172a" : "#f8fafc",
                 border: "1px solid #cbd5e1",
                 padding: "10px 14px",
                 borderRadius: 10,
@@ -3947,30 +4326,48 @@ async function fixWebmDuration(blob: Blob, durationSec: number): Promise<Blob> {
               <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
                 <div
                   style={{
-                    background: logoColorStyle === "white" ? "#1e293b" : "#f1f5f9",
+                    background: logoColorStyle === "white" || logoColorStyle === "gif" ? "#1e293b" : "#f1f5f9",
                     padding: "4px 8px",
                     borderRadius: 6,
-                    border: logoColorStyle === "white" ? "1px solid #334155" : "1px solid #e2e8f0",
+                    border: logoColorStyle === "white" || logoColorStyle === "gif" ? "1px solid #334155" : "1px solid #e2e8f0",
                   }}
                 >
-                  <img
-                    key={`${logoColorStyle}_${Boolean(logoData)}`}
-                    src={
-                      logoData ||
-                      (logoColorStyle === "dark" ? "/logos/logo-viralizou-preta.png" : "/logos/logo-viralizou-branca.png")
-                    }
-                    onError={(e) => {
-                      const img = e.currentTarget;
-                      if (!img.src.includes("/api/logos/")) {
-                        img.src = logoColorStyle === "dark" ? "/api/logos/dark" : "/api/logos/white";
+                  {!logoData && logoColorStyle === "gif" ? (
+                    <video
+                      src="/logos/Viralizou_Goiania_logo_animada_transparente.webm"
+                      autoPlay
+                      loop
+                      muted
+                      playsInline
+                      style={{
+                        maxHeight: 34,
+                        maxWidth: 140,
+                        display: "block",
+                        objectFit: "contain",
+                      }}
+                    />
+                  ) : (
+                    <img
+                      key={`${logoColorStyle}_${Boolean(logoData)}`}
+                      src={
+                        logoData ||
+                        (logoColorStyle === "dark"
+                          ? "/logos/logo-viralizou-preta.png"
+                          : "/logos/logo-viralizou-branca.png")
                       }
-                    }}
-                    alt="Logo ativa"
-                    style={{
-                      maxHeight: 34,
-                      display: "block",
-                    }}
-                  />
+                      onError={(e) => {
+                        const img = e.currentTarget;
+                        if (!img.src.includes("/api/logos/")) {
+                          img.src = logoColorStyle === "dark" ? "/api/logos/dark" : "/api/logos/white";
+                        }
+                      }}
+                      alt="Logo ativa"
+                      style={{
+                        maxHeight: 34,
+                        display: "block",
+                      }}
+                    />
+                  )}
                 </div>
                 <div>
                   <span
@@ -3978,19 +4375,25 @@ async function fixWebmDuration(blob: Blob, durationSec: number): Promise<Blob> {
                       fontSize: 12,
                       fontWeight: 700,
                       display: "block",
-                      color: logoColorStyle === "white" ? "#f8fafc" : "#0f172a",
+                      color: logoColorStyle === "white" || logoColorStyle === "gif" ? "#f8fafc" : "#0f172a",
                     }}
                   >
                     {logoData
                       ? "Logo Personalizada"
+                      : logoColorStyle === "gif"
+                      ? "✨ Logo Oficial Animada Transparente (WebM / Alpha)"
                       : logoColorStyle === "white"
                       ? "⚪ Logo Oficial (Letras Brancas - Sem Fundo)"
                       : logoColorStyle === "dark"
                       ? "⚫ Logo Oficial (Letras Pretas - Sem Fundo)"
                       : "Logo Oficial Original"}
                   </span>
-                  <small style={{ color: logoColorStyle === "white" ? "#94a3b8" : "#64748b", fontSize: 10 }}>
-                    {logoData ? "Arquivo customizado enviado" : "Imagem PNG nativa original e transparente"}
+                  <small style={{ color: logoColorStyle === "white" || logoColorStyle === "gif" ? "#94a3b8" : "#64748b", fontSize: 10 }}>
+                    {logoData
+                      ? "Arquivo customizado enviado"
+                      : logoColorStyle === "gif"
+                      ? "Vídeo WebM leve (65 KB) com canal Alpha nativo sem fundo verde"
+                      : "Imagem PNG nativa original e transparente"}
                   </small>
                 </div>
               </div>
@@ -4042,15 +4445,15 @@ async function fixWebmDuration(blob: Blob, durationSec: number): Promise<Blob> {
                   ⬇️ Baixar Story PNG 1080×1920
                 </button>
                 {videoReady && (
-                  <button type="button" className="btn" disabled={recording || rendering} onClick={createReel}>
-                    {recording ? `Gravando ${recordingProgress}%...` : "🎥 Gerar Story Vídeo"}
+                  <button type="button" className="btn btnMiniIaAction" disabled={recording || rendering} onClick={createReel}>
+                    {recording ? `Gravando ${recordingProgress}%...` : `🎥 Gerar Story Vídeo (${MINI_IA_LEVELS[miniIaLevel].name.toUpperCase()})`}
                   </button>
                 )}
               </>
             )}
             {format === "reel" && (
-              <button type="button" className="btn" disabled={!videoReady || recording || rendering} onClick={createReel}>
-                {recording ? `Gravando ${recordingProgress}%...` : "🎥 Gerar Reel"}
+              <button type="button" className="btn btnMiniIaAction" disabled={!videoReady || recording || rendering} onClick={createReel}>
+                {recording ? `Gravando ${recordingProgress}%...` : `🎥 Gerar Reel (${MINI_IA_LEVELS[miniIaLevel].name.toUpperCase()})`}
               </button>
             )}
           </div>

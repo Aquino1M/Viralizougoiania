@@ -1,0 +1,43 @@
+{
+  "version": "mini-edit-ai-v9-active-experience-consolidation",
+  "updatedAt": "2026-10-13T15:36:31.543Z",
+  "profiles": {
+    "viral": {
+      "samples": 620,
+      "lastLearnedAt": "2026-10-13T15:36:31.543Z",
+      "referenceDuration": 39.21,
+      "effectCounts": {
+        "punchZoom": 4,
+        "kenBurns": 6.37,
+        "sceneBigword": 4,
+        "impactFlashes": 3,
+        "transitions": {
+          "crashZoom": 5.16,
+          "glitch": 3,
+          "flash": 3,
+          "zoomOut": 1,
+          "zoomIn": 1,
+          "shake": 1
+        },
+        "sfx": 8.51,
+        "filters": {
+          "bw-noir": 4,
+          "saturado": 1
+        },
+        "filterId": "saturado",
+        "filterIntensity": 0.5,
+        "progressBar": 1,
+        "hookBars": 1
+      },
+      "captionTemplate": "after-effects-246",
+      "lastPatternScore": 82,
+      "professionalScoreAvg": 95.9,
+      "sceneTypes": {
+        "kinetic": 1,
+        "bigword": 555,
+        "stat": 230,
+        "compare": 12
+      }
+    }
+  }
+}

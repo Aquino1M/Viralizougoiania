@@ -3079,7 +3079,7 @@ export default function AdminApp() {
 
             {/* Downloader de vídeos públicos do Instagram — somente no painel administrativo */}
             {view === "instagramDownloader" && (
-              <InstagramVideoDownloader onBack={() => setView("list")} />
+              <InstagramVideoDownloader onBack={() => setView("list")} onOpenCreator={() => setView("feedCreator")} />
             )}
 
             {/* Compressor de Vídeo Oficial para WhatsApp */}
