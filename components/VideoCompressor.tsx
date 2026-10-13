@@ -192,7 +192,9 @@ export default function VideoCompressor({ onBack }: { onBack: () => void }) {
       activeVideoRef.current = video;
       video.crossOrigin = "anonymous";
       video.playsInline = true;
-      video.preload = "auto";
+      // Não solicita o vídeo inteiro antecipadamente: em celulares e PCs fracos
+      // deixa o decoder buscar os dados conforme a reprodução avança.
+      video.preload = "metadata";
       video.muted = false; // Necessário para AudioContext capturar áudio
 
       const videoUrl = URL.createObjectURL(file);
@@ -233,6 +235,12 @@ export default function VideoCompressor({ onBack }: { onBack: () => void }) {
         maxH = 1080;
         videoBps = 3_800_000;
         audioBps = 160_000;
+      }
+
+      // Mantém a compressão padrão leve para hardware modesto; HD continua opcional.
+      if (preset !== "whatsapp_hd") {
+        maxW = Math.min(maxW, 960);
+        maxH = Math.min(maxH, 960);
       }
 
       // Se vídeo for vertical (Reels / Status / Shorts), inverte dimensões máximas
@@ -303,7 +311,10 @@ export default function VideoCompressor({ onBack }: { onBack: () => void }) {
         'video/webm; codecs="vp8, opus"',
         "video/webm",
       ];
-      const selectedMime = mimeCandidates.find((m) => typeof MediaRecorder !== "undefined" && MediaRecorder.isTypeSupported(m)) || "video/webm";
+      const selectedMime = mimeCandidates.find((m) => typeof MediaRecorder !== "undefined" && MediaRecorder.isTypeSupported(m));
+      if (!selectedMime) {
+        throw new Error("Este navegador não oferece um formato de gravação compatível. Atualize o Chrome/Edge ou use o motor FFmpeg no servidor.");
+      }
 
       const recorder = new MediaRecorder(combinedStream, {
         mimeType: selectedMime,
@@ -336,12 +347,13 @@ export default function VideoCompressor({ onBack }: { onBack: () => void }) {
 
       let animFrameId: number | null = null;
       let lastRenderTime = 0;
+      const renderInterval = preset === "whatsapp_light" ? 66 : 33;
 
       const renderLoop = () => {
         if (isCancelledRef.current || video.paused || video.ended) return;
 
         const now = performance.now();
-        if (now - lastRenderTime >= 28) {
+        if (now - lastRenderTime >= renderInterval) {
           lastRenderTime = now;
           if (ctx && video.readyState >= 2) {
             ctx.drawImage(video, 0, 0, targetW, targetH);
@@ -388,19 +400,22 @@ export default function VideoCompressor({ onBack }: { onBack: () => void }) {
       stopCurrentProcessing();
       URL.revokeObjectURL(videoUrl);
 
-      const isMp4 = selectedMime.includes("mp4");
       const safeBase = file.name.replace(/\.[^/.]+$/, "").replace(/[^a-zA-Z0-9_-]/g, "_");
-      const extension = isMp4 ? ".mp4" : ".webm";
+      const actualMime = (outputBlob.type || selectedMime).toLowerCase();
+      const actualIsMp4 = actualMime.includes("mp4");
+      if (!actualIsMp4) {
+        throw new Error("O navegador gerou WebM, não MP4. O arquivo não será identificado com a extensão errada; use o motor FFmpeg para converter para MP4.");
+      }
       const finalUrl = URL.createObjectURL(outputBlob);
       const reduction = Math.max(0, Math.round(((file.size - outputBlob.size) / file.size) * 100));
 
       setResult({
         url: finalUrl,
-        filename: `${safeBase}-whatsapp${extension}`,
+        filename: `${safeBase}-whatsapp.mp4`,
         originalSize: file.size,
         compressedSize: outputBlob.size,
         reductionPercent: reduction,
-        format: isMp4 ? "MP4 (H.264 Oficial WhatsApp)" : "WebM (Otimizado)",
+        format: "MP4 (H.264/AAC, Faststart)",
       });
 
       setMessage("🎉 Vídeo comprimido com sucesso! 100% pronto e compatível com WhatsApp.");

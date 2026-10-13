@@ -2800,7 +2800,7 @@ async function fixWebmDuration(blob: Blob, durationSec: number): Promise<Blob> {
         addLog("📥 Processamento FFmpeg concluído! Baixando MP4 otimizado...");
         setRecordingProgress(90);
         const mp4Blob = await res.blob();
-        if (!mp4Blob || mp4Blob.size < 1000) {
+        if (!mp4Blob || mp4Blob.size < 1000 || !mp4Blob.type.toLowerCase().includes("video/mp4")) {
           throw new Error("O arquivo retornado pelo servidor é inválido ou vazio.");
         }
 
@@ -2960,7 +2960,17 @@ async function fixWebmDuration(blob: Blob, durationSec: number): Promise<Blob> {
         if (now - lastFrameTime < 27) return;
         lastFrameTime = now;
         const ctx = canvas.getContext("2d");
-        if (ctx && video.readyState >= 2) { ctx.fillStyle = "#050505"; ctx.fillRect(0, 0, W, REEL_H); drawVideoWithFraming(ctx, video, W, REEL_H, videoFramingMode, imagePosition); ctx.drawImage(overlayCanvas, 0, 0); renderedFramesCount++; }
+        if (ctx && video.readyState >= 2 && video.videoWidth > 0 && video.videoHeight > 0) {
+          // Desenha apenas quando existe um frame decodificado, evitando exportar
+          // frames pretos durante o seek/carregamento inicial do vídeo.
+          ctx.save();
+          ctx.fillStyle = "#050505";
+          ctx.fillRect(0, 0, W, REEL_H);
+          drawVideoWithFraming(ctx, video, W, REEL_H, videoFramingMode, imagePosition);
+          ctx.drawImage(overlayCanvas, 0, 0, W, REEL_H);
+          ctx.restore();
+          renderedFramesCount++;
+        }
       };
 
       const syncWithVideoDecoder = () => {
@@ -3023,11 +3033,20 @@ async function fixWebmDuration(blob: Blob, durationSec: number): Promise<Blob> {
         activeRecorder.onerror = () => reject(new Error("A gravação do Reel foi interrompida."));
         activeRecorder.onstop = () => {
           const output = new Blob(chunks, { type: activeRecorder.mimeType || mimeType });
-          output.size ? resolve(output) : reject(new Error("O vídeo exportado ficou vazio."));
+          if (!output.size) {
+            reject(new Error("O vídeo exportado ficou vazio."));
+            return;
+          }
+          resolve(output);
         };
 
         const stopRecordingGracefully = () => {
           if (activeRecorder.state !== "inactive") {
+            if (loopIntervalId) window.clearInterval(loopIntervalId);
+            if (vfcId && "cancelVideoFrameCallback" in video) {
+              try { (video as any).cancelVideoFrameCallback(vfcId); } catch {}
+              vfcId = null;
+            }
             activeRecorder.stop();
           }
         };
@@ -3075,24 +3094,33 @@ async function fixWebmDuration(blob: Blob, durationSec: number): Promise<Blob> {
           body: formData,
         });
 
-        if (convRes.ok) {
+        if (convRes.ok && (convRes.headers.get("content-type") || "").toLowerCase().includes("video/mp4")) {
           const compBlob = await convRes.blob();
+          if (compBlob.size < 1000) throw new Error("O conversor devolveu um MP4 vazio ou inválido.");
           const origMb = (finalBlob.size / 1024 / 1024).toFixed(1);
           const compMb = (compBlob.size / 1024 / 1024).toFixed(1);
           const reduction = convRes.headers.get("X-Reduction-Percent");
           finalBlob = compBlob;
           addLog(`🎉 Compressão WhatsApp concluída com sucesso! De ${origMb} MB para ${compMb} MB${reduction ? ` (-${reduction}%)` : ""}. 100% compatível com o WhatsApp!`);
         } else {
-          addLog(`ℹ️ Servidor de compressão retornou código ${convRes.status}. Mantendo arquivo gravado.`);
+          const detail = await convRes.text().catch(() => "");
+          throw new Error(`Conversão para MP4 falhou (HTTP ${convRes.status}). ${detail.slice(0, 180)}`);
         }
       } catch (convErr: any) {
-        addLog(`ℹ️ Servidor de compressão indisponível (${convErr?.message || "offline"}). Mantendo vídeo gravado.`);
+        addLog(`❌ Conversão para MP4 indisponível (${convErr?.message || "offline"}).`);
+        throw new Error("A gravação terminou, mas não foi possível gerar um MP4 válido. Verifique FFmpeg/endpoint de conversão e tente novamente; nenhum WebM será entregue com extensão MP4.");
+      }
+
+      // Nunca nomeia um WebM como MP4 quando o FFmpeg está indisponível.
+      const actualIsMp4 = finalBlob.type.toLowerCase().includes("mp4");
+      if (!actualIsMp4) {
+        throw new Error("Este navegador só gravou WebM e o conversor MP4 não está disponível. O arquivo não será salvo com extensão MP4 falsa; tente no Chrome/Edge atualizado ou habilite o FFmpeg no servidor.");
       }
 
       setVideoExport({
         url: URL.createObjectURL(finalBlob),
         filename: `${basename}-${formatLabel}.mp4`,
-        type: finalBlob.type || "video/mp4",
+        type: "video/mp4",
       });
       setRecordingProgress(100);
       setMessage(`✅ Vídeo (${formatLabel.toUpperCase()}) 100% pronto em MP4! Áudio e vídeo sincronizados.`);
@@ -4090,7 +4118,8 @@ async function fixWebmDuration(blob: Blob, durationSec: number): Promise<Blob> {
         loop
         muted
         playsInline
-        preload="auto"
+        preload="none"
+        onLoadedMetadata={() => setVideoReady(true)}
         onLoadedData={() => { setVideoReady(true); renderCard(); }}
         onError={() => { setVideoReady(false); setMessage("Não foi possível abrir esse arquivo de vídeo."); }}
         style={{

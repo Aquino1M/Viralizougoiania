@@ -2,7 +2,6 @@ import Link from "next/link";
 import BrandLogo from "@/components/BrandLogo";
 import NavBar from "@/components/NavBar";
 import HeaderSearch from "@/components/HeaderSearch";
-import GoianiaLocalBar from "@/components/GoianiaLocalBar";
 import { getCategories } from "@/lib/storage";
 import { unstable_cache } from "next/cache";
 
@@ -51,9 +50,6 @@ export default async function Header({ breakingTitle }: { breakingTitle?: string
       </header>
 
       <NavBar categories={categories} />
-
-      {/* Widget Goiano: Trânsito, Clima e Futebol dos Clubes Goianos */}
-      <GoianiaLocalBar />
 
       {breakingTitle && (
         <div className="breaking">

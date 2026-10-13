@@ -234,7 +234,7 @@ export async function runServerRadarAutomation(options:{force?:boolean}={}):Prom
       :state.queue_mode
   ) as ServerQueueMode;
   const intervalMinutes=10;
-  await saveAutomationState({running_until:new Date(Date.now()+90*1000).toISOString(),last_run_at:startedAt,last_error:""});
+  await saveAutomationState({running_until:new Date(Date.now()+8*60*1000).toISOString(),last_run_at:startedAt,last_error:""});
   const errors:string[]=[];let found=0,newItems=0,added=0,published=0,resetPublished=0,reclassified=0;const sourceCounts:Record<string,number>={goias:0,brasil:0,futebol:0,fofocas:0};let football=emptyFootball;let audience:null|{updatedAt:string;pageviewsToday:number;articleViewsToday:number}=null;
   try{
     const recat=await reclassifyExternalPosts();reclassified=recat.changed; try{ await archiveOldExternalPosts(7, { allOlderThanDays: true }); }catch{}
@@ -360,7 +360,12 @@ export async function runServerRadarAutomation(options:{force?:boolean}={}):Prom
     added=created.filter(Boolean).length;
     const finishedAt=new Date().toISOString();
     await saveAutomationState({running_until:null,last_success_at:finishedAt,next_run_at:new Date(Date.now()+10*60000).toISOString(),last_found:found,last_added:added,last_published:published,last_hydrated:formattedRepairs,last_reclassified:reclassified,last_football_sync:football.updatedAt,last_round:football.round,last_fixtures:football.fixtures,last_source_counts:sourceCounts,last_error:errors.join(" | ").slice(0,1500)});
-    return{ok:true,found,newItems,added,published,resetPublished,reclassified,audience,football,sourceCounts,errors,startedAt,finishedAt};
+    // Reportar sucesso somente quando a coleta realmente trouxe conteúdo e o
+    // ciclo não acumulou falhas. O painel/Actions não devem exibir falso verde.
+    const sourceFailures = errors.filter((error) => SOURCES.some((source) => error.startsWith(source.name + ":"))).length;
+    const hasUsableFeed = Object.values(sourceCounts).some((count) => count > 0);
+    const ok = hasUsableFeed && sourceFailures < activeSources.length && errors.length === 0;
+    return{ok,found,newItems,added,published,resetPublished,reclassified,audience,football,sourceCounts,errors,startedAt,finishedAt};
   }catch(e){
     const message=e instanceof Error?e.message:"Erro inesperado";errors.push(message);const finishedAt=new Date().toISOString();
     try{await saveAutomationState({running_until:null,next_run_at:new Date(Date.now()+10*60000).toISOString(),last_error:errors.join(" | ").slice(0,1500)});}catch{}
