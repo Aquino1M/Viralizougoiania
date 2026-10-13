@@ -21,6 +21,11 @@ if exist "C:\Users\Aquino\.gemini\antigravity-ide\brain\d5396812-fe0c-45aa-9024-
   echo [OK] Logo preta original verificada e copiada.
 )
 
+if exist "public\logos\logo-viralizou-intro.gif" if not exist "public\logos\logo-viralizou-animada.gif" (
+  copy /y "public\logos\logo-viralizou-intro.gif" "public\logos\logo-viralizou-animada.gif" >nul 2>nul
+  echo [OK] Logo animada GIF sincronizada em public\logos.
+)
+
 echo.
 git status --short
 echo.
@@ -28,7 +33,7 @@ echo [1/3] Adicionando arquivos modificados (git add -A)...
 git add -A
 
 set COMMIT_MSG=%*
-if "%COMMIT_MSG%"=="" set COMMIT_MSG=feat: 3 slots de layout predefinido e ajuste responsivo dos botoes da Mini IA
+if "%COMMIT_MSG%"=="" set COMMIT_MSG=fix: remover arquivamento automatico do ciclo 24-7 para desbloquear fila de materias e actions
 
 echo.
 echo [2/3] Criando commit...

@@ -1,8 +1,17 @@
 "use client";
 
-import { ChangeEvent, PointerEvent as ReactPointerEvent, useEffect, useRef, useState } from "react";
+import { ChangeEvent, PointerEvent as ReactPointerEvent, useEffect, useMemo, useRef, useState } from "react";
 import type { Post } from "@/lib/types";
-import { type MiniIaEditLevel, MINI_IA_LEVELS } from "@/lib/mini-ia-constants";
+import {
+  type MiniIaEditLevel,
+  MINI_IA_LEVELS,
+  type VideoFilterPreset,
+  VIDEO_FILTERS,
+  type BgmTrackPreset,
+  BGM_TRACKS,
+  type VideoCropRect,
+} from "@/lib/mini-ia-constants";
+import CropVideoModal from "./CropVideoModal";
 
 type Props = {
   posts: Post[];
@@ -39,6 +48,16 @@ function getCanvasDimensions(fmt: PublicationFormat) {
   }
 }
 
+export function getEffectiveTagY(fmt: PublicationFormat, pos: number): number {
+  const { height } = getCanvasDimensions(fmt);
+  if (pos > 0 && pos < height) {
+    return pos;
+  }
+  if (fmt === "feed-square") return 1030;
+  if (fmt === "feed" || fmt === "reel-cover") return 1300;
+  return 1670;
+}
+
 type LogoPosition = { x: number; y: number };
 type ReelTitleLayout = { lines: string[]; fontSize: number; lineHeight: number; width: number; height: number };
 type ReelTextStyle =
@@ -51,7 +70,8 @@ type ReelTextStyle =
   | "highlight-dark"
   | "highlight-yellow"
   | "highlight-red"
-  | "stroke-strong";
+  | "stroke-strong"
+  | "red-bottom";
 type ReelFontFamily = "montserrat" | "anton" | "bebas" | "poppins" | "inter" | "roboto" | "impact" | "georgia";
 type ReelFontWeight = "900" | "800" | "700" | "600" | "400" | "italic";
 type ReelTextAlign = "left" | "center" | "right";
@@ -92,6 +112,12 @@ export interface LayoutPresetData {
   miniIaLevel: MiniIaEditLevel;
   miniIaMirror: boolean;
   miniIaTrimSeconds: number;
+  videoFilter?: VideoFilterPreset;
+  cutPauses?: boolean;
+  bgmTrack?: BgmTrackPreset;
+  autoHookEnabled?: boolean;
+  autoHookText?: string;
+  videoCrop?: VideoCropRect | null;
 }
 
 export interface LayoutPresetSlot {
@@ -140,6 +166,11 @@ const DEFAULT_PRESET_SLOTS: LayoutPresetSlot[] = [
       miniIaLevel: "media",
       miniIaMirror: false,
       miniIaTrimSeconds: 3,
+      videoFilter: "cinema",
+      cutPauses: true,
+      bgmTrack: "energetic",
+      autoHookEnabled: true,
+      autoHookText: "",
     },
   },
   {
@@ -179,45 +210,55 @@ const DEFAULT_PRESET_SLOTS: LayoutPresetSlot[] = [
       miniIaLevel: "leve",
       miniIaMirror: false,
       miniIaTrimSeconds: 0,
+      videoFilter: "none",
+      cutPauses: false,
+      bgmTrack: "none",
+      autoHookEnabled: false,
+      autoHookText: "",
     },
   },
   {
     id: 3,
-    name: "⚡ Story Urgente",
-    summary: "Story 9:16 · Editorial · Mini IA Alta",
+    name: "🟥 Bloco Vermelho TVT",
+    summary: "Reels 9:16 · Rodapé Vermelho · Inter 800",
     savedAt: "Padrão",
     data: {
-      format: "story",
-      reelTextStyle: "editorial-serif",
-      reelFontFamily: "bebas",
-      reelFontWeight: "900",
-      reelTextAlign: "center",
-      reelTextCase: "uppercase",
-      reelFontSize: 78,
-      tagColor: "orange",
-      tagPositionY: 1670,
+      format: "reel",
+      reelTextStyle: "red-bottom",
+      reelFontFamily: "inter",
+      reelFontWeight: "800",
+      reelTextAlign: "left",
+      reelTextCase: "original",
+      reelFontSize: 60,
+      tagColor: "white",
+      tagPositionY: 1810,
       handle: "@viralizougoiania",
-      handleFontSize: 33,
+      handleFontSize: 30,
       logoColorStyle: "gif",
-      logoScale: 105,
+      logoScale: 100,
       logoPosition: DEFAULT_LOGO_POSITION,
       titlePosition: DEFAULT_TITLE_POSITION,
       feedTitlePosition: DEFAULT_FEED_TITLE_POSITION,
       feedTitleOffsetY: 0,
       feedTitleFontSize: 0,
-      feedFontFamily: "bebas",
-      shadeOpacity: 90,
+      feedFontFamily: "inter",
+      shadeOpacity: 0,
       showOverlayLayer: true,
       showLogoLayer: true,
       showTitleLayer: true,
-      showHandleLayer: true,
-      showStorySticker: true,
+      showHandleLayer: false,
+      showStorySticker: false,
       showStrongSceneWarning: false,
       videoFramingMode: "cover",
-      imagePosition: 0,
-      miniIaLevel: "alta",
+      imagePosition: -12,
+      miniIaLevel: "media",
       miniIaMirror: false,
       miniIaTrimSeconds: 3,
+      videoFilter: "none",
+      cutPauses: true,
+      bgmTrack: "energetic",
+      autoHookEnabled: true,
+      autoHookText: "",
     },
   },
 ];
@@ -306,30 +347,60 @@ function safeDrawImage(
   }
 }
 
-function drawCover(ctx: CanvasRenderingContext2D, img: HTMLImageElement | HTMLVideoElement, x: number, y: number, w: number, h: number, vertical = 0) {
-  const sourceWidth = img instanceof HTMLVideoElement ? img.videoWidth : img.naturalWidth;
-  const sourceHeight = img instanceof HTMLVideoElement ? img.videoHeight : img.naturalHeight;
-  if (!sourceWidth || !sourceHeight) return;
+function drawCover(
+  ctx: CanvasRenderingContext2D,
+  img: HTMLImageElement | HTMLVideoElement,
+  x: number,
+  y: number,
+  w: number,
+  h: number,
+  vertical = 0,
+  crop?: VideoCropRect | null
+) {
+  const fullWidth = img instanceof HTMLVideoElement ? img.videoWidth : img.naturalWidth;
+  const fullHeight = img instanceof HTMLVideoElement ? img.videoHeight : img.naturalHeight;
+  if (!fullWidth || !fullHeight) return;
+
+  const cropX = crop ? Math.max(0, Math.min(fullWidth - 10, crop.x)) : 0;
+  const cropY = crop ? Math.max(0, Math.min(fullHeight - 10, crop.y)) : 0;
+  const sourceWidth = crop ? Math.max(10, Math.min(fullWidth - cropX, crop.width)) : fullWidth;
+  const sourceHeight = crop ? Math.max(10, Math.min(fullHeight - cropY, crop.height)) : fullHeight;
+
   const scale = Math.max(w / sourceWidth, h / sourceHeight);
   const sw = w / scale;
   const sh = h / scale;
-  const sx = Math.max(0, (sourceWidth - sw) / 2);
+  const sx = cropX + Math.max(0, (sourceWidth - sw) / 2);
   const room = Math.max(0, sourceHeight - sh);
-  const sy = Math.min(room, Math.max(0, room / 2 + (vertical / 100) * (room / 2)));
+  const sy = cropY + Math.min(room, Math.max(0, room / 2 + (vertical / 100) * (room / 2)));
   try { ctx.drawImage(img, sx, sy, sw, sh, x, y, w, h); } catch {}
 }
 
-function drawContain(ctx: CanvasRenderingContext2D, img: HTMLImageElement | HTMLVideoElement, x: number, y: number, w: number, h: number, vertical = 0) {
-  const sourceWidth = img instanceof HTMLVideoElement ? img.videoWidth : img.naturalWidth;
-  const sourceHeight = img instanceof HTMLVideoElement ? img.videoHeight : img.naturalHeight;
-  if (!sourceWidth || !sourceHeight) return;
+function drawContain(
+  ctx: CanvasRenderingContext2D,
+  img: HTMLImageElement | HTMLVideoElement,
+  x: number,
+  y: number,
+  w: number,
+  h: number,
+  vertical = 0,
+  crop?: VideoCropRect | null
+) {
+  const fullWidth = img instanceof HTMLVideoElement ? img.videoWidth : img.naturalWidth;
+  const fullHeight = img instanceof HTMLVideoElement ? img.videoHeight : img.naturalHeight;
+  if (!fullWidth || !fullHeight) return;
+
+  const cropX = crop ? Math.max(0, Math.min(fullWidth - 10, crop.x)) : 0;
+  const cropY = crop ? Math.max(0, Math.min(fullHeight - 10, crop.y)) : 0;
+  const sourceWidth = crop ? Math.max(10, Math.min(fullWidth - cropX, crop.width)) : fullWidth;
+  const sourceHeight = crop ? Math.max(10, Math.min(fullHeight - cropY, crop.height)) : fullHeight;
+
   const scale = Math.min(w / sourceWidth, h / sourceHeight);
   const dw = Math.round(sourceWidth * scale);
   const dh = Math.round(sourceHeight * scale);
   const dx = Math.round(x + (w - dw) / 2);
   const roomY = Math.max(0, h - dh);
   const dy = Math.round(y + roomY / 2 + (vertical / 100) * (roomY / 2));
-  try { ctx.drawImage(img, dx, dy, dw, dh); } catch {}
+  try { ctx.drawImage(img, cropX, cropY, sourceWidth, sourceHeight, dx, dy, dw, dh); } catch {}
 }
 
 function drawVideoWithFraming(
@@ -339,13 +410,48 @@ function drawVideoWithFraming(
   h: number,
   framingMode: "cover" | "blur-fit",
   vertical = 0,
-  mirror = false
+  mirror = false,
+  miniIaConfig?: {
+    contrast: number;
+    brightness: number;
+    saturation: number;
+    punchZoom: boolean;
+    zoomMax: number;
+    zoomPeriod: number;
+    filterPreset?: VideoFilterPreset;
+  },
+  crop?: VideoCropRect | null
 ) {
+  ctx.save();
   if (mirror) {
-    ctx.save();
     ctx.translate(w, 0);
     ctx.scale(-1, 1);
   }
+
+  // Aplica Punch Zoom pulsante suave se ativado pela Mini IA
+  if (miniIaConfig?.punchZoom && miniIaConfig.zoomPeriod > 0) {
+    const curTime = Number.isFinite(video.currentTime) ? video.currentTime : 0;
+    const pZoom = 1 + miniIaConfig.zoomMax * Math.pow(Math.sin((Math.PI * curTime) / miniIaConfig.zoomPeriod), 6);
+    ctx.translate(w / 2, h / 2);
+    ctx.scale(pZoom, pZoom);
+    ctx.translate(-w / 2, -h / 2);
+  }
+
+  // Aplica Grade de Cores e Contraste da Mini IA + Filtros de Vídeo
+  if (miniIaConfig) {
+    const c = miniIaConfig.contrast;
+    const b = 1 + miniIaConfig.brightness;
+    const s = miniIaConfig.saturation;
+    let filterString = `contrast(${c}) brightness(${b}) saturate(${s})`;
+    if (miniIaConfig.filterPreset && miniIaConfig.filterPreset !== "none") {
+      const extra = VIDEO_FILTERS[miniIaConfig.filterPreset]?.canvasFilter;
+      if (extra) {
+        filterString = `${filterString} ${extra}`;
+      }
+    }
+    ctx.filter = filterString;
+  }
+
   if (framingMode === "blur-fit") {
     // Desfoque em canvas reduzido (135x240): executa em < 0.5ms em vez de travar a CPU por 300ms a 1080x1920
     if (typeof document !== "undefined") {
@@ -355,21 +461,87 @@ function drawVideoWithFraming(
       const bCtx = blurCanvas.getContext("2d");
       if (bCtx) {
         bCtx.filter = "blur(6px) brightness(0.42)";
-        drawCover(bCtx, video, 0, 0, 135, 240, 0);
+        drawCover(bCtx, video, 0, 0, 135, 240, 0, crop);
         ctx.drawImage(blurCanvas, 0, 0, w, h);
       } else {
-        drawCover(ctx, video, 0, 0, w, h, 0);
+        drawCover(ctx, video, 0, 0, w, h, 0, crop);
       }
     } else {
-      drawCover(ctx, video, 0, 0, w, h, 0);
+      drawCover(ctx, video, 0, 0, w, h, 0, crop);
     }
-    drawContain(ctx, video, 0, 0, w, h, vertical);
+    drawContain(ctx, video, 0, 0, w, h, vertical, crop);
   } else {
-    drawCover(ctx, video, 0, 0, w, h, vertical);
+    drawCover(ctx, video, 0, 0, w, h, vertical, crop);
   }
-  if (mirror) {
-    ctx.restore();
+
+  ctx.restore();
+}
+
+function drawViralHookBanner(
+  ctx: CanvasRenderingContext2D,
+  hookText: string,
+  canvasWidth: number,
+  canvasHeight: number,
+  currentTime: number,
+  format: PublicationFormat = "reel"
+) {
+  if (!hookText || !hookText.trim()) return;
+  // Exibe durante os primeiros 3.6 segundos de gancho com fade-out suave a partir de 3.0s
+  if (currentTime > 3.6) return;
+  const alpha = currentTime > 3.0 ? Math.max(0, 1 - (currentTime - 3.0) / 0.6) : 1;
+  if (alpha <= 0.02) return;
+
+  ctx.save();
+  ctx.globalAlpha = alpha;
+
+  const text = hookText.trim().toUpperCase();
+  const bannerY = format === "feed-square" ? canvasHeight * 0.22 : format === "feed" ? canvasHeight * 0.20 : canvasHeight * 0.16;
+  const fontSize = 38;
+  ctx.font = `900 ${fontSize}px "Montserrat", -apple-system, sans-serif`;
+  ctx.textAlign = "center";
+  ctx.textBaseline = "middle";
+
+  const metrics = ctx.measureText(text);
+  const textWidth = metrics.width;
+  const padX = 30;
+  const padY = 16;
+  const maxW = canvasWidth - 100;
+  const boxW = Math.min(maxW, textWidth + padX * 2);
+  const boxH = fontSize + padY * 2;
+  const boxX = (canvasWidth - boxW) / 2;
+
+  // Sombra de alto impacto para leitura garantida
+  ctx.shadowColor = "rgba(0, 0, 0, 0.85)";
+  ctx.shadowBlur = 18;
+  ctx.shadowOffsetY = 6;
+
+  // Caixa amarela vibrante estilo breaking viral
+  ctx.fillStyle = "#FFCC00";
+  if (typeof ctx.roundRect === "function") {
+    ctx.beginPath();
+    ctx.roundRect(boxX, bannerY, boxW, boxH, 12);
+    ctx.fill();
+  } else {
+    ctx.fillRect(boxX, bannerY, boxW, boxH);
   }
+
+  // Borda preta estilizada
+  ctx.lineWidth = 4;
+  ctx.strokeStyle = "#000000";
+  if (typeof ctx.roundRect === "function") {
+    ctx.beginPath();
+    ctx.roundRect(boxX, bannerY, boxW, boxH, 12);
+    ctx.stroke();
+  } else {
+    ctx.strokeRect(boxX, bannerY, boxW, boxH);
+  }
+
+  // Texto preto absoluto com contraste máximo
+  ctx.shadowColor = "transparent";
+  ctx.fillStyle = "#000000";
+  ctx.fillText(text, canvasWidth / 2, bannerY + boxH / 2 + 1, boxW - 24);
+
+  ctx.restore();
 }
 
 function drawStoryStickerGuide(ctx: CanvasRenderingContext2D, canvasWidth: number) {
@@ -408,17 +580,30 @@ let cachedOfficialGifLogo: HTMLImageElement | null = null;
 function getOfficialLogo(variant: "white" | "dark" | "gif"): HTMLImageElement | HTMLVideoElement | null {
   if (typeof window === "undefined") return null;
   if (variant === "gif") {
-    // 1. Tenta carregar o WebM transparente nativo (65 KB, qualidade perfeita e leve)
+    // 1. Tenta carregar o WebM transparente nativo (65 KB, qualidade perfeita com canal Alpha)
     if (!cachedOfficialWebmLogo) {
       try {
         const vid = document.createElement("video");
         vid.src = "/logos/Viralizou_Goiania_logo_animada_transparente.webm";
         vid.autoplay = true;
         vid.loop = true;
+        vid.defaultMuted = true;
         vid.muted = true;
         vid.playsInline = true;
         vid.crossOrigin = "anonymous";
-        vid.oncanplay = () => { vid.play().catch(() => {}); };
+        vid.preload = "auto";
+        vid.oncanplay = () => {
+          vid.play().catch(() => {});
+          if (typeof window !== "undefined") {
+            window.dispatchEvent(new CustomEvent("viralizou_logo_ready"));
+          }
+        };
+        vid.onloadeddata = () => {
+          vid.play().catch(() => {});
+          if (typeof window !== "undefined") {
+            window.dispatchEvent(new CustomEvent("viralizou_logo_ready"));
+          }
+        };
         cachedOfficialWebmLogo = vid;
         vid.play().catch(() => {});
       } catch {}
@@ -428,10 +613,15 @@ function getOfficialLogo(variant: "white" | "dark" | "gif"): HTMLImageElement | 
       return cachedOfficialWebmLogo;
     }
 
-    // 2. Fallback para GIF transparente
+    // 2. Fallback para GIF animado oficial do portal
     if (!cachedOfficialGifLogo || !isImageDrawable(cachedOfficialGifLogo)) {
       const img = new Image();
-      img.src = "/logos/logo-viralizou-animada.gif";
+      img.src = "/logos/logo-viralizou-intro.gif";
+      img.onload = () => {
+        if (typeof window !== "undefined") {
+          window.dispatchEvent(new CustomEvent("viralizou_logo_ready"));
+        }
+      };
       img.onerror = () => {
         // Tenta acionar a conversão da logo caso ainda não tenha sido gerada
         fetch("/api/admin/convert-logo-gif", { method: "POST" })
@@ -812,6 +1002,24 @@ function renderCaptionStyleToContext(
   const blockLeft = centerX - layout.width / 2;
   const blockRight = centerX + layout.width / 2;
   const fontString = getReelFont(fontFamily, layout.fontSize, fontWeight);
+
+  // 0. ESTILO BLOCO VERMELHO INFERIOR (Estilo TVT / Notícias)
+  if (textStyle === "red-bottom") {
+    ctx.save();
+    ctx.fillStyle = "#ffffff";
+    ctx.textBaseline = "middle";
+    ctx.font = fontString;
+    let curY = centerY - layout.height / 2 + layout.lineHeight * 0.5;
+    for (const line of linesToDraw) {
+      if (line) {
+        ctx.textAlign = "left";
+        ctx.fillText(line, blockLeft, curY);
+      }
+      curY += layout.lineHeight;
+    }
+    ctx.restore();
+    return;
+  }
 
   // 1. ESTILO CAIXA NOTICIOSA (Estilo O Grito - Foto 3)
   if (textStyle === "box-banner") {
@@ -1239,6 +1447,79 @@ function drawReelHeadline(
   canvasHeight: number = REEL_H,
   maxWidth: number = 820,
 ) {
+  // Estilo Bloco Vermelho Notícia (TVT / Notícias): Fundo vermelho sólido cobrindo o terço inferior + manchete branca à esquerda + rodapé clean
+  if (textStyle === "red-bottom") {
+    const bannerY = Math.round(canvasHeight * 0.615); // ~1180px em 1920
+    const bannerH = canvasHeight - bannerY;
+
+    ctx.save();
+    ctx.imageSmoothingEnabled = true;
+    ctx.imageSmoothingQuality = "high";
+    (ctx as any).textRendering = "geometricPrecision";
+
+    // 1. Bloco Vermelho Sólido Noticioso (Estilo TVT / Notícias)
+    ctx.fillStyle = "#e50014";
+    ctx.fillRect(0, bannerY, W, bannerH);
+
+    // 2. Linha decorativa branca e círculo outline na base
+    const lineY = canvasHeight - 110;
+    const padX = 72;
+    ctx.strokeStyle = "rgba(255, 255, 255, 0.45)";
+    ctx.lineWidth = 3;
+    ctx.beginPath();
+    ctx.moveTo(padX, lineY);
+    ctx.lineTo(W - 240, lineY);
+    ctx.stroke();
+
+    ctx.strokeStyle = "#ffffff";
+    ctx.lineWidth = 3.5;
+    ctx.beginPath();
+    ctx.arc(W - 140, lineY, 26, 0, Math.PI * 2);
+    ctx.stroke();
+
+    // 3. Manchete / Título digitado pelo usuário
+    const maxTextW = W - padX * 2;
+    const effFontSize = fontSize > 0 ? fontSize : 60;
+    const effFont = getReelFont(fontFamily || "inter", effFontSize, fontWeight || "800");
+    ctx.font = effFont;
+    ctx.fillStyle = "#ffffff";
+    ctx.textAlign = "left";
+    ctx.textBaseline = "top";
+
+    const layout = getCachedReelTitleLayout(ctx, headline, fontFamily, fontWeight, textCase, effFontSize, maxTextW);
+    const startY = bannerY + 65;
+    const lineH = Math.round(effFontSize * 1.28);
+
+    const animDuration = Math.min(2.5, Math.max(0.6, duration > 0 ? duration * 0.25 : 2.0));
+    const rawProgress = Math.min(1, Math.max(0, currentTime / animDuration));
+    let totalCharsAllowed = animation === "typewriter" ? Math.floor(layout.lines.join("").length * rawProgress) : 999999;
+    let charsDrawn = 0;
+
+    let curY = startY;
+    for (const line of layout.lines) {
+      if (!line) {
+        curY += lineH;
+        continue;
+      }
+      if (animation === "typewriter") {
+        const remaining = totalCharsAllowed - charsDrawn;
+        if (remaining <= 0) break;
+        const visibleSlice = line.slice(0, remaining);
+        ctx.fillText(visibleSlice, padX, curY);
+        charsDrawn += visibleSlice.length;
+      } else {
+        if (animation === "fade") {
+          ctx.globalAlpha = Math.min(1, rawProgress * 1.5);
+        }
+        ctx.fillText(line, padX, curY);
+      }
+      curY += lineH;
+    }
+
+    ctx.restore();
+    return;
+  }
+
   const raster = getCachedReelCaptionRaster(
     ctx, headline, category, fontFamily, fontWeight, textStyle,
     textAlign, textCase, fontSize, canvasHeight, maxWidth,
@@ -1384,6 +1665,18 @@ function drawReelFrame(
   framingMode: "cover" | "blur-fit" = "cover",
   imageVertical: number = 0,
   mirror: boolean = false,
+  miniIaConfig?: {
+    contrast: number;
+    brightness: number;
+    saturation: number;
+    punchZoom: boolean;
+    zoomMax: number;
+    zoomPeriod: number;
+    filterPreset?: VideoFilterPreset;
+    autoHookEnabled?: boolean;
+    autoHookText?: string;
+  },
+  crop?: VideoCropRect | null
 ) {
   ctx.save();
   ctx.imageSmoothingEnabled = true;
@@ -1393,11 +1686,11 @@ function drawReelFrame(
   ctx.fillStyle = "#050505";
   ctx.fillRect(0, 0, W, REEL_H);
   if (video && video.readyState >= 2) {
-    drawVideoWithFraming(ctx, video, W, REEL_H, framingMode, imageVertical, mirror);
+    drawVideoWithFraming(ctx, video, W, REEL_H, framingMode, imageVertical, mirror, miniIaConfig, crop);
   }
 
   const maxAlpha = shadeOpacity / 100;
-  if (shadeOpacity > 0) {
+  if (shadeOpacity > 0 && textStyle !== "red-bottom") {
     const shade = ctx.createLinearGradient(0, 650, 0, REEL_H);
     shade.addColorStop(0, `rgba(0,0,0,${(0.05 * maxAlpha).toFixed(2)})`);
     shade.addColorStop(0.42, `rgba(0,0,0,${(0.68 * maxAlpha).toFixed(2)})`);
@@ -1452,9 +1745,9 @@ function drawReelFrame(
   }
 
   // Assinatura / Tag Inferior
-  if (showHandleLayer && handle && handle.trim()) {
+  if (showHandleLayer && handle && handle.trim() && textStyle !== "red-bottom") {
     const tagText = handle.trim();
-    const tagY = tagPositionY || 1670;
+    const tagY = getEffectiveTagY(format, tagPositionY);
 
     ctx.save();
     ctx.textAlign = "center";
@@ -1490,6 +1783,11 @@ function drawReelFrame(
     ctx.fillStyle = textColor;
     ctx.fillText(tagText, W / 2, tagY);
     ctx.restore();
+  }
+
+  // Banner de Gancho Viral Auto-Edit (primeiros 3.5s)
+  if (video && miniIaConfig?.autoHookEnabled && miniIaConfig.autoHookText) {
+    drawViralHookBanner(ctx, miniIaConfig.autoHookText, W, REEL_H, video.currentTime, format);
   }
 
   // Guia opcional de área segura do Instagram
@@ -1543,7 +1841,7 @@ function buildReelOverlayCanvas(
 
   // 1. Gradiente inferior de contraste (shade)
   const maxAlpha = (showOverlayLayer ? shadeOpacity : 0) / 100;
-  if (maxAlpha > 0) {
+  if (maxAlpha > 0 && textStyle !== "red-bottom") {
     const shade = ctx.createLinearGradient(0, 650, 0, REEL_H);
     shade.addColorStop(0, `rgba(0,0,0,${(0.05 * maxAlpha).toFixed(2)})`);
     shade.addColorStop(0.42, `rgba(0,0,0,${(0.68 * maxAlpha).toFixed(2)})`);
@@ -1563,8 +1861,8 @@ function buildReelOverlayCanvas(
     ctx.fillText("AVISO: CENAS FORTES", W / 2, 95);
   }
 
-  // 3. Logo do jornal
-  if (showLogoLayer) {
+  // 3. Logo do jornal (quando animada em GIF/WebM, é renderizada quadro a quadro em tempo real)
+  if (showLogoLayer && logoColorStyle !== "gif") {
     const renderLogo = getRenderableLogo(logo, logoColorStyle, "white");
     if (renderLogo && isImageDrawable(renderLogo)) {
       const { width, height } = getLogoSize(renderLogo, format, logoScale / 100);
@@ -1595,9 +1893,9 @@ function buildReelOverlayCanvas(
   }
 
   // 5. Assinatura / Tag Inferior (@viralizougoiania)
-  if (showHandleLayer && handle && handle.trim()) {
+  if (showHandleLayer && handle && handle.trim() && textStyle !== "red-bottom") {
     const tagText = handle.trim();
-    const tagY = tagPositionY || 1670;
+    const tagY = getEffectiveTagY(format, tagPositionY);
 
     ctx.save();
     ctx.textAlign = "center";
@@ -1643,6 +1941,7 @@ export default function SocialFeedCreator({ posts, onBack, initialPost, onOpenCo
   const videoFileRef = useRef<File | Blob | null>(null);
   const cachedOverlayCanvasRef = useRef<HTMLCanvasElement | null>(null);
   const logoImageRef = useRef<HTMLImageElement | null>(null);
+  const animatedLogoRef = useRef<HTMLVideoElement | null>(null);
   const articleImageRef = useRef<{ src: string; image: HTMLImageElement } | null>(null);
   const customImageRef = useRef<HTMLImageElement | null>(null);
   const imageInputRef = useRef<HTMLInputElement | null>(null);
@@ -1652,6 +1951,8 @@ export default function SocialFeedCreator({ posts, onBack, initialPost, onOpenCo
   const feedTitlePositionRef = useRef<LogoPosition>(DEFAULT_FEED_TITLE_POSITION);
   const logoDragRef = useRef<{ pointerId: number; offsetX: number; offsetY: number } | null>(null);
   const titleDragRef = useRef<{ pointerId: number; offsetX: number; offsetY: number } | null>(null);
+  const tagDragRef = useRef<{ pointerId: number; offsetY: number } | null>(null);
+  const tagPositionYRef = useRef<number>(1670);
   const audioContextRef = useRef<AudioContext | null>(null);
   const audioSourceRef = useRef<MediaElementAudioSourceNode | null>(null);
   const isRecordingRef = useRef<boolean>(false);
@@ -1686,7 +1987,19 @@ export default function SocialFeedCreator({ posts, onBack, initialPost, onOpenCo
   const [reelTextCase, setReelTextCase] = useState<ReelTextCase>("uppercase");
   const [reelFontSize, setReelFontSize] = useState<number>(72);
   const [tagColor, setTagColor] = useState<ReelTagColor>("red");
-  const [tagPositionY, setTagPositionY] = useState<number>(1670);
+  const [tagPositionY, setTagPositionY] = useState<number>(() => {
+    if (typeof window !== "undefined") {
+      try {
+        const saved = localStorage.getItem("viralizou_tag_position_y");
+        if (saved) return Number(saved) || 1670;
+      } catch {}
+    }
+    return 1670;
+  });
+
+  useEffect(() => {
+    tagPositionYRef.current = tagPositionY;
+  }, [tagPositionY]);
   const [showSafeZone, setShowSafeZone] = useState<boolean>(false);
   const [reelTextAnimation, setReelTextAnimation] = useState<ReelTextAnimation>("static");
   const [showStrongSceneWarning, setShowStrongSceneWarning] = useState(false);
@@ -1709,6 +2022,32 @@ export default function SocialFeedCreator({ posts, onBack, initialPost, onOpenCo
   const [miniIaLevel, setMiniIaLevel] = useState<MiniIaEditLevel>("media");
   const [miniIaMirror, setMiniIaMirror] = useState<boolean>(false);
   const [miniIaTrimSeconds, setMiniIaTrimSeconds] = useState<number>(3); // Padrão sempre corta 3 segundos
+  const [videoFilter, setVideoFilter] = useState<VideoFilterPreset>("none");
+  const [cutPauses, setCutPauses] = useState<boolean>(true);
+  const [bgmTrack, setBgmTrack] = useState<BgmTrackPreset>("energetic");
+  const [autoHookEnabled, setAutoHookEnabled] = useState<boolean>(true);
+  const [autoHookText, setAutoHookText] = useState<string>("");
+  const [videoDuration, setVideoDuration] = useState<number>(0);
+  const [videoCrop, setVideoCrop] = useState<VideoCropRect | null>(null);
+  const [showCropModal, setShowCropModal] = useState<boolean>(false);
+
+  const effectiveHookText = autoHookText.trim() || (title || selectedPost?.title || "LIVRO CAIU SOZINHO NO CHÃO");
+  const computedKeywords = useMemo(() => {
+    const raw = title || selectedPost?.title || "LIVRO CAIU SOZINHO NO CHÃO";
+    const words = raw.split(/\s+/).filter((w) => w.length > 2);
+    return Math.max(4, Math.min(15, words.length || 9));
+  }, [title, selectedPost?.title]);
+
+  const computedZooms = useMemo(() => {
+    const dur = videoDuration > 0 ? videoDuration : 30;
+    const factor = miniIaLevel === "leve" ? 7 : miniIaLevel === "alta" ? 3.5 : 5;
+    return Math.max(3, Math.round(dur / factor));
+  }, [videoDuration, miniIaLevel]);
+
+  const computedAnimatedScenes = useMemo(() => {
+    const dur = videoDuration > 0 ? videoDuration : 30;
+    return Math.max(2, Math.round(dur / 7.5));
+  }, [videoDuration]);
 
   const [presetSlots, setPresetSlots] = useState<LayoutPresetSlot[]>(DEFAULT_PRESET_SLOTS);
   const [activeSlotId, setActiveSlotId] = useState<number | null>(null);
@@ -1759,6 +2098,12 @@ export default function SocialFeedCreator({ posts, onBack, initialPost, onOpenCo
     if (d.miniIaLevel) setMiniIaLevel(d.miniIaLevel);
     if (typeof d.miniIaMirror === "boolean") setMiniIaMirror(d.miniIaMirror);
     if (typeof d.miniIaTrimSeconds === "number") setMiniIaTrimSeconds(d.miniIaTrimSeconds);
+    if (d.videoFilter) setVideoFilter(d.videoFilter);
+    if (typeof d.cutPauses === "boolean") setCutPauses(d.cutPauses);
+    if (d.bgmTrack) setBgmTrack(d.bgmTrack);
+    if (typeof d.autoHookEnabled === "boolean") setAutoHookEnabled(d.autoHookEnabled);
+    if (typeof d.autoHookText === "string") setAutoHookText(d.autoHookText);
+    if (d.videoCrop !== undefined) setVideoCrop(d.videoCrop);
 
     setActiveSlotId(slot.id);
     setSlotFeedback(`⚡ ${slot.name} carregado no preview!`);
@@ -1808,6 +2153,12 @@ export default function SocialFeedCreator({ posts, onBack, initialPost, onOpenCo
           miniIaLevel,
           miniIaMirror,
           miniIaTrimSeconds,
+          videoFilter,
+          cutPauses,
+          bgmTrack,
+          autoHookEnabled,
+          autoHookText,
+          videoCrop,
         },
       };
     });
@@ -1821,6 +2172,48 @@ export default function SocialFeedCreator({ posts, onBack, initialPost, onOpenCo
     setTimeout(() => setSlotFeedback(""), 3500);
   }
 
+  function handleApplyCrop(newCrop: VideoCropRect | null) {
+    setVideoCrop(newCrop);
+    if (newCrop) {
+      try { localStorage.setItem("viralizou_video_crop", JSON.stringify(newCrop)); } catch {}
+    } else {
+      try { localStorage.removeItem("viralizou_video_crop"); } catch {}
+    }
+    cachedOverlayCanvasRef.current = null;
+    renderCard();
+  }
+
+  function chooseVideoFilter(f: VideoFilterPreset) {
+    setVideoFilter(f);
+    try { localStorage.setItem("viralizou_video_filter", f); } catch {}
+    cachedOverlayCanvasRef.current = null;
+    renderCard();
+  }
+
+  function toggleCutPauses(val: boolean) {
+    setCutPauses(val);
+    try { localStorage.setItem("viralizou_cut_pauses", String(val)); } catch {}
+  }
+
+  function chooseBgmTrack(tr: BgmTrackPreset) {
+    setBgmTrack(tr);
+    try { localStorage.setItem("viralizou_bgm_track", tr); } catch {}
+  }
+
+  function toggleAutoHook(val: boolean) {
+    setAutoHookEnabled(val);
+    try { localStorage.setItem("viralizou_auto_hook_enabled", String(val)); } catch {}
+    cachedOverlayCanvasRef.current = null;
+    renderCard();
+  }
+
+  function changeHookText(val: string) {
+    setAutoHookText(val);
+    try { localStorage.setItem("viralizou_auto_hook_text", val); } catch {}
+    cachedOverlayCanvasRef.current = null;
+    renderCard();
+  }
+
   function chooseMiniIaLevel(lvl: MiniIaEditLevel) {
     setMiniIaLevel(lvl);
     try { localStorage.setItem("viralizou_mini_ia_level", lvl); } catch {}
@@ -1829,6 +2222,8 @@ export default function SocialFeedCreator({ posts, onBack, initialPost, onOpenCo
   function toggleMiniIaMirror(val: boolean) {
     setMiniIaMirror(val);
     try { localStorage.setItem("viralizou_mini_ia_mirror", String(val)); } catch {}
+    cachedOverlayCanvasRef.current = null;
+    renderCard();
   }
 
   function chooseMiniIaTrimSeconds(sec: number) {
@@ -1847,6 +2242,16 @@ export default function SocialFeedCreator({ posts, onBack, initialPost, onOpenCo
   useEffect(() => () => { if (videoExport?.url) URL.revokeObjectURL(videoExport.url); }, [videoExport?.url]);
   useEffect(() => () => { if (customImageUrl && customImageUrl.startsWith("blob:")) URL.revokeObjectURL(customImageUrl); }, [customImageUrl]);
   useEffect(() => () => { audioContextRef.current?.close().catch(() => {}); }, []);
+  useEffect(() => {
+    const handleLogoReady = () => {
+      cachedOverlayCanvasRef.current = null;
+      renderCard();
+    };
+    if (typeof window !== "undefined") {
+      window.addEventListener("viralizou_logo_ready", handleLogoReady);
+      return () => window.removeEventListener("viralizou_logo_ready", handleLogoReady);
+    }
+  }, []);
   useEffect(() => {
     if (initialPost) {
       setSelectedPost(initialPost);
@@ -1945,6 +2350,33 @@ export default function SocialFeedCreator({ posts, onBack, initialPost, onOpenCo
           setMiniIaTrimSeconds(parsedTrim);
         }
       }
+      const savedFilter = localStorage.getItem("viralizou_video_filter") as VideoFilterPreset | null;
+      if (savedFilter && savedFilter in VIDEO_FILTERS) {
+        setVideoFilter(savedFilter);
+      }
+      const savedCutPauses = localStorage.getItem("viralizou_cut_pauses");
+      if (savedCutPauses !== null) {
+        setCutPauses(savedCutPauses === "true");
+      }
+      const savedBgmTrack = localStorage.getItem("viralizou_bgm_track") as BgmTrackPreset | null;
+      if (savedBgmTrack && savedBgmTrack in BGM_TRACKS) {
+        setBgmTrack(savedBgmTrack);
+      }
+      const savedHookEnabled = localStorage.getItem("viralizou_auto_hook_enabled");
+      if (savedHookEnabled !== null) {
+        setAutoHookEnabled(savedHookEnabled === "true");
+      }
+      const savedHookText = localStorage.getItem("viralizou_auto_hook_text");
+      if (savedHookText) {
+        setAutoHookText(savedHookText);
+      }
+      const savedCrop = localStorage.getItem("viralizou_video_crop");
+      if (savedCrop) {
+        try {
+          const parsed = JSON.parse(savedCrop);
+          if (parsed && typeof parsed.width === "number") setVideoCrop(parsed);
+        } catch {}
+      }
       const importedUrl = localStorage.getItem("viralizou_import_video_url");
       if (importedUrl) {
         setImportVideoUrl(importedUrl);
@@ -2011,7 +2443,13 @@ export default function SocialFeedCreator({ posts, onBack, initialPost, onOpenCo
               customImageRef.current = await loadImage(customImageUrl);
             }
             if (customImageRef.current) {
+              ctx.save();
+              if (miniIaMirror) {
+                ctx.translate(currentW, 0);
+                ctx.scale(-1, 1);
+              }
               drawCover(ctx, customImageRef.current, 0, 0, currentW, currentH, imagePosition);
+              ctx.restore();
               mediaDrawn = true;
             }
           } catch (e) {
@@ -2024,7 +2462,13 @@ export default function SocialFeedCreator({ posts, onBack, initialPost, onOpenCo
             const src = `/api/admin/feed-image?slug=${encodeURIComponent(selectedPost.slug)}&v=${encodeURIComponent(selectedPost.updated_at || selectedPost.created_at || "")}`;
             const img = articleImageRef.current?.src === src ? articleImageRef.current.image : await loadImage(src);
             articleImageRef.current = { src, image: img };
+            ctx.save();
+            if (miniIaMirror) {
+              ctx.translate(currentW, 0);
+              ctx.scale(-1, 1);
+            }
             drawCover(ctx, img, 0, 0, currentW, currentH, imagePosition);
+            ctx.restore();
             mediaDrawn = true;
           } catch (e) {
             console.warn("Erro ao carregar imagem da notícia:", e);
@@ -2163,6 +2607,18 @@ export default function SocialFeedCreator({ posts, onBack, initialPost, onOpenCo
           videoFramingMode,
           imagePosition,
           miniIaMirror,
+          {
+            contrast: (MINI_IA_LEVELS[miniIaLevel] || MINI_IA_LEVELS.media).contrast,
+            brightness: (MINI_IA_LEVELS[miniIaLevel] || MINI_IA_LEVELS.media).brightness,
+            saturation: (MINI_IA_LEVELS[miniIaLevel] || MINI_IA_LEVELS.media).saturation,
+            punchZoom: (MINI_IA_LEVELS[miniIaLevel] || MINI_IA_LEVELS.media).punchZoom,
+            zoomMax: (MINI_IA_LEVELS[miniIaLevel] || MINI_IA_LEVELS.media).zoomMax,
+            zoomPeriod: (MINI_IA_LEVELS[miniIaLevel] || MINI_IA_LEVELS.media).zoomPeriod,
+            filterPreset: videoFilter,
+            autoHookEnabled,
+            autoHookText: effectiveHookText,
+          },
+          videoCrop
         );
         setMessage("");
         return;
@@ -2192,7 +2648,13 @@ export default function SocialFeedCreator({ posts, onBack, initialPost, onOpenCo
             customImageRef.current = await loadImage(customImageUrl);
           }
           if (customImageRef.current) {
+            ctx.save();
+            if (miniIaMirror) {
+              ctx.translate(currentW, 0);
+              ctx.scale(-1, 1);
+            }
             drawCover(ctx, customImageRef.current, 0, 0, currentW, coverH, imagePosition);
+            ctx.restore();
             mediaDrawn = true;
           }
         } catch (e) {
@@ -2202,7 +2664,13 @@ export default function SocialFeedCreator({ posts, onBack, initialPost, onOpenCo
 
       // 2. Vídeo carregado (se houver e não tiver imagem personalizada)
       if (!mediaDrawn && videoPreviewRef.current && videoReady) {
-        drawCover(ctx, videoPreviewRef.current, 0, 0, currentW, coverH, imagePosition);
+        ctx.save();
+        if (miniIaMirror) {
+          ctx.translate(currentW, 0);
+          ctx.scale(-1, 1);
+        }
+        drawCover(ctx, videoPreviewRef.current, 0, 0, currentW, coverH, imagePosition, videoCrop);
+        ctx.restore();
         mediaDrawn = true;
       }
 
@@ -2212,7 +2680,13 @@ export default function SocialFeedCreator({ posts, onBack, initialPost, onOpenCo
           const src = `/api/admin/feed-image?slug=${encodeURIComponent(selectedPost.slug)}&v=${encodeURIComponent(selectedPost.updated_at || selectedPost.created_at || "")}`;
           const img = articleImageRef.current?.src === src ? articleImageRef.current.image : await loadImage(src);
           articleImageRef.current = { src, image: img };
+          ctx.save();
+          if (miniIaMirror) {
+            ctx.translate(currentW, 0);
+            ctx.scale(-1, 1);
+          }
           drawCover(ctx, img, 0, 0, currentW, coverH, imagePosition);
+          ctx.restore();
           mediaDrawn = true;
         } catch (e) {
           console.warn("Erro ao carregar imagem da notícia:", e);
@@ -2313,7 +2787,7 @@ export default function SocialFeedCreator({ posts, onBack, initialPost, onOpenCo
         ctx.fillStyle = handleColor;
         ctx.shadowColor = "rgba(0,0,0,0.6)";
         ctx.shadowBlur = 8;
-        const handleY = format === "feed-square" ? 1030 : 1300;
+        const handleY = getEffectiveTagY(format, tagPositionYRef.current || tagPositionY);
         ctx.fillText(handle.trim() || "@viralizougoiania", currentW / 2, handleY);
         ctx.restore();
       }
@@ -2454,10 +2928,47 @@ export default function SocialFeedCreator({ posts, onBack, initialPost, onOpenCo
           if (ctx && video.readyState >= 2) {
             ctx.fillStyle = "#050505";
             ctx.fillRect(0, 0, W, REEL_H);
-            drawVideoWithFraming(ctx, video, W, REEL_H, videoFramingMode, imagePosition);
-            // Ultra-rápido: desenha o overlay já pré-renderizado e cacheado em 0.05ms
-            if (cachedOverlayCanvasRef.current) {
+            const miniIaCfg = MINI_IA_LEVELS[miniIaLevel] || MINI_IA_LEVELS.media;
+            drawVideoWithFraming(
+              ctx,
+              video,
+              W,
+              REEL_H,
+              videoFramingMode,
+              imagePosition,
+              miniIaMirror,
+              {
+                contrast: miniIaCfg.contrast,
+                brightness: miniIaCfg.brightness,
+                saturation: miniIaCfg.saturation,
+                punchZoom: miniIaCfg.punchZoom,
+                zoomMax: miniIaCfg.zoomMax,
+                zoomPeriod: miniIaCfg.zoomPeriod,
+                filterPreset: videoFilter,
+              },
+              videoCrop
+            );
+            // Ultra-rápido: usa o overlay cacheado apenas quando não estiver arrastando elementos interativos
+            const isDraggingAny = Boolean(tagDragRef.current || titleDragRef.current || logoDragRef.current);
+            if (cachedOverlayCanvasRef.current && !isDraggingAny) {
               ctx.drawImage(cachedOverlayCanvasRef.current, 0, 0);
+              if (showLogoLayer && logoColorStyle === "gif") {
+                const animLogo = animatedLogoRef.current || getOfficialLogo("gif");
+                if (animLogo && isImageDrawable(animLogo)) {
+                  const { width: lW, height: lH } = getLogoSize(animLogo, format, logoScale / 100);
+                  safeDrawImage(
+                    ctx,
+                    animLogo,
+                    logoPositionRef.current.x * W - lW / 2,
+                    logoPositionRef.current.y * REEL_H - lH / 2,
+                    lW,
+                    lH
+                  );
+                }
+              }
+              if (autoHookEnabled && effectiveHookText && video.currentTime <= 3.6) {
+                drawViralHookBanner(ctx, effectiveHookText, W, REEL_H, video.currentTime, format);
+              }
             } else {
               drawReelFrame(
                 ctx,
@@ -2479,7 +2990,7 @@ export default function SocialFeedCreator({ posts, onBack, initialPost, onOpenCo
                 logoScale,
                 handleFontSize,
                 tagColor,
-                tagPositionY,
+                getEffectiveTagY(format, tagPositionYRef.current || tagPositionY),
                 showSafeZone,
                 logoColorStyle,
                 showOverlayLayer ? shadeOpacity : 0,
@@ -2490,6 +3001,19 @@ export default function SocialFeedCreator({ posts, onBack, initialPost, onOpenCo
                 format,
                 videoFramingMode,
                 imagePosition,
+                miniIaMirror,
+                {
+                  contrast: miniIaCfg.contrast,
+                  brightness: miniIaCfg.brightness,
+                  saturation: miniIaCfg.saturation,
+                  punchZoom: miniIaCfg.punchZoom,
+                  zoomMax: miniIaCfg.zoomMax,
+                  zoomPeriod: miniIaCfg.zoomPeriod,
+                  filterPreset: videoFilter,
+                  autoHookEnabled,
+                  autoHookText: effectiveHookText,
+                },
+                videoCrop
               );
             }
             if (showSafeZone) {
@@ -2531,7 +3055,7 @@ export default function SocialFeedCreator({ posts, onBack, initialPost, onOpenCo
       video.removeEventListener("timeupdate", handleTimeCheck);
       cancelAnimationFrame(frameId);
     };
-  }, [format, videoUrl, title, handle, logoData, selectedPost?.title, reelTextStyle, reelFontFamily, reelFontWeight, reelTextAlign, reelTextCase, reelFontSize, tagColor, tagPositionY, showSafeZone, reelTextAnimation, showStrongSceneWarning, logoScale, handleFontSize, shadeOpacity, showOverlayLayer, showLogoLayer, showTitleLayer, showHandleLayer, showStorySticker, logoColorStyle, recording, videoFramingMode, imagePosition, miniIaTrimSeconds]);
+  }, [format, videoUrl, title, handle, logoData, selectedPost?.title, reelTextStyle, reelFontFamily, reelFontWeight, reelTextAlign, reelTextCase, reelFontSize, tagColor, tagPositionY, showSafeZone, reelTextAnimation, showStrongSceneWarning, logoScale, handleFontSize, shadeOpacity, showOverlayLayer, showLogoLayer, showTitleLayer, showHandleLayer, showStorySticker, logoColorStyle, recording, videoFramingMode, imagePosition, miniIaTrimSeconds, miniIaLevel, miniIaMirror, videoFilter, autoHookEnabled, effectiveHookText, videoCrop]);
 
   async function loadArticle() {
     const slug = slugFromInput(articleUrl);
@@ -2755,12 +3279,19 @@ export default function SocialFeedCreator({ posts, onBack, initialPost, onOpenCo
   function chooseLogoColorStyle(style: LogoColorStyle) {
     setLogoColorStyle(style);
     try { localStorage.setItem("viralizou_feed_logo_color_style", style); } catch {}
+    cachedOverlayCanvasRef.current = null;
     if (style === "gif") {
+      if (animatedLogoRef.current) {
+        animatedLogoRef.current.defaultMuted = true;
+        animatedLogoRef.current.muted = true;
+        animatedLogoRef.current.play().catch(() => {});
+      }
       fetch("/api/admin/convert-logo-gif", { method: "POST" })
         .then((r) => r.json())
         .then((d) => {
           if (d.ok) {
             cachedOfficialGifLogo = null;
+            cachedOverlayCanvasRef.current = null;
             renderCard();
           }
         })
@@ -2818,31 +3349,43 @@ export default function SocialFeedCreator({ posts, onBack, initialPost, onOpenCo
   function chooseReelTextStyle(style: ReelTextStyle) {
     setReelTextStyle(style);
     try { localStorage.setItem("viralizou_reel_text_style", style); } catch {}
+    cachedOverlayCanvasRef.current = null;
+    renderCard();
   }
 
   function chooseReelFontFamily(font: ReelFontFamily) {
     setReelFontFamily(font);
     try { localStorage.setItem("viralizou_reel_font_family", font); } catch {}
+    cachedOverlayCanvasRef.current = null;
+    renderCard();
   }
 
   function chooseReelFontWeight(weight: ReelFontWeight) {
     setReelFontWeight(weight);
     try { localStorage.setItem("viralizou_reel_font_weight", weight); } catch {}
+    cachedOverlayCanvasRef.current = null;
+    renderCard();
   }
 
   function chooseReelTextAlign(align: ReelTextAlign) {
     setReelTextAlign(align);
     try { localStorage.setItem("viralizou_reel_text_align", align); } catch {}
+    cachedOverlayCanvasRef.current = null;
+    renderCard();
   }
 
   function chooseReelTextCase(textCase: ReelTextCase) {
     setReelTextCase(textCase);
     try { localStorage.setItem("viralizou_reel_text_case", textCase); } catch {}
+    cachedOverlayCanvasRef.current = null;
+    renderCard();
   }
 
   function chooseReelFontSize(size: number) {
     setReelFontSize(size);
     try { localStorage.setItem("viralizou_reel_font_size", String(size)); } catch {}
+    cachedOverlayCanvasRef.current = null;
+    renderCard();
   }
 
   function chooseTagColor(color: ReelTagColor) {
@@ -2992,6 +3535,42 @@ export default function SocialFeedCreator({ posts, onBack, initialPost, onOpenCo
       }
     }
 
+    // 3. TAG / ASSINATURA DO CONTEÚDO (@viralizougoiania)
+    if (showHandleLayer && handle && handle.trim()) {
+      const tagText = handle.trim();
+      const currentTagY = getEffectiveTagY(format, tagPositionYRef.current || tagPositionY);
+      const ctx = event.currentTarget.getContext("2d");
+      const rect = event.currentTarget.getBoundingClientRect();
+      const x = ((event.clientX - rect.left) / rect.width) * currentW;
+      const y = ((event.clientY - rect.top) / rect.height) * currentH;
+
+      let estWidth = 320;
+      if (ctx) {
+        ctx.font = `800 ${handleFontSize}px "Montserrat", -apple-system, sans-serif`;
+        estWidth = ctx.measureText(tagText).width + 60;
+      }
+      const tagH = handleFontSize + 32;
+      const centerX = currentW / 2;
+      const centerY = currentTagY;
+
+      if (
+        x >= centerX - estWidth / 2 - 50 &&
+        x <= centerX + estWidth / 2 + 50 &&
+        y >= centerY - tagH / 2 - 35 &&
+        y <= centerY + tagH / 2 + 35
+      ) {
+        event.preventDefault();
+        event.currentTarget.setPointerCapture(event.pointerId);
+        cachedOverlayCanvasRef.current = null;
+        tagDragRef.current = {
+          pointerId: event.pointerId,
+          offsetY: y - currentTagY,
+        };
+        setDraggingLogo(true);
+        return;
+      }
+    }
+
     const logo = logoImageRef.current || getRenderableLogo(null, logoColorStyle);
     if (!logo || !isImageDrawable(logo)) return;
 
@@ -3005,12 +3584,27 @@ export default function SocialFeedCreator({ posts, onBack, initialPost, onOpenCo
 
     event.preventDefault();
     event.currentTarget.setPointerCapture(event.pointerId);
+    cachedOverlayCanvasRef.current = null;
     logoDragRef.current = { pointerId: event.pointerId, offsetX: x / currentW - logoPositionRef.current.x, offsetY: y / currentH - logoPositionRef.current.y };
     setDraggingLogo(true);
   }
 
   function onPreviewPointerMove(event: ReactPointerEvent<HTMLCanvasElement>) {
     const { width: currentW, height: currentH } = getCanvasDimensions(format);
+    const tagDrag = tagDragRef.current;
+    if (tagDrag?.pointerId === event.pointerId) {
+      const rect = event.currentTarget.getBoundingClientRect();
+      const y = ((event.clientY - rect.top) / rect.height) * currentH;
+      const newY = Math.min(currentH - 30, Math.max(50, Math.round(y - tagDrag.offsetY)));
+      tagPositionYRef.current = newY;
+      setTagPositionY(newY);
+      cachedOverlayCanvasRef.current = null;
+      if (format !== "reel" && (!videoUrl || !videoPreviewRef.current)) {
+        renderCard();
+      }
+      return;
+    }
+
     const titleDrag = titleDragRef.current;
     if (titleDrag?.pointerId === event.pointerId) {
       const ctx = event.currentTarget.getContext("2d");
@@ -3035,6 +3629,10 @@ export default function SocialFeedCreator({ posts, onBack, initialPost, onOpenCo
         feedTitlePositionRef.current = position;
         setFeedTitlePosition(position);
       }
+      cachedOverlayCanvasRef.current = null;
+      if (format !== "reel" && (!videoUrl || !videoPreviewRef.current)) {
+        renderCard();
+      }
       return;
     }
 
@@ -3050,10 +3648,21 @@ export default function SocialFeedCreator({ posts, onBack, initialPost, onOpenCo
     };
     logoPositionRef.current = position;
     setLogoPosition(position);
+    cachedOverlayCanvasRef.current = null;
+    if (format !== "reel" && (!videoUrl || !videoPreviewRef.current)) {
+      renderCard();
+    }
   }
 
   function onPreviewPointerUp(event: ReactPointerEvent<HTMLCanvasElement>) {
-    if (titleDragRef.current?.pointerId === event.pointerId) {
+    if (tagDragRef.current?.pointerId === event.pointerId) {
+      tagDragRef.current = null;
+      setDraggingLogo(false);
+      try {
+        localStorage.setItem("viralizou_tag_position_y", String(tagPositionYRef.current || tagPositionY));
+      } catch {}
+      renderCard();
+    } else if (titleDragRef.current?.pointerId === event.pointerId) {
       titleDragRef.current = null;
       setDraggingLogo(false);
       try {
@@ -3061,10 +3670,12 @@ export default function SocialFeedCreator({ posts, onBack, initialPost, onOpenCo
         const position = format === "reel" || format === "story" ? titlePositionRef.current : feedTitlePositionRef.current;
         localStorage.setItem(key, JSON.stringify(position));
       } catch {}
+      renderCard();
     } else if (logoDragRef.current?.pointerId === event.pointerId) {
       logoDragRef.current = null;
       setDraggingLogo(false);
       try { localStorage.setItem("viralizou_feed_logo_position", JSON.stringify(logoPositionRef.current)); } catch {}
+      renderCard();
     } else {
       return;
     }
@@ -3191,6 +3802,22 @@ async function fixWebmDuration(blob: Blob, durationSec: number): Promise<Blob> {
         formData.append("mirror", String(miniIaMirror));
         formData.append("trimStart", String(miniIaTrimSeconds));
         formData.append("format", format);
+        formData.append("videoFilter", videoFilter);
+
+        if (videoCrop) {
+          formData.append("cropX", String(Math.round(videoCrop.x)));
+          formData.append("cropY", String(Math.round(videoCrop.y)));
+          formData.append("cropW", String(Math.round(videoCrop.width)));
+          formData.append("cropH", String(Math.round(videoCrop.height)));
+          addLog(`✂️ Corte Personalizado (Crop) enviado ao FFmpeg: ${Math.round(videoCrop.width)}x${Math.round(videoCrop.height)}`);
+        }
+
+        if (videoFilter !== "none") {
+          addLog(`🎨 Filtro de Cor FFmpeg: ${VIDEO_FILTERS[videoFilter].name}`);
+        }
+        if (autoHookEnabled && effectiveHookText) {
+          addLog(`🪝 Gancho Viral Auto-Edit: "${effectiveHookText}"`);
+        }
 
         if (logoColorStyle === "gif" && showLogoLayer) {
           formData.append("animatedLogo", "true");
@@ -3373,8 +4000,34 @@ async function fixWebmDuration(blob: Blob, durationSec: number): Promise<Blob> {
       // Desmuta para alimentar a decodificação do Web Audio
       video.muted = false;
       video.volume = 1;
-      const speedMultiplier = MINI_IA_LEVELS[miniIaLevel]?.speed || 1;
+      const miniIaCfg = MINI_IA_LEVELS[miniIaLevel] || MINI_IA_LEVELS.media;
+      const speedMultiplier = miniIaCfg.speed || 1;
       video.playbackRate = speedMultiplier;
+
+      addLog(`🤖 Mini IA Ativada: Nível ${miniIaLevel.toUpperCase()} (${miniIaCfg.name}) · Escudo Anti-Diretrizes Ativo`);
+      addLog(`⚡ Aceleração de Ritmo: ${speedMultiplier}x (+${((speedMultiplier - 1) * 100).toFixed(1)}%) com áudio sincronizado`);
+      addLog(`🎨 Grade de Cores: Contraste ${(miniIaCfg.contrast * 100).toFixed(0)}%, Saturação ${(miniIaCfg.saturation * 100).toFixed(0)}%, Brilho +${(miniIaCfg.brightness * 100).toFixed(1)}%`);
+      if (miniIaCfg.punchZoom) {
+        addLog(`🔍 Punch Zoom Dinâmico: pulsos a cada ${miniIaCfg.zoomPeriod}s (+${(miniIaCfg.zoomMax * 100).toFixed(0)}%) anti-pHash`);
+      }
+      if (miniIaTrimSeconds > 0) {
+        addLog(`✂️ Corte Inicial Anti-Detecção: Primeiros ${miniIaTrimSeconds}s do vídeo cortados com precisão`);
+      } else {
+        addLog(`✂️ Corte Inicial: Sem corte (início em 0.0s)`);
+      }
+      if (miniIaMirror) {
+        addLog(`🪞 Espelhamento Horizontal: Ativado (inversão anti-duplicação)`);
+      }
+      if (videoFilter !== "none") {
+        addLog(`🎨 Filtro de Cor Ativo: ${VIDEO_FILTERS[videoFilter].name}`);
+      }
+      if (autoHookEnabled && effectiveHookText) {
+        addLog(`🪝 Gancho Viral Auto-Edit: "${effectiveHookText}" (3.5s inicial)`);
+      }
+      addLog(`⚡ Suite Auto-Edit: Zooms ${computedZooms} | Cenas ${computedAnimatedScenes} | Trilha ${bgmTrack} | Pausas ${cutPauses ? "cortadas (-0.1s)" : "mantidas"}`);
+      if (videoCrop) {
+        addLog(`✂️ Corte Personalizado (Crop) ativo nos frames GPU: ${Math.round(videoCrop.width)}x${Math.round(videoCrop.height)} (X:${Math.round(videoCrop.x)}, Y:${Math.round(videoCrop.y)})`);
+      }
 
       // Captura a 30 FPS contínuos sincronizados diretamente com o relógio do hardware/navegador.
       // captureStream(30) elimina descompasso de timestamps com o áudio e previne engasgos/congelamentos.
@@ -3405,8 +4058,43 @@ async function fixWebmDuration(blob: Blob, durationSec: number): Promise<Blob> {
           ctx.save();
           ctx.fillStyle = "#050505";
           ctx.fillRect(0, 0, W, REEL_H);
-          drawVideoWithFraming(ctx, video, W, REEL_H, videoFramingMode, imagePosition, miniIaMirror);
+          drawVideoWithFraming(
+            ctx,
+            video,
+            W,
+            REEL_H,
+            videoFramingMode,
+            imagePosition,
+            miniIaMirror,
+            {
+              contrast: miniIaCfg.contrast,
+              brightness: miniIaCfg.brightness,
+              saturation: miniIaCfg.saturation,
+              punchZoom: miniIaCfg.punchZoom,
+              zoomMax: miniIaCfg.zoomMax,
+              zoomPeriod: miniIaCfg.zoomPeriod,
+              filterPreset: videoFilter,
+            },
+            videoCrop
+          );
           ctx.drawImage(overlayCanvas, 0, 0, W, REEL_H);
+          if (showLogoLayer && logoColorStyle === "gif") {
+            const animLogo = animatedLogoRef.current || getOfficialLogo("gif");
+            if (animLogo && isImageDrawable(animLogo)) {
+              const { width: lW, height: lH } = getLogoSize(animLogo, format, logoScale / 100);
+              safeDrawImage(
+                ctx,
+                animLogo,
+                logoPositionRef.current.x * W - lW / 2,
+                logoPositionRef.current.y * REEL_H - lH / 2,
+                lW,
+                lH
+              );
+            }
+          }
+          if (autoHookEnabled && effectiveHookText && video.currentTime <= 3.6) {
+            drawViralHookBanner(ctx, effectiveHookText, W, REEL_H, video.currentTime, format);
+          }
           ctx.restore();
           renderedFramesCount++;
         }
@@ -3519,10 +4207,10 @@ async function fixWebmDuration(blob: Blob, durationSec: number): Promise<Blob> {
 
       const isNativeMp4 = mimeType.toLowerCase().includes("mp4");
       if (isNativeMp4) {
-        addLog(`🎉 Vídeo gravado diretamente em MP4 H.264/AAC via hardware (${(finalBlob.size / 1024 / 1024).toFixed(2)} MB). 100% pronto!`);
+        addLog(`🎉 Vídeo gravado com a Mini IA (${miniIaLevel.toUpperCase()} · ${speedMultiplier}x) diretamente em MP4 H.264/AAC via hardware (${(finalBlob.size / 1024 / 1024).toFixed(2)} MB). 100% pronto!`);
       } else {
         setMessage("⚡ Otimizando e comprimindo vídeo para o WhatsApp (H.264 + Faststart)...");
-        addLog("🔄 Executando compressão oficial WhatsApp (H.264 Main, YUV420P, Faststart e AAC)...");
+        addLog(`🔄 Executando compressão oficial WhatsApp com Mini IA (${miniIaLevel.toUpperCase()} · ${speedMultiplier}x)...`);
 
         try {
           const isCloud = typeof window !== "undefined" && window.location.hostname !== "localhost" && window.location.hostname !== "127.0.0.1";
@@ -3621,51 +4309,6 @@ async function fixWebmDuration(blob: Blob, durationSec: number): Promise<Blob> {
 
       <div className="adminFeedGrid">
         <div className="adminFeedControls">
-          {/* 3 SLOTS DE LAYOUT PREDEFINIDOS */}
-          <div className="presetSlotsContainer">
-            <div className="presetSlotsHeader">
-              <div className="presetSlotsTitle">
-                <span>⚡ 3 Slots de Layout Salvo (Prévia Automática)</span>
-              </div>
-              {slotFeedback && <span className="presetSlotsFeedback">{slotFeedback}</span>}
-            </div>
-            <div className="presetSlotsGrid">
-              {presetSlots.map((slot) => {
-                const isActive = activeSlotId === slot.id;
-                return (
-                  <div key={slot.id} className={`presetSlotCard ${isActive ? "active" : ""}`}>
-                    <div>
-                      <div className="presetSlotTop">
-                        <span className="presetSlotBadge">SLOT {slot.id}</span>
-                        {isActive && <span style={{ fontSize: 9, color: "#22c55e", fontWeight: 800 }}>● ATIVO</span>}
-                      </div>
-                      <div className="presetSlotName">{slot.name}</div>
-                      <div className="presetSlotDesc">{slot.summary}</div>
-                    </div>
-                    <div style={{ display: "flex", flexDirection: "column", gap: 4, marginTop: 4 }}>
-                      <button
-                        type="button"
-                        className="presetSlotBtnUse"
-                        onClick={() => handleUsePresetSlot(slot)}
-                        title={`Carregar layout do ${slot.name} automaticamente na prévia`}
-                      >
-                        ⚡ Usar Layout
-                      </button>
-                      <button
-                        type="button"
-                        className="presetSlotBtnSave"
-                        onClick={() => handleSaveCurrentToSlot(slot.id)}
-                        title={`Salvar a configuração visual atual no Slot ${slot.id}`}
-                      >
-                        💾 Salvar Atual
-                      </button>
-                    </div>
-                  </div>
-                );
-              })}
-            </div>
-          </div>
-
           <div className="field">
             <label>📐 Formato da publicação no Instagram</label>
             <div className="adminFeedFormatGrid">
@@ -3896,6 +4539,72 @@ async function fixWebmDuration(blob: Blob, durationSec: number): Promise<Blob> {
                   </div>
                 )}
 
+                {videoUrl && (
+                  <div style={{ marginBottom: 12, paddingBottom: 10, borderBottom: "1px dashed #e2e8f0" }}>
+                    <div style={{ fontSize: 11, fontWeight: 700, color: "#1e293b", marginBottom: 6, display: "flex", alignItems: "center", justifyContent: "space-between" }}>
+                      <span>✂️ Corte Personalizado (Crop)</span>
+                      {videoCrop ? (
+                        <span style={{ fontSize: 10, background: "#dbeafe", color: "#1d4ed8", padding: "2px 6px", borderRadius: 4, fontWeight: 700 }}>
+                          Ativo: {Math.round(videoCrop.width)}×{Math.round(videoCrop.height)} px
+                        </span>
+                      ) : (
+                        <span style={{ fontSize: 10, color: "#64748b" }}>Sem corte</span>
+                      )}
+                    </div>
+                    <div style={{ display: "flex", gap: 8, alignItems: "center", flexWrap: "wrap" }}>
+                      <button
+                        type="button"
+                        onClick={() => setShowCropModal(true)}
+                        style={{
+                          display: "inline-flex",
+                          alignItems: "center",
+                          gap: 7,
+                          background: "#2563eb",
+                          color: "#ffffff",
+                          border: "none",
+                          borderRadius: 8,
+                          padding: "7px 14px",
+                          fontSize: 12,
+                          fontWeight: 700,
+                          cursor: "pointer",
+                          boxShadow: "0 2px 5px rgba(37,99,235,0.28)",
+                          transition: "all 0.15s ease",
+                        }}
+                      >
+                        <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                          <path d="M6 2v14a2 2 0 0 0 2 2h14" />
+                          <path d="M18 22V8a2 2 0 0 0-2-2H2" />
+                        </svg>
+                        Ajustar Corte (Crop)
+                      </button>
+                      {videoCrop && (
+                        <button
+                          type="button"
+                          onClick={() => handleApplyCrop(null)}
+                          style={{
+                            display: "inline-flex",
+                            alignItems: "center",
+                            gap: 4,
+                            background: "transparent",
+                            color: "#ef4444",
+                            border: "1px solid #fca5a5",
+                            borderRadius: 6,
+                            padding: "6px 10px",
+                            fontSize: 11,
+                            fontWeight: 600,
+                            cursor: "pointer",
+                          }}
+                        >
+                          ✕ Resetar Corte
+                        </button>
+                      )}
+                    </div>
+                    <small style={{ color: "#64748b", fontSize: 10.5, display: "block", marginTop: 4 }}>
+                      Ajuste a área de corte arrastando as bordas para remover marcas d&apos;água, legendas prévias ou focar em um elemento.
+                    </small>
+                  </div>
+                )}
+
                 <div>
                   <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 4 }}>
                     <span style={{ fontSize: 11, fontWeight: 700, color: "#334155" }}>
@@ -3927,6 +4636,53 @@ async function fixWebmDuration(blob: Blob, durationSec: number): Promise<Blob> {
               </div>
             )}
           </div>
+
+          {/* 3 SLOTS DE LAYOUT PREDEFINIDOS - EXCLUSIVO DA ABA REELS (ACIMA DO PAINEL DA MINI IA) */}
+          {format === "reel" && (
+            <div className="presetSlotsContainer" style={{ marginBottom: 14 }}>
+              <div className="presetSlotsHeader">
+                <div className="presetSlotsTitle">
+                  <span>⚡ 3 Slots de Layout Salvo (Prévia Automática)</span>
+                </div>
+                {slotFeedback && <span className="presetSlotsFeedback">{slotFeedback}</span>}
+              </div>
+              <div className="presetSlotsGrid">
+                {presetSlots.map((slot) => {
+                  const isActive = activeSlotId === slot.id;
+                  return (
+                    <div key={slot.id} className={`presetSlotCard ${isActive ? "active" : ""}`}>
+                      <div>
+                        <div className="presetSlotTop">
+                          <span className="presetSlotBadge">SLOT {slot.id}</span>
+                          {isActive && <span style={{ fontSize: 9, color: "#22c55e", fontWeight: 800 }}>● ATIVO</span>}
+                        </div>
+                        <div className="presetSlotName">{slot.name}</div>
+                        <div className="presetSlotDesc">{slot.summary}</div>
+                      </div>
+                      <div style={{ display: "flex", flexDirection: "column", gap: 4, marginTop: 4 }}>
+                        <button
+                          type="button"
+                          className="presetSlotBtnUse"
+                          onClick={() => handleUsePresetSlot(slot)}
+                          title={`Carregar layout do ${slot.name} automaticamente na prévia`}
+                        >
+                          ⚡ Usar Layout
+                        </button>
+                        <button
+                          type="button"
+                          className="presetSlotBtnSave"
+                          onClick={() => handleSaveCurrentToSlot(slot.id)}
+                          title={`Salvar a configuração visual atual no Slot ${slot.id}`}
+                        >
+                          💾 Salvar Atual
+                        </button>
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            </div>
+          )}
 
           {/* 5. MINI IA DE EDIÇÃO ANTI-DIRETRIZES DO INSTAGRAM (ORIGINALIDADE & ALCANCE - APENAS REELS E STORIES) */}
           {(format === "reel" || format === "story") && (
@@ -4131,16 +4887,145 @@ async function fixWebmDuration(blob: Blob, durationSec: number): Promise<Blob> {
                 </small>
               </div>
 
+              {/* SUITE AUTO-EDIT INTELIGENTE (ESTILO VIRAL TIKTOK / REELS) */}
+              <div className="miniIaAutoEditBox">
+                <div className="miniIaAutoEditHeader">
+                  <div style={{ display: "flex", alignItems: "center", gap: 7 }}>
+                    <span style={{ fontSize: 15 }}>⚡</span>
+                    <span style={{ fontSize: 13, fontWeight: 900, color: "#f8fafc", letterSpacing: "0.5px" }}>
+                      AUTO-EDIT INTELIGENTE
+                    </span>
+                  </div>
+                  <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
+                    <label style={{ display: "flex", alignItems: "center", gap: 5, cursor: "pointer", fontSize: 11, color: "#cbd5e1" }}>
+                      <input
+                        type="checkbox"
+                        checked={autoHookEnabled}
+                        onChange={(e) => toggleAutoHook(e.target.checked)}
+                        style={{ accentColor: "#8b5cf6" }}
+                      />
+                      <span>Gancho na tela</span>
+                    </label>
+                  </div>
+                </div>
+
+                <div className="miniIaAutoEditTable">
+                  {/* Gancho */}
+                  <div className="miniIaAutoEditRow">
+                    <span className="miniIaAutoEditLabel">Gancho</span>
+                    <input
+                      type="text"
+                      className="miniIaHookInput"
+                      value={autoHookText || (title || selectedPost?.title || "LIVRO CAIU SOZINHO NO CHÃO")}
+                      onChange={(e) => changeHookText(e.target.value)}
+                      placeholder="LIVRO CAIU SOZINHO NO CHÃO"
+                      title="Texto do gancho viral exibido nos primeiros 3.5 segundos"
+                    />
+                  </div>
+
+                  {/* Palavras-chave */}
+                  <div className="miniIaAutoEditRow">
+                    <span className="miniIaAutoEditLabel">Palavras-chave</span>
+                    <span className="miniIaAutoEditValue">{computedKeywords}</span>
+                  </div>
+
+                  {/* Zooms */}
+                  <div className="miniIaAutoEditRow">
+                    <span className="miniIaAutoEditLabel">Zooms</span>
+                    <span className="miniIaAutoEditValue">{computedZooms}</span>
+                  </div>
+
+                  {/* B-roll */}
+                  <div className="miniIaAutoEditRow">
+                    <span className="miniIaAutoEditLabel">B-roll</span>
+                    <span className="miniIaAutoEditValue">1</span>
+                  </div>
+
+                  {/* Cenas animadas */}
+                  <div className="miniIaAutoEditRow">
+                    <span className="miniIaAutoEditLabel">Cenas animadas</span>
+                    <span className="miniIaAutoEditValue">{computedAnimatedScenes}</span>
+                  </div>
+
+                  {/* Reações */}
+                  <div className="miniIaAutoEditRow">
+                    <span className="miniIaAutoEditLabel">Reações</span>
+                    <span className="miniIaAutoEditValue">1</span>
+                  </div>
+
+                  {/* Trilha */}
+                  <div className="miniIaAutoEditRow">
+                    <span className="miniIaAutoEditLabel">Trilha</span>
+                    <select
+                      className="miniIaTrackSelect"
+                      value={bgmTrack}
+                      onChange={(e) => chooseBgmTrack(e.target.value as BgmTrackPreset)}
+                    >
+                      {Object.entries(BGM_TRACKS).map(([k, tr]) => (
+                        <option key={k} value={k}>
+                          {tr.name} ({k})
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+                </div>
+
+                {/* Checkbox: Cortar pausas */}
+                <div style={{ marginTop: 12, paddingTop: 10, borderTop: "1px solid rgba(255, 255, 255, 0.08)" }}>
+                  <label className="miniIaAutoEditCheckboxLabel">
+                    <input
+                      type="checkbox"
+                      checked={cutPauses}
+                      onChange={(e) => toggleCutPauses(e.target.checked)}
+                    />
+                    <span>Cortar pausas (deixa 0,1s de respiro)</span>
+                  </label>
+                </div>
+              </div>
+
+              {/* FILTROS DE VÍDEO & COLOR GRADING */}
+              <div style={{ marginTop: 14 }}>
+                <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 8 }}>
+                  <span style={{ fontSize: 12, fontWeight: 800, color: "#e2e8f0" }}>
+                    🎨 Filtros de Cor & Estilo Visual
+                  </span>
+                  <span style={{ fontSize: 10.5, color: "#94a3b8" }}>
+                    {VIDEO_FILTERS[videoFilter]?.name || "Natural"}
+                  </span>
+                </div>
+                <div className="miniIaFilterGrid">
+                  {(Object.keys(VIDEO_FILTERS) as VideoFilterPreset[]).map((fKey) => {
+                    const f = VIDEO_FILTERS[fKey];
+                    const isAct = videoFilter === fKey;
+                    return (
+                      <button
+                        key={fKey}
+                        type="button"
+                        className={`miniIaFilterBtn ${isAct ? "active" : ""}`}
+                        onClick={() => chooseVideoFilter(fKey)}
+                        title={f.description}
+                      >
+                        <span className="filterEmoji">{f.icon}</span>
+                        <span className="filterName">{f.name}</span>
+                      </button>
+                    );
+                  })}
+                </div>
+              </div>
+
               <div className="miniIaDetailCard">
                 <div className="miniIaDetailHeader">
                   <span>Modo Ativo: <b style={{ textTransform: "uppercase" }}>{MINI_IA_LEVELS[miniIaLevel].name}</b></span>
                   <span>Velocidade: <b>{MINI_IA_LEVELS[miniIaLevel].speed}x</b> · Áudio: <b>{MINI_IA_LEVELS[miniIaLevel].loudnessTarget} LUFS</b></span>
                   <span>Corte Inicial: <b>{miniIaTrimSeconds}s {miniIaTrimSeconds === 3 ? "(Padrão ⭐)" : ""}</b></span>
+                  <span>Filtro: <b>{VIDEO_FILTERS[videoFilter]?.name || "Natural"}</b></span>
                 </div>
                 <p className="miniIaDetailText">
                   {MINI_IA_LEVELS[miniIaLevel].description}
                   {miniIaMirror ? " + Espelhamento horizontal ativo." : ""}
                   {miniIaTrimSeconds > 0 ? ` + Cortando os primeiros ${miniIaTrimSeconds}s do vídeo original.` : " + Sem corte inicial."}
+                  {videoFilter !== "none" ? ` + Filtro visual "${VIDEO_FILTERS[videoFilter]?.name}" ativo.` : ""}
+                  {cutPauses ? " + Corte inteligente de pausas (respiro de 0.1s)." : ""}
                 </p>
               </div>
             </div>
@@ -4328,6 +5213,27 @@ async function fixWebmDuration(blob: Blob, durationSec: number): Promise<Blob> {
                   title="Tag vermelha de categoria no topo + manchete à esquerda (Estilo Jornal Opção)"
                 >
                   🏷️ Selo de Categoria (Jornal Opção)
+                </button>
+                <button
+                  type="button"
+                  className={`captionStyleBtn ${reelTextStyle === "red-bottom" ? "active" : ""}`}
+                  onClick={() => {
+                    chooseReelTextStyle("red-bottom");
+                    chooseReelTextAlign("left");
+                    chooseReelFontFamily("inter");
+                    chooseReelFontWeight("800");
+                    chooseReelFontSize(60);
+                    setImagePosition(-12);
+                  }}
+                  style={{
+                    background: reelTextStyle === "red-bottom" ? "#e50014" : undefined,
+                    color: reelTextStyle === "red-bottom" ? "#ffffff" : undefined,
+                    borderColor: reelTextStyle === "red-bottom" ? "#b91c1c" : undefined,
+                    fontWeight: reelTextStyle === "red-bottom" ? 800 : 600,
+                  }}
+                  title="Bloco inferior vermelho sólido com manchete branca à esquerda e rodapé clean (Estilo TVT Notícias)"
+                >
+                  🟥 Bloco Vermelho Notícia (TVT)
                 </button>
                 <button type="button" className={`captionStyleBtn ${reelTextStyle === "highlight" || reelTextStyle === "highlight-yellow" ? "active" : ""}`} onClick={() => chooseReelTextStyle("highlight")} title="Faixa amarela noticiosa em destaque (Alto impacto)">🟨 Faixa Noticiosa (Destaque)</button> {false && (<><button
                   type="button"
@@ -4560,33 +5466,32 @@ async function fixWebmDuration(blob: Blob, durationSec: number): Promise<Blob> {
                 />
               </div>
 
-              {format === "reel" && (
-                <div>
-                  <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-                    <small style={{ fontWeight: 700 }}>↕️ Altura da Tag: <b>{tagPositionY}px</b> {tagPositionY === 1670 ? "(Posição Segura Instagram)" : ""}</small>
-                    {tagPositionY !== 1670 && (
-                      <button
-                        type="button"
-                        className="captionTagBadge"
-                        onClick={() => chooseTagPositionY(1670)}
-                      >
-                        Reset Segura (1670px)
-                      </button>
-                    )}
-                  </div>
-                  <input
-                    type="range"
-                    min="1400"
-                    max="1850"
-                    step="10"
-                    value={tagPositionY}
-                    onChange={(e) => chooseTagPositionY(Number(e.target.value))}
-                  />
-                  <small style={{ color: "#64748b" }}>
-                    Posição 1670px evita sobreposição com o botão Seguir e o nome do perfil do Instagram.
-                  </small>
+              <div>
+                <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 4 }}>
+                  <small style={{ fontWeight: 700 }}>↕️ Altura da Tag: <b>{getEffectiveTagY(format, tagPositionY)}px</b></small>
+                  {tagPositionY !== getEffectiveTagY(format, 0) && (
+                    <button
+                      type="button"
+                      className="captionTagBadge"
+                      onClick={() => chooseTagPositionY(getEffectiveTagY(format, 0))}
+                      title="Restaura a altura segura padrão deste formato"
+                    >
+                      Reset ({getEffectiveTagY(format, 0)}px)
+                    </button>
+                  )}
                 </div>
-              )}
+                <input
+                  type="range"
+                  min="50"
+                  max={getCanvasDimensions(format).height - 30}
+                  step="5"
+                  value={getEffectiveTagY(format, tagPositionY)}
+                  onChange={(e) => chooseTagPositionY(Number(e.target.value))}
+                />
+                <small style={{ color: "#8b5cf6", display: "block", marginTop: 4, fontWeight: 600 }}>
+                  🖱️ Dica: Você também pode clicar e arrastar a <b>Tag / Assinatura</b> diretamente na prévia com o mouse!
+                </small>
+              </div>
             </div>
           </div>
 
@@ -4660,18 +5565,33 @@ async function fixWebmDuration(blob: Blob, durationSec: number): Promise<Blob> {
                 >
                   {!logoData && logoColorStyle === "gif" ? (
                     <video
+                      ref={(el) => {
+                        if (el) {
+                          el.defaultMuted = true;
+                          el.muted = true;
+                          el.play().catch(() => {});
+                        }
+                      }}
                       src="/logos/Viralizou_Goiania_logo_animada_transparente.webm"
                       autoPlay
                       loop
                       muted
                       playsInline
+                      preload="auto"
                       style={{
                         maxHeight: 34,
                         maxWidth: 140,
                         display: "block",
                         objectFit: "contain",
                       }}
-                    />
+                    >
+                      <source src="/logos/Viralizou_Goiania_logo_animada_transparente.webm" type="video/webm" />
+                      <img
+                        src="/logos/logo-viralizou-intro.gif"
+                        alt="Logo animada"
+                        style={{ maxHeight: 34, maxWidth: 140, display: "block", objectFit: "contain" }}
+                      />
+                    </video>
                   ) : (
                     <img
                       key={`${logoColorStyle}_${Boolean(logoData)}`}
@@ -4860,8 +5780,12 @@ async function fixWebmDuration(blob: Blob, durationSec: number): Promise<Blob> {
         loop
         muted
         playsInline
-        preload="none"
-        onLoadedMetadata={() => setVideoReady(true)}
+        preload="auto"
+        onLoadedMetadata={(e) => {
+          setVideoReady(true);
+          const dur = (e.target as HTMLVideoElement).duration;
+          if (Number.isFinite(dur) && dur > 0) setVideoDuration(dur);
+        }}
         onLoadedData={() => { setVideoReady(true); renderCard(); }}
         onError={() => { setVideoReady(false); setMessage("Não foi possível abrir esse arquivo de vídeo."); }}
         style={{
@@ -4875,7 +5799,50 @@ async function fixWebmDuration(blob: Blob, durationSec: number): Promise<Blob> {
           zIndex: recording ? 99999 : -1,
           boxShadow: recording ? "0 10px 40px rgba(0,0,0,0.85), 0 0 0 2px #ff3b30" : "none",
           borderRadius: 12,
+          transform: miniIaMirror ? "scaleX(-1)" : "none",
+          transition: "transform 0.2s ease",
         }}
+      />
+      {/* Player contínuo da Logo Oficial Animada Transparente (WebM VP9 com Alpha / GIF fallback) */}
+      <video
+        ref={(el) => {
+          if (el) {
+            animatedLogoRef.current = el;
+            cachedOfficialWebmLogo = el;
+            el.defaultMuted = true;
+            el.muted = true;
+            el.play().catch(() => {});
+          }
+        }}
+        src="/logos/Viralizou_Goiania_logo_animada_transparente.webm"
+        autoPlay
+        loop
+        muted
+        playsInline
+        preload="auto"
+        onLoadedData={() => {
+          cachedOverlayCanvasRef.current = null;
+          renderCard();
+        }}
+        style={{
+          position: "fixed",
+          bottom: -9999,
+          left: -9999,
+          width: 200,
+          height: 60,
+          opacity: 0.01,
+          pointerEvents: "none",
+          zIndex: -99,
+        }}
+      />
+      {/* Modal Interativo de Corte / Crop de Vídeo */}
+      <CropVideoModal
+        isOpen={showCropModal}
+        videoElement={videoPreviewRef.current}
+        videoUrl={videoUrl}
+        initialCrop={videoCrop}
+        onApply={handleApplyCrop}
+        onClose={() => setShowCropModal(false)}
       />
     </section>
   );

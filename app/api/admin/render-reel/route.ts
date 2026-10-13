@@ -30,6 +30,14 @@ export async function POST(request: Request) {
     const editLevel = ((formData.get("editLevel") as string | null) || "media") as import("@/lib/mini-ia-editor").MiniIaEditLevel;
     const mirror = String(formData.get("mirror") || "false") === "true";
     const formatType = (formData.get("format") as string | null) || "reel";
+    const videoFilter = ((formData.get("videoFilter") as string | null) || "none") as import("@/lib/mini-ia-constants").VideoFilterPreset;
+    const cropX = formData.get("cropX") ? Number(formData.get("cropX")) : undefined;
+    const cropY = formData.get("cropY") ? Number(formData.get("cropY")) : undefined;
+    const cropW = formData.get("cropW") ? Number(formData.get("cropW")) : undefined;
+    const cropH = formData.get("cropH") ? Number(formData.get("cropH")) : undefined;
+    const crop = (cropW && cropH && cropW > 0 && cropH > 0)
+      ? { x: cropX || 0, y: cropY || 0, width: cropW, height: cropH }
+      : undefined;
 
     if (!videoFile || !overlayFile) {
       return NextResponse.json({ error: "Vídeo ou imagem de sobreposição ausente." }, { status: 400 });
@@ -85,6 +93,7 @@ export async function POST(request: Request) {
     const candidateLogoPaths = [
       path.join(projectRoot, "public", "logos", "Viralizou_Goiania_logo_animada_transparente.webm"),
       path.join(projectRoot, "public", "logos", "Viralizou_Goiania_logo_animada_transparente.mov"),
+      path.join(projectRoot, "public", "logos", "logo-viralizou-intro.gif"),
       path.join(projectRoot, "public", "logos", "logo-viralizou-animada.gif"),
     ];
 
@@ -117,6 +126,8 @@ export async function POST(request: Request) {
       width,
       height,
       animatedLogo: animatedLogoConfig,
+      videoFilter,
+      crop,
     });
 
     // Configuração oficial de compatibilidade universal (H.264 / AAC / YUV420P / +faststart)

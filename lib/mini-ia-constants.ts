@@ -77,3 +77,148 @@ export const MINI_IA_LEVELS: Record<MiniIaEditLevel, MiniIaLevelConfig> = {
     recommendationNote: "Essencial para vídeos virais baixados de outros perfis ou com risco de strike de originalidade.",
   },
 };
+
+export interface VideoCropRect {
+  x: number;
+  y: number;
+  width: number;
+  height: number;
+}
+
+export type VideoFilterPreset = "none" | "cinema" | "dark_moody" | "cyberpunk" | "vintage" | "noir" | "hdr";
+
+export interface VideoFilterConfig {
+  id: VideoFilterPreset;
+  name: string;
+  badge: string;
+  icon: string;
+  canvasFilter: string;
+  ffmpegFilter: string;
+  description: string;
+}
+
+export const VIDEO_FILTERS: Record<VideoFilterPreset, VideoFilterConfig> = {
+  none: {
+    id: "none",
+    name: "Natural",
+    badge: "Padrão",
+    icon: "🌿",
+    canvasFilter: "none",
+    ffmpegFilter: "",
+    description: "Cores originais sem filtro extra.",
+  },
+  cinema: {
+    id: "cinema",
+    name: "Cinema",
+    badge: "Teal & Orange",
+    icon: "🎬",
+    canvasFilter: "contrast(1.15) brightness(1.02) saturate(1.22) hue-rotate(-6deg)",
+    ffmpegFilter: "eq=contrast=1.15:brightness=0.02:saturation=1.22,colorbalance=rs=0.08:gs=-0.04:bs=-0.12:rm=0.05:gm=-0.02:bm=-0.08",
+    description: "Look de filme com sombras frias teal e realce de pele alaranjado.",
+  },
+  dark_moody: {
+    id: "dark_moody",
+    name: "Dark Moody",
+    badge: "Tenso & Escuro",
+    icon: "🏙️",
+    canvasFilter: "contrast(1.28) brightness(0.92) saturate(0.85)",
+    ffmpegFilter: "eq=contrast=1.28:brightness=-0.08:saturation=0.85",
+    description: "Contraste dramático e sombras profundas para notícias de impacto.",
+  },
+  cyberpunk: {
+    id: "cyberpunk",
+    name: "Cyberpunk",
+    badge: "Neon Pop",
+    icon: "⚡",
+    canvasFilter: "contrast(1.22) brightness(1.05) saturate(1.55) hue-rotate(12deg)",
+    ffmpegFilter: "eq=contrast=1.22:brightness=0.05:saturation=1.55,hue=h=12",
+    description: "Cores neon vibrantes e alta saturação com estética moderna.",
+  },
+  vintage: {
+    id: "vintage",
+    name: "Vintage",
+    badge: "VHS Anos 90",
+    icon: "🎞️",
+    canvasFilter: "contrast(1.08) brightness(1.02) sepia(0.35) saturate(0.9)",
+    ffmpegFilter: "eq=contrast=1.08:brightness=0.02:saturation=0.9,colorchannelmixer=rr=1.0:rg=0.1:rb=0:gr=0:gg=0.9:gb=0.1:br=0:bg=0.1:bb=0.7",
+    description: "Tom quente nostálgico inspirado em câmeras analógicas.",
+  },
+  noir: {
+    id: "noir",
+    name: "Preto & Branco",
+    badge: "Noir Dramático",
+    icon: "🖤",
+    canvasFilter: "grayscale(1) contrast(1.35) brightness(0.95)",
+    ffmpegFilter: "hue=s=0,eq=contrast=1.35:brightness=-0.05",
+    description: "Monocromático de alto contraste e foco total na ação.",
+  },
+  hdr: {
+    id: "hdr",
+    name: "HDR Vivid",
+    badge: "Ultra Nitidez",
+    icon: "🌟",
+    canvasFilter: "contrast(1.18) brightness(1.06) saturate(1.35)",
+    ffmpegFilter: "eq=contrast=1.18:brightness=0.06:saturation=1.35,unsharp=5:5:0.8:5:5:0.0",
+    description: "Brilho e definição aumentados para destacar o vídeo no feed.",
+  },
+};
+
+export type BgmTrackPreset = "energetic" | "breaking" | "suspense" | "chill" | "none";
+
+export interface BgmTrackConfig {
+  id: BgmTrackPreset;
+  name: string;
+  icon: string;
+  tempoBpm: number;
+  description: string;
+}
+
+export const BGM_TRACKS: Record<BgmTrackPreset, BgmTrackConfig> = {
+  energetic: {
+    id: "energetic",
+    name: "Energetic",
+    icon: "🔥",
+    tempoBpm: 128,
+    description: "Batida viral energética e motivacional com alta retenção.",
+  },
+  breaking: {
+    id: "breaking",
+    name: "Plantão / Urgente",
+    icon: "🚨",
+    tempoBpm: 135,
+    description: "Trilha de noticiário urgente com tensão e seriedade.",
+  },
+  suspense: {
+    id: "suspense",
+    name: "Suspense",
+    icon: "🕵️",
+    tempoBpm: 95,
+    description: "Clima misterioso e investigativo para revelações.",
+  },
+  chill: {
+    id: "chill",
+    name: "Chill / Lo-Fi",
+    icon: "☕",
+    tempoBpm: 85,
+    description: "Fundo calmo e moderno para matérias informativas.",
+  },
+  none: {
+    id: "none",
+    name: "Sem Trilha",
+    icon: "🔇",
+    tempoBpm: 0,
+    description: "Apenas o áudio original do vídeo.",
+  },
+};
+
+export interface AutoEditAnalysis {
+  hook: string;
+  keywordsCount: number;
+  zoomsCount: number;
+  brollCount: number;
+  animatedScenesCount: number;
+  reactionsCount: number;
+  bgmTrack: BgmTrackPreset;
+  cutPauses: boolean;
+  videoFilter: VideoFilterPreset;
+}

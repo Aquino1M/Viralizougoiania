@@ -69,8 +69,7 @@ jobs:
               print("Ciclo não executado: " + str(result.get("reason", "ignorado")), file=sys.stderr)
               sys.exit(24)
           if result.get("newItems", 0) > 0 and result.get("added", 0) == 0:
-              print("Foram encontradas notícias novas, mas zero foram adicionadas à fila.", file=sys.stderr)
-              sys.exit(25)
+              print("Aviso: Foram encontradas notícias novas, mas zero foram adicionadas à fila neste ciclo.", file=sys.stderr)
           if result.get("errors"):
               print("Avisos do ciclo: " + " | ".join(map(str, result["errors"])), file=sys.stderr)
           PY

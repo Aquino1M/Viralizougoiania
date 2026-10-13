@@ -503,3 +503,28 @@ export function normalizeImportedCategory(item: ImportedNews, forcedCategory?: s
   }
   return { ...item, category: classifyEditorial(item) };
 }
+
+export const CATEGORY_FALLBACK_IMAGES: Record<string, string> = {
+  "Goiânia": "https://images.unsplash.com/photo-1480714378408-67cf0d13bc1b?auto=format&fit=crop&w=1600&q=85",
+  "Bairros": "https://images.unsplash.com/photo-1514924013411-cbf25faa35bb?auto=format&fit=crop&w=1600&q=85",
+  "Trânsito": "https://images.unsplash.com/photo-1494522358652-f30e61a60313?auto=format&fit=crop&w=1600&q=85",
+  "Segurança": "https://images.unsplash.com/photo-1453873531674-2151bcd01707?auto=format&fit=crop&w=1600&q=85",
+  "Política": "https://images.unsplash.com/photo-1541872703-74c5e44368f9?auto=format&fit=crop&w=1600&q=85",
+  "Empregos": "https://images.unsplash.com/photo-1521737711867-e3b97375f902?auto=format&fit=crop&w=1600&q=85",
+  "Esportes": "https://images.unsplash.com/photo-1461896836934-ffe607ba8211?auto=format&fit=crop&w=1600&q=85",
+  "Futebol": "https://images.unsplash.com/photo-1508098682722-e99c43a406b2?auto=format&fit=crop&w=1600&q=85",
+  "Eventos": "https://images.unsplash.com/photo-1492684223066-81342ee5ff30?auto=format&fit=crop&w=1600&q=85",
+  "Economia": "https://images.unsplash.com/photo-1611974789855-9c2a0a7236a3?auto=format&fit=crop&w=1600&q=85",
+  "Serviços": "https://images.unsplash.com/photo-1497366811353-6870744d04b2?auto=format&fit=crop&w=1600&q=85",
+  "Fofocas": "https://images.unsplash.com/photo-1511671782779-c97d3d27a1d4?auto=format&fit=crop&w=1600&q=85",
+};
+
+export function getCategoryFallbackImage(category?: string | null): string {
+  if (!category) return CATEGORY_FALLBACK_IMAGES["Goiânia"];
+  const clean = category.trim().toLowerCase();
+  const matchedKey = Object.keys(CATEGORY_FALLBACK_IMAGES).find(
+    (k) => k.toLowerCase() === clean
+  );
+  return matchedKey ? CATEGORY_FALLBACK_IMAGES[matchedKey] : CATEGORY_FALLBACK_IMAGES["Goiânia"];
+}
+

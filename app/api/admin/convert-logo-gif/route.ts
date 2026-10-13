@@ -18,6 +18,7 @@ export async function GET() {
 
     const webmPath = path.join(logosDir, "Viralizou_Goiania_logo_animada_transparente.webm");
     const movPath = path.join(logosDir, "Viralizou_Goiania_logo_animada_transparente.mov");
+    const introGifPath = path.join(logosDir, "logo-viralizou-intro.gif");
     const gifPath = path.join(logosDir, "logo-viralizou-animada.gif");
 
     if (fsSync.existsSync(webmPath)) {
@@ -27,6 +28,17 @@ export async function GET() {
         exists: true,
         format: "webm",
         url: "/logos/Viralizou_Goiania_logo_animada_transparente.webm",
+        size: stat.size,
+      });
+    }
+
+    if (fsSync.existsSync(introGifPath)) {
+      const stat = await fs.stat(introGifPath);
+      return NextResponse.json({
+        ok: true,
+        exists: true,
+        format: "gif",
+        url: "/logos/logo-viralizou-intro.gif",
         size: stat.size,
       });
     }

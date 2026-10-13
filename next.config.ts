@@ -40,6 +40,12 @@ try {
     fs.copyFileSync(darkSrc, darkDst);
     fs.copyFileSync(darkSrc, path.join(process.cwd(), "public", "logo-viralizou-preta.png"));
   }
+
+  const introGif = path.join(publicLogosDir, "logo-viralizou-intro.gif");
+  const animGif = path.join(publicLogosDir, "logo-viralizou-animada.gif");
+  if (fs.existsSync(introGif) && !fs.existsSync(animGif)) {
+    try { fs.copyFileSync(introGif, animGif); } catch {}
+  }
 } catch (e) {
   // Ignora se estiver rodando em ambiente sem permissão ou na nuvem
 }

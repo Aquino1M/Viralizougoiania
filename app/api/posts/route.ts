@@ -3,7 +3,7 @@ import { revalidatePath } from "next/cache";
 import { createPost, getPosts, storageMode } from "@/lib/storage";
 import { isAdmin } from "@/lib/session";
 import { slugify } from "@/lib/slug";
-import { inferLocation } from "@/lib/category-classifier";
+import { getCategoryFallbackImage, inferLocation } from "@/lib/category-classifier";
 import type { PostStatus } from "@/lib/types";
 
 function normalizePublishing(status: unknown, publishedAt: unknown) {
@@ -31,9 +31,10 @@ export async function POST(req: Request) {
       source_name: typeof b.source_name === "string" ? b.source_name : "",
       source_url: typeof b.source_url === "string" ? b.source_url : "",
     });
-    if (!b.image_url || typeof b.image_url !== "string" || b.image_url.trim().length < 10) {
-      return NextResponse.json({ error: "É obrigatório que toda matéria tenha uma imagem válida para ser postada ou agendada na fila." }, { status: 400 });
-    }
+    const finalImage = (b.image_url && typeof b.image_url === "string" && b.image_url.trim().length >= 10)
+      ? b.image_url.trim()
+      : getCategoryFallbackImage(b.category);
+
     if (b.status === "scheduled" && !b.published_at) {
       return NextResponse.json({ error: "Escolha a data e a hora do agendamento." }, { status: 400 });
     }
@@ -46,8 +47,8 @@ export async function POST(req: Request) {
       // Evita que o valor antigo/padrão "Goiânia" rotule notícias de outras cidades de Goiás.
       city: b.city ? b.city : (inferredLocation.isGoias ? inferredLocation.city : "Goiânia"),
       author: b.author || "Redação Viralizougoiania",
-      image_url: b.image_url || "",
-      image_credit: b.image_credit || "",
+      image_url: finalImage,
+      image_credit: b.image_credit || "Foto: Reprodução / Divulgação",
       video_url: b.video_url || "",
       featured: Boolean(b.featured),
       status: publishing.status,

@@ -1,4 +1,4 @@
-import { archiveOldExternalPosts, createPost, getCategories, getPostIdentityIndex, getPosts, getScheduledPostsAll, publishAllScheduledNow, publishDuePostsBatch, reclassifyExternalPosts, updatePost } from "@/lib/storage";
+import { createPost, getCategories, getPostIdentityIndex, getPosts, getScheduledPostsAll, publishAllScheduledNow, publishDuePostsBatch, reclassifyExternalPosts, updatePost } from "@/lib/storage";
 import { buildEditorialExcerpt, formatViralizouArticle, needsEditorialRepair } from "@/lib/rewrite";
 import { slugify } from "@/lib/slug";
 import type { ImportedNews, Post, PostStatus } from "@/lib/types";
@@ -251,11 +251,6 @@ export async function runServerRadarAutomation(options:{force?:boolean}={}):Prom
   await saveAutomationState({running_until:new Date(Date.now()+60*1000).toISOString(),last_run_at:startedAt,last_error:""});
   const errors:string[]=[];let found=0,newItems=0,added=0,published=0,resetPublished=0,reclassified=0;const sourceCounts:Record<string,number>={goias:0,brasil:0,futebol:0,fofocas:0};let football=emptyFootball;let audience:null|{updatedAt:string;pageviewsToday:number;articleViewsToday:number}=null;
   try{
-    const now = Date.now();
-    const lastArchiveAt = (state as any).last_archive_at ? new Date((state as any).last_archive_at).getTime() : 0;
-    if (options.force || !lastArchiveAt || (now - lastArchiveAt > 6 * 3600 * 1000)) {
-      try { await archiveOldExternalPosts(7, { allOlderThanDays: true }); (state as any).last_archive_at = new Date().toISOString(); } catch {}
-    }
     if (options.force) {
       try { const recat = await reclassifyExternalPosts(); reclassified = recat.changed; } catch {}
     }

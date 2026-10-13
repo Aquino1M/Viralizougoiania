@@ -5,11 +5,12 @@ import { useRouter } from "next/navigation";
 import type { AdminUser, Category, ImportedNews, Post, PostStatus, SocialLinks } from "@/lib/types";
 import { slugify } from "@/lib/slug";
 import { formatViralizouArticle } from "@/lib/rewrite";
-import { inferLocation } from "@/lib/category-classifier";
+import { getCategoryFallbackImage, inferLocation } from "@/lib/category-classifier";
 import SocialFeedCreator from "@/components/SocialFeedCreator";
 import InstagramVideoDownloader from "@/components/InstagramVideoDownloader";
 import AudienceAnalytics from "@/components/AudienceAnalytics";
 import VideoCompressor from "@/components/VideoCompressor";
+import { executeBatchQueue } from "@/lib/batch-queue-client";
 
 type View = "list" | "form" | "import" | "categories" | "socials" | "queue" | "admins" | "feedCreator" | "instagramDownloader" | "analytics" | "videoCompressor";
 type FormState = {
@@ -527,9 +528,9 @@ export default function AdminApp() {
 
       // Regra obrigatória: Matéria precisa de imagem para ir para a fila ou ser postada
       if (!activeItem.image_url || activeItem.image_url.trim().length < 10) {
-        setImportMessage("⚠️ Esta notícia não possui imagem na fonte original. Regra do portal: se não tiver foto, não posta!");
-        setImporting(false);
-        return;
+        activeItem.image_url = getCategoryFallbackImage(activeItem.category || "Goiânia");
+
+
       }
 
       let targetCategory = "Goiânia";
@@ -1153,7 +1154,8 @@ export default function AdminApp() {
       baseTime = Math.max(Date.now(), new Date(last.published_at!).getTime());
     }
 
-    for (let i = 0; i < plannedSchedule.length; i++) {
+    countSuccess = await executeBatchQueue({ plannedSchedule, baseTime, setBatchProgress });
+    if (false) for (let i = 0; i < plannedSchedule.length; i++) {
       const { item, slotMinutes } = plannedSchedule[i];
       setBatchProgress(`Enviando para a Fila (${i + 1} de ${plannedSchedule.length}): "${item.title.slice(0, 32)}..." (+${slotMinutes}m)`);
 
@@ -2275,7 +2277,7 @@ export default function AdminApp() {
                     )}
                     <span>
                       {autoPilot
-                        ? `Servidor 24/7 ativo: GitHub Actions → Vercel a cada 10 min atualiza ${autoPilotScope === "goias_priority" ? "📍 Goiânia & Goiás + ⚽ Futebol & Brasileirão + ✨ Fofocas & Famosos + 🏛️ Política + Arquivamento automático (+7 dias)" : "🌐 Todos os Canais (Goiás + Nacional + Futebol + Fofocas + Política) + Arquivamento automático (+7 dias)"} • Próximo ciclo aprox. em ${Math.floor(autoPilotCountdown / 60).toString().padStart(2, "0")}:${(autoPilotCountdown % 60).toString().padStart(2, "0")}${automationLastRun ? " • Última execução: " + new Date(automationLastRun).toLocaleTimeString("pt-BR", { hour: "2-digit", minute: "2-digit" }) : ""}`
+                        ? `Servidor 24/7 ativo: GitHub Actions → Vercel a cada 10 min atualiza ${autoPilotScope === "goias_priority" ? "📍 Goiânia & Goiás + ⚽ Futebol & Brasileirão + ✨ Fofocas & Famosos + 🏛️ Política" : "🌐 Todos os Canais (Goiás + Nacional + Futebol + Fofocas + Política)"} • Próximo ciclo aprox. em ${Math.floor(autoPilotCountdown / 60).toString().padStart(2, "0")}:${(autoPilotCountdown % 60).toString().padStart(2, "0")}${automationLastRun ? " • Última execução: " + new Date(automationLastRun).toLocaleTimeString("pt-BR", { hour: "2-digit", minute: "2-digit" }) : ""}`
                         : automationConfigured
                         ? `Piloto 24/7 pausado no servidor. Clique em ligar para voltar a varrer automaticamente.`
                         : `Configure o Supabase para habilitar o Piloto Automático 24/7 no servidor.`}

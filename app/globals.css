@@ -1366,5 +1366,158 @@ main{min-height:65vh}.heroSection{padding:30px 0 25px}.cityEyebrow{font-size:12p
   transform: translateY(-1px);
 }
 
+/* ==========================================================
+   AUTO-EDIT STUDIO DA MINI IA & FILTROS DE VÍDEO
+   ========================================================== */
+.miniIaAutoEditBox {
+  background: #0f111a;
+  border: 1px solid #2d264f;
+  border-radius: 12px;
+  padding: 14px 16px;
+  margin: 12px 0;
+  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.45);
+}
+
+.miniIaAutoEditHeader {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 12px;
+  padding-bottom: 8px;
+  border-bottom: 1px solid rgba(139, 92, 246, 0.2);
+}
+
+.miniIaAutoEditHeaderTitle {
+  font-size: 13px;
+  font-weight: 800;
+  color: #c084fc;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.miniIaAutoEditTable {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+  font-size: 13px;
+}
+
+.miniIaAutoEditRow {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 12px;
+}
+
+.miniIaAutoEditLabel {
+  color: #94a3b8;
+  font-size: 13px;
+  font-weight: 500;
+}
+
+.miniIaAutoEditValue {
+  color: #f8fafc;
+  font-weight: 700;
+  font-size: 13px;
+  text-align: right;
+}
+
+.miniIaHookInput {
+  background: rgba(30, 41, 59, 0.8);
+  border: 1px solid #475569;
+  border-radius: 6px;
+  color: #f8fafc;
+  padding: 4px 8px;
+  font-size: 11px;
+  font-weight: 700;
+  width: 240px;
+  max-width: 60vw;
+  text-align: right;
+  outline: none;
+}
+
+.miniIaHookInput:focus {
+  border-color: #a855f7;
+  box-shadow: 0 0 8px rgba(168, 85, 247, 0.35);
+}
+
+.miniIaTrackSelect {
+  background: #1e1b4b;
+  border: 1px solid #6366f1;
+  color: #e0e7ff;
+  border-radius: 6px;
+  padding: 4px 8px;
+  font-size: 12px;
+  font-weight: 700;
+  cursor: pointer;
+  outline: none;
+}
+
+.miniIaAutoEditCheckboxLabel {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  cursor: pointer;
+  margin-top: 10px;
+  padding-top: 10px;
+  border-top: 1px solid rgba(255, 255, 255, 0.08);
+  color: #f8fafc;
+  font-size: 13px;
+  font-weight: 600;
+}
+
+.miniIaFilterGrid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(130px, 1fr));
+  gap: 8px;
+  margin-top: 8px;
+}
+
+.miniIaFilterBtn {
+  background: #1e293b;
+  border: 1.5px solid #334155;
+  border-radius: 8px;
+  padding: 8px 10px;
+  color: #f8fafc;
+  cursor: pointer;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  text-align: left;
+  gap: 3px;
+  transition: all 0.2s ease;
+}
+
+.miniIaFilterBtn:hover {
+  background: #334155;
+  border-color: #64748b;
+  transform: translateY(-1px);
+}
+
+.miniIaFilterBtn.active {
+  border-color: #38bdf8;
+  background: rgba(56, 189, 248, 0.15);
+  box-shadow: 0 0 12px rgba(56, 189, 248, 0.3);
+}
+
+.miniIaFilterBtnName {
+  font-size: 12px;
+  font-weight: 800;
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.miniIaFilterBtnBadge {
+  font-size: 9px;
+  color: #94a3b8;
+  font-weight: 600;
+}
+
+
+
+
 
 

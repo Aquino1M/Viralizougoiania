@@ -13,7 +13,7 @@
 
 import { runFfmpeg } from "./ffmpeg";
 export * from "./mini-ia-constants";
-import { MINI_IA_LEVELS, type MiniIaEditLevel } from "./mini-ia-constants";
+import { MINI_IA_LEVELS, type MiniIaEditLevel, VIDEO_FILTERS, type VideoFilterPreset, type VideoCropRect } from "./mini-ia-constants";
 
 /**
  * Detecta se o arquivo possui uma stream de áudio válida inspecionando o cabeçalho via FFmpeg
@@ -61,7 +61,9 @@ export interface BuildFilterGraphOptions {
   framingMode: "cover" | "blur-fit";
   verticalPos: number; // -100 a +100
   editLevel: MiniIaEditLevel;
+  videoFilter?: VideoFilterPreset;
   mirror?: boolean;
+  crop?: VideoCropRect;
   hasAudio?: boolean;
   width?: number;
   height?: number;
@@ -85,7 +87,9 @@ export function buildMiniIaFilterGraph(options: BuildFilterGraphOptions): {
     framingMode,
     verticalPos,
     editLevel,
+    videoFilter = "none",
     mirror = false,
+    crop,
     hasAudio = true,
     width = 1080,
     height = 1920,
@@ -95,7 +99,10 @@ export function buildMiniIaFilterGraph(options: BuildFilterGraphOptions): {
   const cfg = MINI_IA_LEVELS[editLevel] || MINI_IA_LEVELS.media;
   const speed = cfg.speed;
 
-  // 1. Filtros de base no vídeo original
+  // 1. Filtros de base no vídeo original (Crop personalizado, espelhamento e velocidade)
+  const cropFilter = crop && crop.width > 0 && crop.height > 0
+    ? `crop=${Math.round(crop.width)}:${Math.round(crop.height)}:${Math.round(crop.x)}:${Math.round(crop.y)},`
+    : "";
   const mirrorFilter = mirror ? "hflip," : "";
   const speedFilter = `setpts=PTS/${speed}`;
 
@@ -111,6 +118,14 @@ export function buildMiniIaFilterGraph(options: BuildFilterGraphOptions): {
     postFxFilter += `,noise=alls=2:allf=t+u,vignette=PI/4.5`;
   }
 
+  // Aplica o filtro de color grading estilizado (Cinema, Dark Moody, Cyberpunk, etc.)
+  if (videoFilter && videoFilter !== "none") {
+    const filterCfg = VIDEO_FILTERS[videoFilter];
+    if (filterCfg && filterCfg.ffmpegFilter) {
+      postFxFilter += `,${filterCfg.ffmpegFilter}`;
+    }
+  }
+
   // 3. Punch Zoom dinâmico (se ativado pelo nível)
   let zoomExpr = "";
   if (cfg.punchZoom && cfg.zoomPeriod > 0) {
@@ -124,7 +139,7 @@ export function buildMiniIaFilterGraph(options: BuildFilterGraphOptions): {
   if (framingMode === "blur-fit") {
     // Estilo Jornalístico: Vídeo original centralizado sem cortes + fundo ampliado com desfoque
     filterComplex =
-      `[0:v]${speedFilter},${mirrorFilter}split=2[v_bg][v_fg];` +
+      `[0:v]${cropFilter}${speedFilter},${mirrorFilter}split=2[v_bg][v_fg];` +
       `[v_bg]scale=${width}:${height}:force_original_aspect_ratio=increase,crop=${width}:${height},boxblur=22:5,eq=brightness=-0.22[bg];` +
       `[v_fg]scale=${width}:${height}:force_original_aspect_ratio=decrease,${postFxFilter}${zoomExpr}[fg];` +
       `[bg][fg]overlay=(W-w)/2:(H-h)/2[${baseLayerTag}];`;
@@ -135,7 +150,7 @@ export function buildMiniIaFilterGraph(options: BuildFilterGraphOptions): {
 
     baseLayerTag = "bg";
     filterComplex =
-      `[0:v]${speedFilter},${mirrorFilter}` +
+      `[0:v]${cropFilter}${speedFilter},${mirrorFilter}` +
       `scale=${width}:${height}:force_original_aspect_ratio=increase,` +
       `crop=${width}:${height}:(in_w-out_w)/2:${ratio}*(in_h-out_h),` +
       `${postFxFilter}${zoomExpr}[${baseLayerTag}];`;
