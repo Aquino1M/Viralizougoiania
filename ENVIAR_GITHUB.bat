@@ -28,7 +28,7 @@ echo [1/3] Adicionando arquivos modificados (git add -A)...
 git add -A
 
 set COMMIT_MSG=%*
-if "%COMMIT_MSG%"=="" set COMMIT_MSG=fix: mover servidor Vercel para Sao Paulo gru1 e desacoplar mini-ia-constants
+if "%COMMIT_MSG%"=="" set COMMIT_MSG=feat: 3 slots de layout predefinido e ajuste responsivo dos botoes da Mini IA
 
 echo.
 echo [2/3] Criando commit...

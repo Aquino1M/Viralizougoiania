@@ -60,6 +60,168 @@ type ReelTagColor = "red" | "white" | "yellow" | "orange";
 type ReelTextAnimation = "typewriter" | "pop" | "slide" | "fade" | "static";
 type LogoColorStyle = "white" | "dark" | "gif" | "original";
 
+export interface LayoutPresetData {
+  format: PublicationFormat;
+  reelTextStyle: ReelTextStyle;
+  reelFontFamily: ReelFontFamily;
+  reelFontWeight: ReelFontWeight;
+  reelTextAlign: ReelTextAlign;
+  reelTextCase: ReelTextCase;
+  reelFontSize: number;
+  tagColor: ReelTagColor;
+  tagPositionY: number;
+  handle: string;
+  handleFontSize: number;
+  logoColorStyle: LogoColorStyle;
+  logoScale: number;
+  logoPosition: LogoPosition;
+  titlePosition: LogoPosition;
+  feedTitlePosition: LogoPosition;
+  feedTitleOffsetY: number;
+  feedTitleFontSize: number;
+  feedFontFamily: ReelFontFamily;
+  shadeOpacity: number;
+  showOverlayLayer: boolean;
+  showLogoLayer: boolean;
+  showTitleLayer: boolean;
+  showHandleLayer: boolean;
+  showStorySticker: boolean;
+  showStrongSceneWarning: boolean;
+  videoFramingMode: "cover" | "blur-fit";
+  imagePosition: number;
+  miniIaLevel: MiniIaEditLevel;
+  miniIaMirror: boolean;
+  miniIaTrimSeconds: number;
+}
+
+export interface LayoutPresetSlot {
+  id: number;
+  name: string;
+  summary: string;
+  savedAt: string;
+  data: LayoutPresetData;
+}
+
+const DEFAULT_PRESET_SLOTS: LayoutPresetSlot[] = [
+  {
+    id: 1,
+    name: "🔥 Reels Viral",
+    summary: "Reels 9:16 · Caixa Escura · Mini IA Média",
+    savedAt: "Padrão",
+    data: {
+      format: "reel",
+      reelTextStyle: "box-banner",
+      reelFontFamily: "montserrat",
+      reelFontWeight: "900",
+      reelTextAlign: "center",
+      reelTextCase: "uppercase",
+      reelFontSize: 72,
+      tagColor: "red",
+      tagPositionY: 1670,
+      handle: "@viralizougoiania",
+      handleFontSize: 33,
+      logoColorStyle: "gif",
+      logoScale: 100,
+      logoPosition: DEFAULT_LOGO_POSITION,
+      titlePosition: DEFAULT_TITLE_POSITION,
+      feedTitlePosition: DEFAULT_FEED_TITLE_POSITION,
+      feedTitleOffsetY: 0,
+      feedTitleFontSize: 0,
+      feedFontFamily: "montserrat",
+      shadeOpacity: 85,
+      showOverlayLayer: true,
+      showLogoLayer: true,
+      showTitleLayer: true,
+      showHandleLayer: true,
+      showStorySticker: false,
+      showStrongSceneWarning: false,
+      videoFramingMode: "cover",
+      imagePosition: 0,
+      miniIaLevel: "media",
+      miniIaMirror: false,
+      miniIaTrimSeconds: 3,
+    },
+  },
+  {
+    id: 2,
+    name: "📰 Feed Notícia",
+    summary: "Feed 4:5 · Selo Vermelho · Georgia",
+    savedAt: "Padrão",
+    data: {
+      format: "feed",
+      reelTextStyle: "category-badge",
+      reelFontFamily: "georgia",
+      reelFontWeight: "800",
+      reelTextAlign: "center",
+      reelTextCase: "uppercase",
+      reelFontSize: 64,
+      tagColor: "yellow",
+      tagPositionY: 1670,
+      handle: "@viralizougoiania",
+      handleFontSize: 33,
+      logoColorStyle: "white",
+      logoScale: 100,
+      logoPosition: DEFAULT_LOGO_POSITION,
+      titlePosition: DEFAULT_TITLE_POSITION,
+      feedTitlePosition: DEFAULT_FEED_TITLE_POSITION,
+      feedTitleOffsetY: 0,
+      feedTitleFontSize: 0,
+      feedFontFamily: "georgia",
+      shadeOpacity: 85,
+      showOverlayLayer: true,
+      showLogoLayer: true,
+      showTitleLayer: true,
+      showHandleLayer: true,
+      showStorySticker: false,
+      showStrongSceneWarning: false,
+      videoFramingMode: "cover",
+      imagePosition: 0,
+      miniIaLevel: "leve",
+      miniIaMirror: false,
+      miniIaTrimSeconds: 0,
+    },
+  },
+  {
+    id: 3,
+    name: "⚡ Story Urgente",
+    summary: "Story 9:16 · Editorial · Mini IA Alta",
+    savedAt: "Padrão",
+    data: {
+      format: "story",
+      reelTextStyle: "editorial-serif",
+      reelFontFamily: "bebas",
+      reelFontWeight: "900",
+      reelTextAlign: "center",
+      reelTextCase: "uppercase",
+      reelFontSize: 78,
+      tagColor: "orange",
+      tagPositionY: 1670,
+      handle: "@viralizougoiania",
+      handleFontSize: 33,
+      logoColorStyle: "gif",
+      logoScale: 105,
+      logoPosition: DEFAULT_LOGO_POSITION,
+      titlePosition: DEFAULT_TITLE_POSITION,
+      feedTitlePosition: DEFAULT_FEED_TITLE_POSITION,
+      feedTitleOffsetY: 0,
+      feedTitleFontSize: 0,
+      feedFontFamily: "bebas",
+      shadeOpacity: 90,
+      showOverlayLayer: true,
+      showLogoLayer: true,
+      showTitleLayer: true,
+      showHandleLayer: true,
+      showStorySticker: true,
+      showStrongSceneWarning: false,
+      videoFramingMode: "cover",
+      imagePosition: 0,
+      miniIaLevel: "alta",
+      miniIaMirror: false,
+      miniIaTrimSeconds: 3,
+    },
+  },
+];
+
 function slugFromInput(value: string) {
   const raw = value.trim();
   if (!raw) return "";
@@ -1547,6 +1709,117 @@ export default function SocialFeedCreator({ posts, onBack, initialPost, onOpenCo
   const [miniIaLevel, setMiniIaLevel] = useState<MiniIaEditLevel>("media");
   const [miniIaMirror, setMiniIaMirror] = useState<boolean>(false);
   const [miniIaTrimSeconds, setMiniIaTrimSeconds] = useState<number>(3); // Padrão sempre corta 3 segundos
+
+  const [presetSlots, setPresetSlots] = useState<LayoutPresetSlot[]>(DEFAULT_PRESET_SLOTS);
+  const [activeSlotId, setActiveSlotId] = useState<number | null>(null);
+  const [slotFeedback, setSlotFeedback] = useState<string>("");
+
+  useEffect(() => {
+    try {
+      const raw = localStorage.getItem("viralizou_layout_presets_v1");
+      if (raw) {
+        const parsed = JSON.parse(raw);
+        if (Array.isArray(parsed) && parsed.length === 3) {
+          setPresetSlots(parsed);
+        }
+      }
+    } catch {}
+  }, []);
+
+  function handleUsePresetSlot(slot: LayoutPresetSlot) {
+    const d = slot.data;
+    if (d.format) setFormat(d.format);
+    if (d.reelTextStyle) setReelTextStyle(d.reelTextStyle);
+    if (d.reelFontFamily) setReelFontFamily(d.reelFontFamily);
+    if (d.reelFontWeight) setReelFontWeight(d.reelFontWeight);
+    if (d.reelTextAlign) setReelTextAlign(d.reelTextAlign);
+    if (d.reelTextCase) setReelTextCase(d.reelTextCase);
+    if (typeof d.reelFontSize === "number") setReelFontSize(d.reelFontSize);
+    if (d.tagColor) setTagColor(d.tagColor);
+    if (typeof d.tagPositionY === "number") setTagPositionY(d.tagPositionY);
+    if (d.handle) setHandle(d.handle);
+    if (typeof d.handleFontSize === "number") setHandleFontSize(d.handleFontSize);
+    if (d.logoColorStyle) setLogoColorStyle(d.logoColorStyle);
+    if (typeof d.logoScale === "number") setLogoScale(d.logoScale);
+    if (d.logoPosition) setLogoPosition(d.logoPosition);
+    if (d.titlePosition) setTitlePosition(d.titlePosition);
+    if (d.feedTitlePosition) setFeedTitlePosition(d.feedTitlePosition);
+    if (typeof d.feedTitleOffsetY === "number") setFeedTitleOffsetY(d.feedTitleOffsetY);
+    if (typeof d.feedTitleFontSize === "number") setFeedTitleFontSize(d.feedTitleFontSize);
+    if (d.feedFontFamily) setFeedFontFamily(d.feedFontFamily);
+    if (typeof d.shadeOpacity === "number") setShadeOpacity(d.shadeOpacity);
+    if (typeof d.showOverlayLayer === "boolean") setShowOverlayLayer(d.showOverlayLayer);
+    if (typeof d.showLogoLayer === "boolean") setShowLogoLayer(d.showLogoLayer);
+    if (typeof d.showTitleLayer === "boolean") setShowTitleLayer(d.showTitleLayer);
+    if (typeof d.showHandleLayer === "boolean") setShowHandleLayer(d.showHandleLayer);
+    if (typeof d.showStorySticker === "boolean") setShowStorySticker(d.showStorySticker);
+    if (typeof d.showStrongSceneWarning === "boolean") setShowStrongSceneWarning(d.showStrongSceneWarning);
+    if (d.videoFramingMode) setVideoFramingMode(d.videoFramingMode);
+    if (typeof d.imagePosition === "number") setImagePosition(d.imagePosition);
+    if (d.miniIaLevel) setMiniIaLevel(d.miniIaLevel);
+    if (typeof d.miniIaMirror === "boolean") setMiniIaMirror(d.miniIaMirror);
+    if (typeof d.miniIaTrimSeconds === "number") setMiniIaTrimSeconds(d.miniIaTrimSeconds);
+
+    setActiveSlotId(slot.id);
+    setSlotFeedback(`⚡ ${slot.name} carregado no preview!`);
+    setTimeout(() => setSlotFeedback(""), 3500);
+  }
+
+  function handleSaveCurrentToSlot(slotId: number) {
+    const formatName = format === "reel" ? "Reels 9:16" : format === "story" ? "Story 9:16" : format === "feed-square" ? "Feed 1:1" : "Feed 4:5";
+    const currentSummary = `${formatName} · ${reelTextStyle} · ${reelFontFamily.toUpperCase()} · ${miniIaLevel.toUpperCase()}`;
+    const nowTime = new Date().toLocaleTimeString("pt-BR", { hour: "2-digit", minute: "2-digit" });
+
+    const newSlots = presetSlots.map((s) => {
+      if (s.id !== slotId) return s;
+      return {
+        ...s,
+        summary: currentSummary,
+        savedAt: `Salvo às ${nowTime}`,
+        data: {
+          format,
+          reelTextStyle,
+          reelFontFamily,
+          reelFontWeight,
+          reelTextAlign,
+          reelTextCase,
+          reelFontSize,
+          tagColor,
+          tagPositionY,
+          handle,
+          handleFontSize,
+          logoColorStyle,
+          logoScale,
+          logoPosition,
+          titlePosition,
+          feedTitlePosition,
+          feedTitleOffsetY,
+          feedTitleFontSize,
+          feedFontFamily,
+          shadeOpacity,
+          showOverlayLayer,
+          showLogoLayer,
+          showTitleLayer,
+          showHandleLayer,
+          showStorySticker,
+          showStrongSceneWarning,
+          videoFramingMode,
+          imagePosition,
+          miniIaLevel,
+          miniIaMirror,
+          miniIaTrimSeconds,
+        },
+      };
+    });
+
+    setPresetSlots(newSlots);
+    setActiveSlotId(slotId);
+    try {
+      localStorage.setItem("viralizou_layout_presets_v1", JSON.stringify(newSlots));
+    } catch {}
+    setSlotFeedback(`💾 Layout salvo no Slot ${slotId}!`);
+    setTimeout(() => setSlotFeedback(""), 3500);
+  }
 
   function chooseMiniIaLevel(lvl: MiniIaEditLevel) {
     setMiniIaLevel(lvl);
@@ -3348,6 +3621,51 @@ async function fixWebmDuration(blob: Blob, durationSec: number): Promise<Blob> {
 
       <div className="adminFeedGrid">
         <div className="adminFeedControls">
+          {/* 3 SLOTS DE LAYOUT PREDEFINIDOS */}
+          <div className="presetSlotsContainer">
+            <div className="presetSlotsHeader">
+              <div className="presetSlotsTitle">
+                <span>⚡ 3 Slots de Layout Salvo (Prévia Automática)</span>
+              </div>
+              {slotFeedback && <span className="presetSlotsFeedback">{slotFeedback}</span>}
+            </div>
+            <div className="presetSlotsGrid">
+              {presetSlots.map((slot) => {
+                const isActive = activeSlotId === slot.id;
+                return (
+                  <div key={slot.id} className={`presetSlotCard ${isActive ? "active" : ""}`}>
+                    <div>
+                      <div className="presetSlotTop">
+                        <span className="presetSlotBadge">SLOT {slot.id}</span>
+                        {isActive && <span style={{ fontSize: 9, color: "#22c55e", fontWeight: 800 }}>● ATIVO</span>}
+                      </div>
+                      <div className="presetSlotName">{slot.name}</div>
+                      <div className="presetSlotDesc">{slot.summary}</div>
+                    </div>
+                    <div style={{ display: "flex", flexDirection: "column", gap: 4, marginTop: 4 }}>
+                      <button
+                        type="button"
+                        className="presetSlotBtnUse"
+                        onClick={() => handleUsePresetSlot(slot)}
+                        title={`Carregar layout do ${slot.name} automaticamente na prévia`}
+                      >
+                        ⚡ Usar Layout
+                      </button>
+                      <button
+                        type="button"
+                        className="presetSlotBtnSave"
+                        onClick={() => handleSaveCurrentToSlot(slot.id)}
+                        title={`Salvar a configuração visual atual no Slot ${slot.id}`}
+                      >
+                        💾 Salvar Atual
+                      </button>
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          </div>
+
           <div className="field">
             <label>📐 Formato da publicação no Instagram</label>
             <div className="adminFeedFormatGrid">
@@ -3642,9 +3960,9 @@ async function fixWebmDuration(blob: Blob, durationSec: number): Promise<Blob> {
                     <span className="miniIaBtnDot leve" />
                     <span className="miniIaBtnName">LEVE</span>
                   </div>
-                  <div className="miniIaBtnTag">1.015x · Equalização Suave</div>
+                  <div className="miniIaBtnTag">1.015x · Suave</div>
                   <div className="miniIaBtnDesc">
-                    Ajuste fino de ritmo e áudio limpo com remoção de metadados de câmera.
+                    Preserva áudio original e limpa metadados de câmera.
                   </div>
                 </button>
 
@@ -3656,13 +3974,15 @@ async function fixWebmDuration(blob: Blob, durationSec: number): Promise<Blob> {
                   title="Ritmo 1.03x, cortes dinâmicos punch zoom a cada 4.5s, color grading e áudio normalizado"
                 >
                   <div className="miniIaBtnTop">
-                    <span className="miniIaBtnDot media" />
-                    <span className="miniIaBtnName">MÉDIA</span>
-                    <span className="miniIaRecommendedStar">★ RECOMENDADA</span>
+                    <div style={{ display: "flex", alignItems: "center", gap: 5 }}>
+                      <span className="miniIaBtnDot media" />
+                      <span className="miniIaBtnName">MÉDIA</span>
+                    </div>
+                    <span className="miniIaRecommendedStar">★ TOP</span>
                   </div>
-                  <div className="miniIaBtnTag">1.03x · Punch Zoom & Color</div>
+                  <div className="miniIaBtnTag">1.03x · Punch Zoom</div>
                   <div className="miniIaBtnDesc">
-                    Micro-cortes dinâmicos a cada 4.5s, color grading e áudio normalizado (-16 LUFS).
+                    Micro-cortes dinâmicos a cada 4.5s e som normalizado.
                   </div>
                 </button>
 
@@ -3677,9 +3997,9 @@ async function fixWebmDuration(blob: Blob, durationSec: number): Promise<Blob> {
                     <span className="miniIaBtnDot alta" />
                     <span className="miniIaBtnName">ALTA</span>
                   </div>
-                  <div className="miniIaBtnTag">1.05x · Anti-pHash & Grão</div>
+                  <div className="miniIaBtnTag">1.05x · Anti-pHash</div>
                   <div className="miniIaBtnDesc">
-                    Quebra o algoritmo com zooms a cada 3.8s, ruído temporal e saturação viva.
+                    Transformação máxima: zooms frequentes e micro-grão.
                   </div>
                 </button>
               </div>
