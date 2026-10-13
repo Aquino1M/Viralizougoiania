@@ -83,8 +83,11 @@ async function fetchSource(source:RadarSource):Promise<ImportedNews[]>{
     const pub=cleanText(tag(block,"pubDate")||tag(block,"published")||tag(block,"updated"));
     const category=source.category||classifyEditorial({title,excerpt:sourceText,source_name:source.name,source_url:link});
     const excerpt=buildEditorialExcerpt(desc||sourceText,title,240);
-    items.push({title,excerpt:excerpt||title,content:"",source_content:sourceText,category,image_url:feedImage(block,source.feedUrl),image_credit:"Foto: Reprodução / "+source.name,video_url:"",source_name:source.name,source_url:link,source_author:"",published_at:safeIso(pub)});
+    const imageUrl = feedImage(block,source.feedUrl);
+    items.push({title,excerpt:excerpt||title,content:"",source_content:sourceText,category,image_url:imageUrl,image_credit:"Foto: Reprodução / "+source.name,video_url:"",source_name:source.name,source_url:link,source_author:"",published_at:safeIso(pub)});
   }
+
+
   return items;
 }
 
@@ -93,7 +96,9 @@ function dedupeIncoming(items:ImportedNews[],posts:Array<Pick<Post,"slug"|"title
   const postSlugs=new Set(posts.map(p=>p.slug));const result:ImportedNews[]=[];const urls=new Set<string>(),slugs=new Set<string>();
   const sorted=items.slice().sort((a,b)=>+new Date(b.published_at||0)-+new Date(a.published_at||0));
   for(const item of sorted){
-    if(!item.image_url||item.image_url.trim().length<10)continue;
+    // RSSs frequentemente não fornecem imagem no item. Isso não deve impedir
+    // que uma notícia válida seja salva na fila; a interface usa fallback.
+    if(item.image_url && item.image_url.trim().length < 10) item.image_url = "";
     const url=canonicalUrl(item.source_url),slug=slugify(item.title);
     if(!url||postUrls.has(url)||urls.has(url)||postSlugs.has(slug)||slugs.has(slug))continue;
     if(posts.some(p=>titleSimilarity(p.title,item.title)>=0.86)||result.some(p=>titleSimilarity(p.title,item.title)>=0.86))continue;
@@ -227,14 +232,23 @@ export async function runServerRadarAutomation(options:{force?:boolean}={}):Prom
   const startedAt=new Date().toISOString();const state=await getAutomationState();
   const emptyFootball={updated:false,round:0,fixtures:0,updatedAt:null as string|null};
   if(!options.force&&!state.enabled)return{ok:true,skipped:true,reason:"paused",found:0,newItems:0,added:0,published:0,reclassified:0,football:emptyFootball,sourceCounts:{},errors:[],startedAt,finishedAt:new Date().toISOString()};
-  if(!options.force&&state.running_until&&new Date(state.running_until).getTime()>Date.now())return{ok:true,skipped:true,reason:"already-running",found:0,newItems:0,added:0,published:0,reclassified:0,football:emptyFootball,sourceCounts:{},errors:[],startedAt,finishedAt:new Date().toISOString()};
+  if (!options.force && state.running_until) {
+    const lockExpiry = Date.parse(state.running_until);
+    if (Number.isFinite(lockExpiry) && lockExpiry > Date.now() && (lockExpiry - Date.now()) <= 150000) {
+      return {ok:true,skipped:true,reason:"already-running",found:0,newItems:0,added:0,published:0,reclassified:0,football:emptyFootball,sourceCounts:{},errors:[],startedAt,finishedAt:new Date().toISOString()};
+    }
+    await saveAutomationState({running_until:null});
+  }
   const queueMode:ServerQueueMode=(
     state.queue_mode==="50_per_10m"||state.queue_mode==="50_per_1m"
       ?"300_per_10m"
       :state.queue_mode
   ) as ServerQueueMode;
   const intervalMinutes=10;
-  await saveAutomationState({running_until:new Date(Date.now()+8*60*1000).toISOString(),last_run_at:startedAt,last_error:""});
+  // O ciclo pode levar vários minutos (feeds, banco, futebol e agendamento).
+  // Um lease curto deixava o painel afirmar que o próximo ciclo estava livre
+  // antes que o anterior realmente terminasse.
+  await saveAutomationState({running_until:new Date(Date.now()+150*1000).toISOString(),last_run_at:startedAt,last_error:""});
   const errors:string[]=[];let found=0,newItems=0,added=0,published=0,resetPublished=0,reclassified=0;const sourceCounts:Record<string,number>={goias:0,brasil:0,futebol:0,fofocas:0};let football=emptyFootball;let audience:null|{updatedAt:string;pageviewsToday:number;articleViewsToday:number}=null;
   try{
     const recat=await reclassifyExternalPosts();reclassified=recat.changed; try{ await archiveOldExternalPosts(7, { allOlderThanDays: true }); }catch{}
@@ -343,6 +357,16 @@ export async function runServerRadarAutomation(options:{force?:boolean}={}):Prom
     unseen.sort((a,b) => (isGoiasOrigin(b)?1:0) - (isGoiasOrigin(a)?1:0));
     newItems=unseen.length;
     const toSchedule = unseen.slice(0, 30);
+    await Promise.allSettled(
+      toSchedule.filter((it) => !it.image_url && it.source_url).slice(0, 8).map(async (item) => {
+        try {
+          const html = await fetchText(item.source_url, 2000);
+          const m = html.match(/<meta\b[^>]*(?:property|name)=["'](?:og:image|twitter:image)["'][^>]*content=["']([^"']+)["']/i)
+            || html.match(/<meta\b[^>]*content=["']([^"']+)["'][^>]*(?:property|name)=["'](?:og:image|twitter:image)["']/i);
+          if (m?.[1]) item.image_url = absoluteUrl(m[1], item.source_url);
+        } catch {}
+      })
+    );
     const planned=planSchedule(toSchedule,posts,intervalMinutes,queueMode);
     const created=await parallelMap(planned,6,async plannedItem=>{
       const item=plannedItem.item;const sourceText=item.source_content||item.excerpt||item.title;
@@ -358,13 +382,16 @@ export async function runServerRadarAutomation(options:{force?:boolean}={}):Prom
       }catch(e){errors.push("Agendamento: "+(e instanceof Error?e.message:"erro desconhecido"));return null;}
     });
     added=created.filter(Boolean).length;
+    if (planned.length > 0 && added === 0) {
+      errors.push("Foram encontradas matérias novas, mas nenhuma foi gravada na fila. Confira a persistência no Supabase e o log de Agendamento.");
+    }
     const finishedAt=new Date().toISOString();
-    await saveAutomationState({running_until:null,last_success_at:finishedAt,next_run_at:new Date(Date.now()+10*60000).toISOString(),last_found:found,last_added:added,last_published:published,last_hydrated:formattedRepairs,last_reclassified:reclassified,last_football_sync:football.updatedAt,last_round:football.round,last_fixtures:football.fixtures,last_source_counts:sourceCounts,last_error:errors.join(" | ").slice(0,1500)});
     // Reportar sucesso somente quando a coleta realmente trouxe conteúdo e o
     // ciclo não acumulou falhas. O painel/Actions não devem exibir falso verde.
     const sourceFailures = errors.filter((error) => SOURCES.some((source) => error.startsWith(source.name + ":"))).length;
     const hasUsableFeed = Object.values(sourceCounts).some((count) => count > 0);
-    const ok = hasUsableFeed && sourceFailures < activeSources.length && errors.length === 0;
+    const ok = hasUsableFeed && sourceFailures < activeSources.length && (planned.length === 0 || added > 0);
+    await saveAutomationState({running_until:null,last_success_at:ok?finishedAt:state.last_success_at,next_run_at:new Date(Date.now()+10*60000).toISOString(),last_found:found,last_added:added,last_published:published,last_hydrated:formattedRepairs,last_reclassified:reclassified,last_football_sync:football.updatedAt,last_round:football.round,last_fixtures:football.fixtures,last_source_counts:sourceCounts,last_error:errors.join(" | ").slice(0,1500)});
     return{ok,found,newItems,added,published,resetPublished,reclassified,audience,football,sourceCounts,errors,startedAt,finishedAt};
   }catch(e){
     const message=e instanceof Error?e.message:"Erro inesperado";errors.push(message);const finishedAt=new Date().toISOString();

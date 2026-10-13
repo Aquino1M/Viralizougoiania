@@ -529,6 +529,7 @@ main{min-height:65vh}.heroSection{padding:30px 0 25px}.cityEyebrow{font-size:12p
    GOIÂNIA EM TEMPO REAL: BARRA HIPERLOCAL (CLIMA, TRÂNSITO & FUTEBOL)
    ========================================================================== */
 .goianiaLocalBar {
+  display: none !important;
   background: linear-gradient(180deg, #090e17 0%, #0f172a 100%);
   border-bottom: 1px solid rgba(255, 255, 255, 0.08);
   padding: 10px 0 12px;

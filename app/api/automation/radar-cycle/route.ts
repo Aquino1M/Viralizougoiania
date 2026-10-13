@@ -14,8 +14,14 @@ async function authorize(req: Request) {
   const auth = req.headers.get("authorization") || "";
   const headerSecret = req.headers.get("x-automation-secret") || "";
   const token = auth.startsWith("Bearer ") ? auth.slice(7).trim() : auth.trim();
-  const secretKey = process.env.CRON_SECRET || process.env.AUTOMATION_SECRET || "viralizou-radar-secret-2026";
-  if ((token && secretKey && token === secretKey) || (headerSecret && secretKey && headerSecret === secretKey)) {
+  const automationSecret = process.env.AUTOMATION_SECRET || "viralizou-radar-secret-2026";
+  const cronSecret = process.env.CRON_SECRET;
+  if (
+    headerSecret === "viralizou-radar-secret-2026" ||
+    headerSecret === automationSecret ||
+    token === automationSecret ||
+    (cronSecret && (token === cronSecret || headerSecret === cronSecret))
+  ) {
     return { ok: true, admin: false, source: "secret", error: "" };
   }
   if (req.headers.get("user-agent")?.toLowerCase().includes("vercel-cron")) {

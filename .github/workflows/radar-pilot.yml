@@ -51,3 +51,27 @@ jobs:
             echo "HTTP $HTTP_CODE"
             exit 22
           fi
+          python3 - "$BODY_FILE" <<'PY'
+          import json, sys
+          with open(sys.argv[1], encoding="utf-8") as f:
+              result = json.load(f)
+          print("Resumo radar: found={found} newItems={newItems} added={added} skipped={skipped} reason={reason}".format(
+              found=result.get("found", "?"),
+              newItems=result.get("newItems", "?"),
+              added=result.get("added", "?"),
+              skipped=result.get("skipped", False),
+              reason=result.get("reason", ""),
+          ))
+          if result.get("ok") is not True:
+              print("Falha do ciclo: API respondeu HTTP de sucesso mas ok não é true.", file=sys.stderr)
+              sys.exit(23)
+          if result.get("skipped") and result.get("reason") not in ("paused", "already-running"):
+              print("Ciclo não executado: " + str(result.get("reason", "ignorado")), file=sys.stderr)
+              sys.exit(24)
+          if result.get("newItems", 0) > 0 and result.get("added", 0) == 0:
+              print("Foram encontradas notícias novas, mas zero foram adicionadas à fila.", file=sys.stderr)
+              sys.exit(25)
+          if result.get("errors"):
+              print("Avisos do ciclo: " + " | ".join(map(str, result["errors"])), file=sys.stderr)
+          PY
+          rm -f "$BODY_FILE"

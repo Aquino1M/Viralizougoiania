@@ -51,7 +51,7 @@ export default function NewsCard({ post }: { post: Post }) {
 
   return (
     <article className="newsCard">
-      <Link href={`/noticia/${post.slug}`} className="cardImage" prefetch={true}>
+      <Link href={`/noticia/${post.slug}`} className="cardImage" prefetch={false}>
         <img
           src={post.image_url || "https://images.unsplash.com/photo-1495020689067-958852a7765e?auto=format&fit=crop&w=1200&q=75"}
           alt=""
@@ -70,7 +70,7 @@ export default function NewsCard({ post }: { post: Post }) {
 
       </Link>
       <div className="cardBody">
-        <Link href={`/noticia/${post.slug}`} prefetch={true}>
+        <Link href={`/noticia/${post.slug}`} prefetch={false}>
           <h3>{post.title}</h3>
         </Link>
         <p>{post.excerpt}</p>

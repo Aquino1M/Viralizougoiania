@@ -4,13 +4,14 @@ import Header from "@/components/Header";
 import Footer from "@/components/Footer";
 import NewsCard from "@/components/NewsCard";
 import { getPostBySlug, getPosts } from "@/lib/storage";
+import type { Post } from "@/lib/types";
 import { unstable_cache } from "next/cache";
 import { notFound } from "next/navigation";
 
 export const dynamic = "force-dynamic";
 
 const getCachedRelatedPosts = unstable_cache(
-  async (category: string) => getPosts({ category, limit: 24 }),
+  async (category: string): Promise<Post[]> => getPosts({ category, limit: 24 }),
   ["article-related-posts-v2"],
   { revalidate: 300 }
 );
@@ -105,7 +106,7 @@ function VideoEmbed({ url }: { url: string }) {
   if (url.endsWith(".mp4") || url.includes(".mp4?")) {
     return (
       <div className="articleVideoWrapper">
-        <video controls playsInline preload="metadata" src={url} style={{ width: "100%", borderRadius: 12 }}>
+        <video controls playsInline preload="none" src={url} style={{ width: "100%", borderRadius: 12 }}>
           Seu navegador não suporta reprodução direta de vídeo.
         </video>
       </div>
@@ -138,8 +139,8 @@ export default async function Article({
   const relatedPool = await getCachedRelatedPosts(post.category);
   const paras = post.content.split(/\n\n+/).filter(Boolean);
   const sourceUrl = safeSourceUrl(post.source_url);
-  const related = relatedPool
-    .filter((p) => p.id !== post.id)
+  const related: Post[] = (relatedPool as Post[])
+    .filter((p: Post) => p.id !== post.id)
     .slice(0, 3);
 
   const shareText = `*${post.title}*\n\nLeia a matéria completa no Viralizougoiania:\n`;
@@ -310,7 +311,7 @@ export default async function Article({
                 </div>
               </div>
               <div className="cardGrid">
-                {related.map((p) => (
+                {related.map((p: Post) => (
                   <NewsCard key={p.id} post={p} />
                 ))}
               </div>
