@@ -28,7 +28,7 @@ echo [1/3] Adicionando arquivos modificados (git add -A)...
 git add -A
 
 set COMMIT_MSG=%*
-if "%COMMIT_MSG%"=="" set COMMIT_MSG=fix: desacoplar mini-ia-constants do bundle cliente para eliminar erro Turbopack child_process
+if "%COMMIT_MSG%"=="" set COMMIT_MSG=fix: mover servidor Vercel para Sao Paulo gru1 e desacoplar mini-ia-constants
 
 echo.
 echo [2/3] Criando commit...
