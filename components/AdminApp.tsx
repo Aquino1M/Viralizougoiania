@@ -1155,7 +1155,7 @@ export default function AdminApp() {
     }
 
     countSuccess = await executeBatchQueue({ plannedSchedule, baseTime, setBatchProgress });
-    if (false) for (let i = 0; i < plannedSchedule.length; i++) {
+    /* Obsoleto - processado pelo servidor em paralelo (/api/posts/batch-queue)
       const { item, slotMinutes } = plannedSchedule[i];
       setBatchProgress(`Enviando para a Fila (${i + 1} de ${plannedSchedule.length}): "${item.title.slice(0, 32)}..." (+${slotMinutes}m)`);
 
@@ -1164,7 +1164,7 @@ export default function AdminApp() {
       let targetCategory = "Goiânia";
       if (item.category) {
         const match = categories.find((c) => c.name.toLowerCase() === item.category!.toLowerCase());
-        targetCategory = match ? match.name : item.category;
+        targetCategory = (match ? match.name : (item.category || "Goiânia"));
       } else {
         targetCategory = orderedCategories.find((c) => c.active)?.name || "Goiânia";
       }
@@ -1244,7 +1244,7 @@ export default function AdminApp() {
       } catch (err) {
         console.warn("Erro ao agendar item em lote:", err);
       }
-    }
+    */
 
     await load();
     setSelectedUrls([]);
@@ -1463,7 +1463,7 @@ export default function AdminApp() {
       title: activeItem.title,
       slug: slugify(activeItem.title),
       excerpt: activeItem.excerpt || activeItem.title,
-      image_url: activeItem.image_url,
+      image_url: activeItem.image_url || getCategoryFallbackImage(targetCategory),
       image_credit: activeItem.image_credit || (activeItem.source_author ? `Reportagem: ${activeItem.source_author}${activeItem.source_name ? ` | ${activeItem.source_name}` : ""}` : `Foto: Reprodução / ${activeItem.source_name || "Divulgação"}`),
       video_url: activeItem.video_url || "",
       status: "published",

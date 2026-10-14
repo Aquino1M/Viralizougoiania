@@ -25,6 +25,10 @@ if exist "public\logos\logo-viralizou-intro.gif" if not exist "public\logos\logo
   copy /y "public\logos\logo-viralizou-intro.gif" "public\logos\logo-viralizou-animada.gif" >nul 2>nul
   echo [OK] Logo animada GIF sincronizada em public\logos.
 )
+if exist "C:\Users\Aquino\.gemini\antigravity-ide\brain\05f1ad7a-878c-43ff-9525-efe8bcdf74ea\.user_uploaded\media_1791933403602.png" (
+  copy /y "C:\Users\Aquino\.gemini\antigravity-ide\brain\05f1ad7a-878c-43ff-9525-efe8bcdf74ea\.user_uploaded\media_1791933403602.png" "public\logos\logo-circular-vermelha.png" >nul 2>nul
+  echo [OK] Logo circular vermelha verificada e copiada.
+)
 
 echo.
 git status --short
@@ -33,7 +37,7 @@ echo [1/3] Adicionando arquivos modificados (git add -A)...
 git add -A
 
 set COMMIT_MSG=%*
-if "%COMMIT_MSG%"=="" set COMMIT_MSG=fix: remover arquivamento automatico do ciclo 24-7 para desbloquear fila de materias e actions
+if "%COMMIT_MSG%"=="" set COMMIT_MSG=fix: remove snapshot de audiencia do actions, otimiza consultas supabase e adiciona estilo bacci-red
 
 echo.
 echo [2/3] Criando commit...

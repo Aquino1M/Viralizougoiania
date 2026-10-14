@@ -3,10 +3,10 @@ import { buildEditorialExcerpt, formatViralizouArticle, needsEditorialRepair } f
 import { slugify } from "@/lib/slug";
 import type { ImportedNews, Post, PostStatus } from "@/lib/types";
 import { getAutomationState, saveAutomationState, saveRadarSnapshot, type RadarSnapshotItem } from "@/lib/automation-state";
-import { classifyEditorial, inferLocation, isGoiasOrigin } from "@/lib/category-classifier";
+import { classifyEditorial, getCategoryFallbackImage, inferLocation, isGoiasOrigin } from "@/lib/category-classifier";
 import { syncBrasileiraoData } from "@/lib/football-sync";
 import { hasBrokenEncoding, readResponseTextSmart, repairMojibake } from "@/lib/text-encoding";
-import { refreshAudienceSnapshot } from "@/lib/audience-analytics";
+// Audiência contabilizada sob demanda no painel, sem sobrecarga no GitHub Actions.
 
 type RadarGroup = "goias" | "brasil" | "futebol" | "fofocas";
 type RadarSource = { name:string; feedUrl:string; hosts:string[]; group:RadarGroup; category?: "Futebol" | "Fofocas" };
@@ -273,11 +273,11 @@ export async function runServerRadarAutomation(options:{force?:boolean}={}):Prom
 
     const released=await publishDuePostsBatch(300);published+=released.length;
 
-    // Mesma execução do GitHub Actions atualiza também o resumo de audiência.
+    // Audiência é contabilizada sob demanda no painel administrativo (sem sobrecarga no Actions).
     try{
-      audience=await refreshAudienceSnapshot();
+      audience = null;
     }catch(e){
-      errors.push("Audiência: "+(e instanceof Error?e.message:"falha ao atualizar"));
+      // ok
     }
 
     const activeSources = SOURCES.filter((src) => {
@@ -381,7 +381,7 @@ export async function runServerRadarAutomation(options:{force?:boolean}={}):Prom
         postCat = "Fofocas";
       }
       try{
-        return await createPost({slug:slugify(item.title),title:item.title,excerpt:item.excerpt||item.title,content,source_content:sourceText,category:postCat,city:postCity,author:item.source_author?item.source_author+" | "+item.source_name:(item.source_name||"Redação"),image_url:item.image_url||"",image_credit:item.image_credit||("Foto: Reprodução / "+(item.source_name||"Fonte")),video_url:item.video_url||"",featured:false,status:"scheduled" as PostStatus,published_at:plannedItem.publishedAt,source_name:item.source_name||"",source_url:item.source_url||"",source_author:item.source_author||"",seo_title:item.title,seo_description:item.excerpt||item.title,seo_keywords:loc.isGoias?("Goiás, Goiânia, "+postCat):(postCat+", Brasil")});
+        return await createPost({slug:slugify(item.title),title:item.title,excerpt:item.excerpt||item.title,content,source_content:sourceText,category:postCat,city:postCity,author:item.source_author?item.source_author+" | "+item.source_name:(item.source_name||"Redação"),image_url:item.image_url||getCategoryFallbackImage(postCat),image_credit:item.image_credit||("Foto: Reprodução / "+(item.source_name||"Fonte")),video_url:item.video_url||"",featured:false,status:"scheduled" as PostStatus,published_at:plannedItem.publishedAt,source_name:item.source_name||"",source_url:item.source_url||"",source_author:item.source_author||"",seo_title:item.title,seo_description:item.excerpt||item.title,seo_keywords:loc.isGoias?("Goiás, Goiânia, "+postCat):(postCat+", Brasil")});
       }catch(e){errors.push("Agendamento: "+(e instanceof Error?e.message:"erro desconhecido"));return null;}
     });
     added=created.filter(Boolean).length;

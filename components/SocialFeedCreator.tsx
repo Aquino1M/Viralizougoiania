@@ -71,7 +71,8 @@ type ReelTextStyle =
   | "highlight-yellow"
   | "highlight-red"
   | "stroke-strong"
-  | "red-bottom";
+  | "red-bottom"
+  | "bacci-red";
 type ReelFontFamily = "montserrat" | "anton" | "bebas" | "poppins" | "inter" | "roboto" | "impact" | "georgia";
 type ReelFontWeight = "900" | "800" | "700" | "600" | "400" | "italic";
 type ReelTextAlign = "left" | "center" | "right";
@@ -576,6 +577,54 @@ let cachedOfficialWhiteLogo: HTMLImageElement | null = null;
 let cachedOfficialDarkLogo: HTMLImageElement | null = null;
 let cachedOfficialWebmLogo: HTMLVideoElement | null = null;
 let cachedOfficialGifLogo: HTMLImageElement | null = null;
+
+let cachedCircularRedLogo: HTMLImageElement | null = null;
+let cachedClippedCircularRedCanvas: HTMLCanvasElement | null = null;
+
+function getCircularRedLogo(): HTMLCanvasElement | HTMLImageElement | null {
+  if (typeof window === "undefined") return null;
+  if (cachedClippedCircularRedCanvas) return cachedClippedCircularRedCanvas;
+
+  if (!cachedCircularRedLogo) {
+    const img = new Image();
+    img.crossOrigin = "anonymous";
+    img.src = "/logos/logo-circular-vermelha.png";
+    img.onload = () => {
+      try {
+        const off = document.createElement("canvas");
+        const w = img.naturalWidth || img.width || 500;
+        const h = img.naturalHeight || img.height || 500;
+        off.width = w;
+        off.height = h;
+        const offCtx = off.getContext("2d");
+        if (offCtx) {
+          offCtx.imageSmoothingEnabled = true;
+          offCtx.imageSmoothingQuality = "high";
+          offCtx.clearRect(0, 0, w, h);
+          const cx = w / 2;
+          const cy = h / 2;
+          const r = Math.min(cx, cy) * 0.935;
+          offCtx.beginPath();
+          offCtx.arc(cx, cy, r, 0, Math.PI * 2);
+          offCtx.closePath();
+          offCtx.clip();
+          offCtx.drawImage(img, 0, 0, w, h);
+          cachedClippedCircularRedCanvas = off;
+          window.dispatchEvent(new CustomEvent("viralizou_logo_ready"));
+        }
+      } catch {}
+    };
+    img.onerror = () => {
+      const fallback = getOfficialLogo("white");
+      if (fallback instanceof HTMLImageElement) cachedCircularRedLogo = fallback;
+    };
+    cachedCircularRedLogo = img;
+  }
+
+  if (cachedClippedCircularRedCanvas) return cachedClippedCircularRedCanvas;
+  if (cachedCircularRedLogo && isImageDrawable(cachedCircularRedLogo)) return cachedCircularRedLogo;
+  return null;
+}
 
 function getOfficialLogo(variant: "white" | "dark" | "gif"): HTMLImageElement | HTMLVideoElement | null {
   if (typeof window === "undefined") return null;
@@ -1446,6 +1495,7 @@ function drawReelHeadline(
   duration: number,
   canvasHeight: number = REEL_H,
   maxWidth: number = 820,
+  handle: string = "@VIRALIZOUGOIANIA",
 ) {
   // Estilo Bloco Vermelho Notícia (TVT / Notícias): Fundo vermelho sólido cobrindo o terço inferior + manchete branca à esquerda + rodapé clean
   if (textStyle === "red-bottom") {
@@ -1514,6 +1564,266 @@ function drawReelHeadline(
         ctx.fillText(line, padX, curY);
       }
       curY += lineH;
+    }
+
+    ctx.restore();
+    return;
+  }
+
+  // Estilo Bacci Notícias (Tarja Vermelha & Logo Circular do Viralizou)
+  if (textStyle === "bacci-red") {
+    const isSquare = canvasHeight <= 1100;
+    const isFeed = canvasHeight <= 1400 && !isSquare;
+    const topY = isSquare
+      ? Math.round(canvasHeight * 0.48)
+      : isFeed
+      ? Math.round(canvasHeight * 0.52)
+      : Math.round(canvasHeight * 0.58);
+
+    const darkBoxH = isSquare ? 230 : isFeed ? 270 : 330;
+    const redBarH = isSquare ? 120 : isFeed ? 136 : 156;
+
+    ctx.save();
+    ctx.imageSmoothingEnabled = true;
+    ctx.imageSmoothingQuality = "high";
+    (ctx as any).textRendering = "geometricPrecision";
+
+    // 1. CAIXA SUPERIOR DA NOTÍCIA (Dark Card estilo Bacci)
+    const darkGrad = ctx.createLinearGradient(0, topY, 0, topY + darkBoxH);
+    darkGrad.addColorStop(0, "rgba(8, 10, 18, 0.98)");
+    darkGrad.addColorStop(0.5, "rgba(12, 16, 28, 0.99)");
+    darkGrad.addColorStop(1, "rgba(5, 7, 14, 0.99)");
+    ctx.fillStyle = darkGrad;
+    ctx.fillRect(0, topY, W, darkBoxH);
+
+    // Linha sutil de brilho superior
+    ctx.fillStyle = "rgba(255, 255, 255, 0.15)";
+    ctx.fillRect(0, topY, W, 2);
+
+    // 2. LOGO CIRCULAR VG VIRALIZOU GOIÂNIA (À ESQUERDA)
+    // Cortada 100% redonda (tira toda a parte branca quadrada dos cantos)
+    const logoSize = isSquare ? 140 : isFeed ? 160 : 190;
+    const logoX = 46;
+    const logoY = topY + Math.round((darkBoxH - logoSize) / 2);
+    const circularLogo = getCircularRedLogo();
+
+    if (circularLogo && isImageDrawable(circularLogo)) {
+      ctx.save();
+      const cx = logoX + logoSize / 2;
+      const cy = logoY + logoSize / 2;
+      const r = (logoSize / 2) * 0.935;
+
+      // Glow vermelho atrás da logo
+      ctx.shadowColor = "rgba(220, 38, 38, 0.65)";
+      ctx.shadowBlur = 24;
+
+      // Corte circular perfeito (elimina qualquer fundo branco externo)
+      ctx.beginPath();
+      ctx.arc(cx, cy, r, 0, Math.PI * 2);
+      ctx.closePath();
+      ctx.clip();
+      ctx.drawImage(circularLogo, logoX, logoY, logoSize, logoSize);
+      ctx.restore();
+
+      // Borda 3D branca brilhante em volta do anel
+      ctx.save();
+      ctx.strokeStyle = "rgba(255, 255, 255, 0.9)";
+      ctx.lineWidth = 3.5;
+      ctx.beginPath();
+      ctx.arc(cx, cy, r + 0.5, 0, Math.PI * 2);
+      ctx.stroke();
+      ctx.restore();
+    }
+
+    // 3. LINHA SEPARADORA VERTICAL BRANCA (|)
+    const dividerX = logoX + logoSize + (isSquare ? 28 : 38);
+    const dividerTop = topY + (isSquare ? 30 : 42);
+    const dividerBottom = topY + darkBoxH - (isSquare ? 30 : 42);
+    ctx.save();
+    ctx.strokeStyle = "rgba(255, 255, 255, 0.85)";
+    ctx.lineWidth = 3.5;
+    ctx.beginPath();
+    ctx.moveTo(dividerX, dividerTop);
+    ctx.lineTo(dividerX, dividerBottom);
+    ctx.stroke();
+    ctx.restore();
+
+    // 4. MANCHETE / TÍTULO DA NOTÍCIA (À DIREITA DA LINHA)
+    const textStartX = dividerX + (isSquare ? 24 : 34);
+    const textMaxW = W - textStartX - (isSquare ? 36 : 48);
+    const effFontSize = fontSize > 0 ? Math.min(fontSize, isSquare ? 42 : isFeed ? 48 : 56) : (isSquare ? 40 : isFeed ? 46 : 52);
+    const effFont = getReelFont(fontFamily === "georgia" ? "anton" : (fontFamily || "anton"), effFontSize, "900");
+    ctx.font = effFont;
+    ctx.fillStyle = "#ffffff";
+    ctx.textAlign = "left";
+    ctx.textBaseline = "top";
+
+    const layout = getCachedReelTitleLayout(ctx, headline, fontFamily || "anton", "900", "uppercase", effFontSize, textMaxW);
+    const lineH = Math.round(effFontSize * 1.18);
+    const totalTextH = layout.lines.length * lineH;
+    const textStartY = topY + Math.max(26, Math.round((darkBoxH - totalTextH) / 2));
+
+    ctx.save();
+    ctx.shadowColor = "rgba(0, 0, 0, 0.95)";
+    ctx.shadowBlur = 10;
+    ctx.shadowOffsetY = 3;
+
+    const animDuration = Math.min(2.5, Math.max(0.6, duration > 0 ? duration * 0.25 : 2.0));
+    const rawProgress = Math.min(1, Math.max(0, currentTime / animDuration));
+    const totalCharsAllowed = animation === "typewriter" ? Math.floor(layout.lines.join("").length * rawProgress) : 999999;
+    let charsDrawn = 0;
+
+    let curY = textStartY;
+    for (const line of layout.lines) {
+      if (!line) {
+        curY += lineH;
+        continue;
+      }
+      if (animation === "typewriter") {
+        const remaining = totalCharsAllowed - charsDrawn;
+        if (remaining <= 0) break;
+        const visibleSlice = line.slice(0, remaining);
+        ctx.fillText(visibleSlice, textStartX, curY);
+        charsDrawn += visibleSlice.length;
+      } else {
+        if (animation === "fade") {
+          ctx.globalAlpha = Math.min(1, rawProgress * 1.5);
+        }
+        ctx.fillText(line, textStartX, curY);
+      }
+      curY += lineH;
+    }
+    ctx.restore();
+
+    // 5. TARJA INFERIOR VERMELHA NOTICIOSA (Broadcast Lower-Third)
+    const redBarY = topY + darkBoxH;
+    const redGrad = ctx.createLinearGradient(0, redBarY, W, redBarY + redBarH);
+    redGrad.addColorStop(0, "#991b1b");
+    redGrad.addColorStop(0.35, "#dc2626");
+    redGrad.addColorStop(0.7, "#b91c1c");
+    redGrad.addColorStop(1, "#7f1d1d");
+
+    ctx.fillStyle = redGrad;
+    ctx.fillRect(0, redBarY, W, redBarH);
+
+    // Reflexo brilhante no topo da tarja vermelha
+    ctx.fillStyle = "rgba(255, 255, 255, 0.35)";
+    ctx.fillRect(0, redBarY, W, 2.5);
+
+    // 6. ÍCONE DE REDE SOCIAL & CANAL (À ESQUERDA NA TARJA VERMELHA)
+    const rawHandle = (category || "").toUpperCase().includes("GOIÁS") || (category || "").toUpperCase().includes("GOIÂNIA")
+      ? "@VIRALIZOUGOIANIA"
+      : "@VIRALIZOUGOIANIA";
+    const socialText = (handle && handle.trim() ? handle.trim().toUpperCase() : rawHandle).replace(/^@/, "");
+    const socialLabel = `YOUTUBE.COM/@${socialText}`;
+
+    // Ícone do YouTube (botão vermelho estilo player com triângulo branco)
+    const ytBadgeX = 46;
+    const ytBadgeY = redBarY + (isSquare ? 22 : isFeed ? 28 : 34);
+    const ytBadgeW = isSquare ? 46 : 54;
+    const ytBadgeH = isSquare ? 32 : 38;
+
+    ctx.save();
+    ctx.fillStyle = "#ffffff";
+    if (typeof ctx.roundRect === "function") {
+      ctx.beginPath();
+      ctx.roundRect(ytBadgeX, ytBadgeY, ytBadgeW, ytBadgeH, 8);
+      ctx.fill();
+    } else {
+      ctx.fillRect(ytBadgeX, ytBadgeY, ytBadgeW, ytBadgeH);
+    }
+    // Triângulo vermelho do play
+    ctx.fillStyle = "#dc2626";
+    ctx.beginPath();
+    ctx.moveTo(ytBadgeX + (isSquare ? 18 : 22), ytBadgeY + (isSquare ? 9 : 11));
+    ctx.lineTo(ytBadgeX + (isSquare ? 32 : 37), ytBadgeY + (isSquare ? 16 : 19));
+    ctx.lineTo(ytBadgeX + (isSquare ? 18 : 22), ytBadgeY + (isSquare ? 23 : 27));
+    ctx.closePath();
+    ctx.fill();
+    ctx.restore();
+
+    // Texto do canal do YouTube / Handle
+    ctx.save();
+    const handleFSize = isSquare ? 30 : isFeed ? 34 : 38;
+    ctx.font = `900 ${handleFSize}px "Montserrat", "Arial Black", sans-serif`;
+    ctx.fillStyle = "#ffffff";
+    ctx.textBaseline = "middle";
+    ctx.textAlign = "left";
+    ctx.shadowColor = "rgba(0, 0, 0, 0.75)";
+    ctx.shadowBlur = 8;
+    ctx.fillText(socialLabel, ytBadgeX + ytBadgeW + 14, ytBadgeY + ytBadgeH / 2);
+    ctx.restore();
+
+    // 7. SLOGAN COM LINHA DECORATIVA (Embaixo do canal)
+    const sloganY = redBarY + (isSquare ? 80 : isFeed ? 94 : 106);
+    const sloganText = "O PORTAL QUE VIRALIZA GOIÂNIA!";
+    ctx.save();
+    const sloganFSize = isSquare ? 17 : isFeed ? 19 : 21;
+    ctx.font = `800 ${sloganFSize}px "Montserrat", sans-serif`;
+    ctx.fillStyle = "rgba(255, 255, 255, 0.95)";
+    ctx.textBaseline = "middle";
+    ctx.textAlign = "left";
+
+    // Linha decorativa branca fina
+    ctx.strokeStyle = "rgba(255, 255, 255, 0.6)";
+    ctx.lineWidth = 2;
+    ctx.beginPath();
+    ctx.moveTo(ytBadgeX, sloganY);
+    ctx.lineTo(ytBadgeX + 65, sloganY);
+    ctx.stroke();
+
+    ctx.fillText(sloganText, ytBadgeX + 78, sloganY);
+    ctx.restore();
+
+    // 8. SELO CIRCULAR DE CANAL DE TV (À DIREITA NA TARJA VERMELHA)
+    const tvBadgeSize = isSquare ? 90 : isFeed ? 104 : 118;
+    const tvBadgeX = W - tvBadgeSize - 46;
+    const tvBadgeY = redBarY + Math.round((redBarH - tvBadgeSize) / 2);
+
+    if (circularLogo && isImageDrawable(circularLogo)) {
+      ctx.save();
+      const tvCx = tvBadgeX + tvBadgeSize / 2;
+      const tvCy = tvBadgeY + tvBadgeSize / 2;
+      const tvR = (tvBadgeSize / 2) * 0.92;
+
+      // Fundo branco do selo de TV
+      ctx.fillStyle = "#ffffff";
+      ctx.beginPath();
+      ctx.arc(tvCx, tvCy, tvR + 3, 0, Math.PI * 2);
+      ctx.fill();
+
+      // Borda prata/branca
+      ctx.strokeStyle = "rgba(255, 255, 255, 0.95)";
+      ctx.lineWidth = 3;
+      ctx.stroke();
+
+      // Corte circular do logo
+      ctx.beginPath();
+      ctx.arc(tvCx, tvCy, tvR, 0, Math.PI * 2);
+      ctx.closePath();
+      ctx.clip();
+      ctx.drawImage(circularLogo, tvBadgeX, tvBadgeY, tvBadgeSize, tvBadgeSize);
+      ctx.restore();
+
+      // Mini selo de "TV" no canto inferior do badge
+      ctx.save();
+      const miniR = isSquare ? 12 : 14;
+      const miniBadgeX = tvBadgeX + tvBadgeSize - miniR * 2 - 2;
+      const miniBadgeY = tvBadgeY + tvBadgeSize - miniR * 2 - 2;
+      ctx.fillStyle = "#dc2626";
+      ctx.beginPath();
+      ctx.arc(miniBadgeX + miniR, miniBadgeY + miniR, miniR, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.strokeStyle = "#ffffff";
+      ctx.lineWidth = 2;
+      ctx.stroke();
+
+      ctx.fillStyle = "#ffffff";
+      ctx.font = `900 ${isSquare ? 10 : 12}px "Inter", sans-serif`;
+      ctx.textAlign = "center";
+      ctx.textBaseline = "middle";
+      ctx.fillText("TV", miniBadgeX + miniR, miniBadgeY + miniR);
+      ctx.restore();
     }
 
     ctx.restore();
@@ -1690,7 +2000,7 @@ function drawReelFrame(
   }
 
   const maxAlpha = shadeOpacity / 100;
-  if (shadeOpacity > 0 && textStyle !== "red-bottom") {
+  if (shadeOpacity > 0 && textStyle !== "red-bottom" && textStyle !== "bacci-red") {
     const shade = ctx.createLinearGradient(0, 650, 0, REEL_H);
     shade.addColorStop(0, `rgba(0,0,0,${(0.05 * maxAlpha).toFixed(2)})`);
     shade.addColorStop(0.42, `rgba(0,0,0,${(0.68 * maxAlpha).toFixed(2)})`);
@@ -1709,7 +2019,7 @@ function drawReelFrame(
     ctx.fillText("AVISO: CENAS FORTES", W / 2, 95);
   }
 
-  if (showLogoLayer) {
+  if (showLogoLayer && textStyle !== "bacci-red") {
     const renderLogo = getRenderableLogo(logo, logoColorStyle, "white");
     if (renderLogo && isImageDrawable(renderLogo)) {
       const { width, height } = getLogoSize(renderLogo, format, logoScale / 100);
@@ -1737,6 +2047,7 @@ function drawReelFrame(
       duration,
       REEL_H,
       820,
+      handle || "@VIRALIZOUGOIANIA",
     );
   }
 
@@ -1745,7 +2056,7 @@ function drawReelFrame(
   }
 
   // Assinatura / Tag Inferior
-  if (showHandleLayer && handle && handle.trim() && textStyle !== "red-bottom") {
+  if (showHandleLayer && handle && handle.trim() && textStyle !== "red-bottom" && textStyle !== "bacci-red") {
     const tagText = handle.trim();
     const tagY = getEffectiveTagY(format, tagPositionY);
 
@@ -1841,7 +2152,7 @@ function buildReelOverlayCanvas(
 
   // 1. Gradiente inferior de contraste (shade)
   const maxAlpha = (showOverlayLayer ? shadeOpacity : 0) / 100;
-  if (maxAlpha > 0 && textStyle !== "red-bottom") {
+  if (maxAlpha > 0 && textStyle !== "red-bottom" && textStyle !== "bacci-red") {
     const shade = ctx.createLinearGradient(0, 650, 0, REEL_H);
     shade.addColorStop(0, `rgba(0,0,0,${(0.05 * maxAlpha).toFixed(2)})`);
     shade.addColorStop(0.42, `rgba(0,0,0,${(0.68 * maxAlpha).toFixed(2)})`);
@@ -1862,7 +2173,7 @@ function buildReelOverlayCanvas(
   }
 
   // 3. Logo do jornal (quando animada em GIF/WebM, é renderizada quadro a quadro em tempo real)
-  if (showLogoLayer && logoColorStyle !== "gif") {
+  if (showLogoLayer && logoColorStyle !== "gif" && textStyle !== "bacci-red") {
     const renderLogo = getRenderableLogo(logo, logoColorStyle, "white");
     if (renderLogo && isImageDrawable(renderLogo)) {
       const { width, height } = getLogoSize(renderLogo, format, logoScale / 100);
@@ -1889,11 +2200,12 @@ function buildReelOverlayCanvas(
       10,
       REEL_H,
       820,
+      handle || "@VIRALIZOUGOIANIA",
     );
   }
 
   // 5. Assinatura / Tag Inferior (@viralizougoiania)
-  if (showHandleLayer && handle && handle.trim() && textStyle !== "red-bottom") {
+  if (showHandleLayer && handle && handle.trim() && textStyle !== "red-bottom" && textStyle !== "bacci-red") {
     const tagText = handle.trim();
     const tagY = getEffectiveTagY(format, tagPositionY);
 
@@ -2728,7 +3040,7 @@ export default function SocialFeedCreator({ posts, onBack, initialPost, onOpenCo
         ctx.fillText("AVISO: CENAS FORTES", currentW / 2, 40 + bannerH / 2);
       }
 
-      if (showLogoLayer) {
+      if (showLogoLayer && reelTextStyle !== "bacci-red") {
         let customImg: HTMLImageElement | null = logoImageRef.current;
         if (logoData && (!customImg || customImg.src !== logoData)) {
           try {
@@ -2770,10 +3082,11 @@ export default function SocialFeedCreator({ posts, onBack, initialPost, onOpenCo
           10,
           currentH,
           920,
+          handle || "@VIRALIZOUGOIANIA",
         );
       }
 
-      if (showHandleLayer && handle && handle.trim()) {
+      if (showHandleLayer && handle && handle.trim() && reelTextStyle !== "red-bottom" && reelTextStyle !== "bacci-red") {
         ctx.save();
         ctx.textAlign = "center";
         ctx.textBaseline = "middle";
@@ -5234,6 +5547,28 @@ async function fixWebmDuration(blob: Blob, durationSec: number): Promise<Blob> {
                   title="Bloco inferior vermelho sólido com manchete branca à esquerda e rodapé clean (Estilo TVT Notícias)"
                 >
                   🟥 Bloco Vermelho Notícia (TVT)
+                </button>
+                <button
+                  type="button"
+                  className={`captionStyleBtn ${reelTextStyle === "bacci-red" ? "active" : ""}`}
+                  onClick={() => {
+                    chooseReelTextStyle("bacci-red");
+                    chooseReelFontFamily("anton");
+                    chooseReelFontWeight("900");
+                    chooseReelTextCase("uppercase");
+                    chooseReelTextAlign("left");
+                    chooseReelFontSize(52);
+                    setImagePosition(-12);
+                  }}
+                  style={{
+                    background: reelTextStyle === "bacci-red" ? "linear-gradient(135deg, #b91c1c, #991b1b)" : undefined,
+                    color: reelTextStyle === "bacci-red" ? "#ffffff" : undefined,
+                    borderColor: reelTextStyle === "bacci-red" ? "#ef4444" : undefined,
+                    fontWeight: reelTextStyle === "bacci-red" ? 800 : 600,
+                  }}
+                  title="Estilo Bacci Notícias: Bloco escuro com logo circular 3D sem bordas brancas + manchete + tarja vermelha de TV com redes sociais"
+                >
+                  📺 Estilo Bacci (Tarja Vermelha & Logo Circular)
                 </button>
                 <button type="button" className={`captionStyleBtn ${reelTextStyle === "highlight" || reelTextStyle === "highlight-yellow" ? "active" : ""}`} onClick={() => chooseReelTextStyle("highlight")} title="Faixa amarela noticiosa em destaque (Alto impacto)">🟨 Faixa Noticiosa (Destaque)</button> {false && (<><button
                   type="button"

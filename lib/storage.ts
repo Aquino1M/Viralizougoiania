@@ -185,7 +185,11 @@ export async function getPostIdentityIndex(): Promise<Array<Pick<Post, "id" | "s
   if (hasSupabaseConfig()) {
     const pageSize = 1000;
     const all: Array<Pick<Post, "id" | "slug" | "title" | "source_url">> = [];
-    for (let offset = 0; offset < 100000; offset += pageSize) {
+    try {
+      const rows = await sb("posts?select=id,slug,title,source_url&order=created_at.desc&limit=3000");
+      return Array.isArray(rows) ? rows : [];
+    } catch {}
+    if (false) for (let offset = 0; offset < 100000; offset += pageSize) {
       const rows = await sb(
         `posts?select=id,slug,title,source_url&order=created_at.desc&limit=${pageSize}&offset=${offset}`
       );
@@ -204,7 +208,11 @@ export async function getScheduledPostsAll(): Promise<Post[]> {
   if (hasSupabaseConfig()) {
     const pageSize = 1000;
     const all: Post[] = [];
-    for (let offset = 0; offset < 100000; offset += pageSize) {
+    try {
+      const rows = await sb("posts?select=*&status=eq.scheduled&order=published_at.asc.nullslast,created_at.asc&limit=1000");
+      if (Array.isArray(rows)) return (rows as Post[]).map((p) => normalizePostCategory(p));
+    } catch {}
+    if (false) for (let offset = 0; offset < 100000; offset += pageSize) {
       const rows = await sb(
         `posts?select=*&status=eq.scheduled&order=published_at.asc.nullslast,created_at.asc&limit=${pageSize}&offset=${offset}`
       );
