@@ -26,7 +26,7 @@ const DEFAULT_STATE: AutomationState = {
   scope_mode: "goias_priority",
   enabled: true,
   interval_minutes: 10,
-  queue_mode: "300_per_10m",
+  queue_mode: "50_per_10m",
   queue_reflow_version: 1,
   queue_reset_version: 0,
   last_run_at: null,
@@ -84,11 +84,11 @@ export async function getAutomationState(): Promise<AutomationState> {
       updated_at: rows[0].updated_at || null,
     };
     if (
-      stored.queue_mode === "50_per_10m" ||
+      stored.queue_mode === "300_per_10m" ||
       stored.queue_mode === "50_per_1m" ||
       stored.queue_mode === undefined
     ) {
-      state.queue_mode = "300_per_10m";
+      state.queue_mode = "50_per_10m";
       state.interval_minutes = 10;
     }
     if (stored.queue_reflow_version === undefined) state.queue_reflow_version = 1;

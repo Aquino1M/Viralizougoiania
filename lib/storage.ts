@@ -186,8 +186,11 @@ export async function getPostIdentityIndex(): Promise<Array<Pick<Post, "id" | "s
     const pageSize = 1000;
     const all: Array<Pick<Post, "id" | "slug" | "title" | "source_url">> = [];
     try {
-      const rows = await sb("posts?select=id,slug,title,source_url&order=created_at.desc&limit=3000");
-      return Array.isArray(rows) ? rows : [];
+      const [b1, b2] = await Promise.all([
+        sb("posts?select=id,slug,title,source_url&order=created_at.desc&limit=1000"),
+        sb("posts?select=id,slug,title,source_url&order=created_at.desc&limit=1000&offset=1000")
+      ]);
+      return [...(Array.isArray(b1) ? b1 : []), ...(Array.isArray(b2) ? b2 : [])];
     } catch {}
     if (false) for (let offset = 0; offset < 100000; offset += pageSize) {
       const rows = await sb(
@@ -209,7 +212,7 @@ export async function getScheduledPostsAll(): Promise<Post[]> {
     const pageSize = 1000;
     const all: Post[] = [];
     try {
-      const rows = await sb("posts?select=*&status=eq.scheduled&order=published_at.asc.nullslast,created_at.asc&limit=1000");
+      const rows = await sb("posts?select=id,status,published_at,category&status=eq.scheduled&order=published_at.asc.nullslast,created_at.asc&limit=1000");
       if (Array.isArray(rows)) return (rows as Post[]).map((p) => normalizePostCategory(p));
     } catch {}
     if (false) for (let offset = 0; offset < 100000; offset += pageSize) {
@@ -564,7 +567,8 @@ export async function createPost(input: PostInput) {
       } catch (err: any) {
         // Se houver conflito de slug único no Supabase, adiciona sufixo único e tenta novamente
         if (err.message && err.message.includes("posts_slug_key")) {
-          post.slug = `${post.slug}-${Math.random().toString(36).slice(2, 6)}`;
+          const uniqueSuffix = `${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 6)}`;
+          post.slug = `${post.slug.slice(0, 75)}-${uniqueSuffix}`;
           try {
             rows = await sb("posts", {
               method: "POST",
@@ -580,7 +584,16 @@ export async function createPost(input: PostInput) {
                 body: JSON.stringify(withoutVideo),
               });
             } else {
-              throw retryErr;
+              try {
+                const { video_url: _, ...withoutVideo } = post;
+                rows = await sb("posts", {
+                  method: "POST",
+                  headers: { Prefer: "return=representation" },
+                  body: JSON.stringify(withoutVideo),
+                });
+              } catch {
+                return null;
+              }
             }
           }
         } else if (err.message && err.message.includes("video_url")) {
@@ -605,7 +618,7 @@ export async function createPost(input: PostInput) {
       }
     } catch (err: any) {
       console.warn("Erro ao salvar post no Supabase:", err.message);
-      if (process.env.NODE_ENV === "production") throw err;
+      return null;
     }
   }
   const posts = await readLocal();

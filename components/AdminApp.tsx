@@ -81,8 +81,8 @@ const RADAR_SOURCES: RadarSource[] = [
   { name: "G1 Goiás", url: "https://g1.globo.com/rss/g1/go/goias/", label: "G1 Goiás", region: "goias", tag: "Tempo Real" },
   { name: "A Redação", url: "https://aredacao.com.br/feed/", label: "A Redação Goiânia", region: "goias", tag: "Capital" },
   { name: "Diário de Goiás", url: "https://diariodegoias.com.br/feed/", label: "Diário de Goiás", region: "goias", tag: "Notícias & Política" },
-  { name: "Curta Mais", url: "https://curtamais.com.br/goiania/feed/", label: "Curta Mais Goiânia", region: "goias", tag: "Eventos & Gastronomia" },
-  { name: "Dia Online", url: "https://diaonline.ig.com.br/feed/", label: "Dia Online", region: "goias", tag: "Goiás" },
+  { name: "Curta Mais", url: "https://curtamais.com.br/goiania/ultimas-noticias/feed/", label: "Curta Mais Goiânia", region: "goias", tag: "Eventos & Gastronomia" },
+
   { name: "Metrópoles Goiás", url: "https://www.metropoles.com/distrito-federal/entorno/feed", label: "Metrópoles Goiás", region: "goias", tag: "Goiás & Região" },
   { name: "Goiás 24 Horas", url: "https://goias24horas.com.br/feed/", label: "Goiás 24 Horas", region: "goias", tag: "Notícias" },
 

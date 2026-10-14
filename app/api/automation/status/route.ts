@@ -26,12 +26,12 @@ export async function POST(req: Request) {
     const allowedQueueModes = new Set(["1_per_10m", "2_per_10m", "3_per_10m", "50_per_10m", "50_per_1m", "300_per_10m", "1_per_category", "3_per_category"]);
     if (typeof body.queue_mode === "string" && allowedQueueModes.has(body.queue_mode)) {
       const normalizedMode =
-        body.queue_mode === "50_per_1m" || body.queue_mode === "50_per_10m"
-          ? "300_per_10m"
+        body.queue_mode === "300_per_10m" || body.queue_mode === "50_per_1m"
+          ? "50_per_10m"
           : body.queue_mode;
       patch.queue_mode = normalizedMode;
       patch.interval_minutes = 10;
-      if (normalizedMode === "300_per_10m") patch.queue_reflow_version = 1;
+      if (normalizedMode === "50_per_10m") patch.queue_reflow_version = 1;
     }
 
     const state = await saveAutomationState(patch);

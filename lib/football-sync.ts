@@ -209,7 +209,7 @@ export async function syncBrasileiraoData(): Promise<StoredFootballData> {
         "Accept-Language": "pt-BR,pt;q=0.9,en-US;q=0.8,en;q=0.7",
       },
       cache: "no-store",
-      signal: AbortSignal.timeout(12000),
+      signal: AbortSignal.timeout(4000),
     });
 
     if (!res.ok) {

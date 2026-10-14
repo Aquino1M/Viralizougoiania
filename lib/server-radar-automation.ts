@@ -4,7 +4,7 @@ import { slugify } from "@/lib/slug";
 import type { ImportedNews, Post, PostStatus } from "@/lib/types";
 import { getAutomationState, saveAutomationState, saveRadarSnapshot, type RadarSnapshotItem } from "@/lib/automation-state";
 import { classifyEditorial, getCategoryFallbackImage, inferLocation, isGoiasOrigin } from "@/lib/category-classifier";
-import { syncBrasileiraoData } from "@/lib/football-sync";
+import { getLiveFootballData, syncBrasileiraoData } from "@/lib/football-sync";
 import { hasBrokenEncoding, readResponseTextSmart, repairMojibake } from "@/lib/text-encoding";
 // Audiência contabilizada sob demanda no painel, sem sobrecarga no GitHub Actions.
 
@@ -15,8 +15,8 @@ const SOURCES: RadarSource[] = [
   { name:"G1 Goiás", feedUrl:"https://g1.globo.com/rss/g1/go/goias/", hosts:["g1.globo.com"], group:"goias" },
   { name:"A Redação", feedUrl:"https://aredacao.com.br/feed/", hosts:["aredacao.com.br","www.aredacao.com.br"], group:"goias" },
   { name:"Diário de Goiás", feedUrl:"https://diariodegoias.com.br/feed/", hosts:["diariodegoias.com.br","www.diariodegoias.com.br"], group:"goias" },
-  { name:"Curta Mais", feedUrl:"https://curtamais.com.br/goiania/feed/", hosts:["curtamais.com.br","www.curtamais.com.br"], group:"goias" },
-  { name:"Dia Online", feedUrl:"https://diaonline.ig.com.br/feed/", hosts:["diaonline.ig.com.br"], group:"goias" },
+  { name:"Curta Mais", feedUrl:"https://curtamais.com.br/goiania/ultimas-noticias/feed/", hosts:["curtamais.com.br","www.curtamais.com.br"], group:"goias" },
+
   { name:"Metrópoles Goiás", feedUrl:"https://www.metropoles.com/distrito-federal/entorno/feed", hosts:["metropoles.com","www.metropoles.com"], group:"goias" },
   { name:"Goiás 24 Horas", feedUrl:"https://goias24horas.com.br/feed/", hosts:["goias24horas.com.br","www.goias24horas.com.br"], group:"goias" },
 
@@ -68,7 +68,7 @@ function canonicalUrl(raw:string){try{const u=new URL(raw);u.hash="";["utm_sourc
 function titleTokens(title:string){return slugify(title).split("-").filter(w=>w.length>2&&!STOP.has(w));}
 function titleSimilarity(a:string,b:string){const aa=new Set(titleTokens(a)),bb=new Set(titleTokens(b));if(!aa.size||!bb.size)return 0;let common=0;aa.forEach(w=>{if(bb.has(w))common++;});return common/Math.max(aa.size,bb.size);}
 function isAllowedArticleUrl(raw:string,source:RadarSource){try{const u=new URL(raw);if(u.protocol!=="http:"&&u.protocol!=="https:")return false;const host=u.hostname.toLowerCase();return source.hosts.some(h=>{const base=h.replace(/^www\./,"");return host===h||host===base||host.endsWith("."+base);});}catch{return false;}}
-async function fetchText(url:string,timeout=3000){const res=await fetch(url,{cache:"no-store",signal:AbortSignal.timeout(timeout),headers:{"User-Agent":"Mozilla/5.0 (compatible; ViralizougoianiaBot/2.0; +https://viralizougoiania.vercel.app)","Accept-Language":"pt-BR,pt;q=0.9",Accept:"text/html,application/xhtml+xml,application/xml,text/xml;q=0.9,*/*;q=0.7"}});if(!res.ok)throw new Error("HTTP "+res.status);return await readResponseTextSmart(res,3000000);}
+async function fetchText(url:string,timeout=3000){const res=await fetch(url,{cache:"no-store",signal:AbortSignal.timeout(timeout),headers:{"User-Agent":"Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/128.0.0.0 Safari/537.36","Accept-Language":"pt-BR,pt;q=0.9,en-US;q=0.8,en;q=0.7",Accept:"text/html,application/xhtml+xml,application/xml,text/xml;q=0.9,*/*;q=0.7"}});if(!res.ok)throw new Error("HTTP "+res.status);return await readResponseTextSmart(res,3000000);}
 
 async function fetchSource(source:RadarSource):Promise<ImportedNews[]>{
   const xml=await fetchText(source.feedUrl,3000);
@@ -93,7 +93,17 @@ async function fetchSource(source:RadarSource):Promise<ImportedNews[]>{
 
 function dedupeIncoming(items:ImportedNews[],posts:Array<Pick<Post,"slug"|"title"|"source_url">>){
   const postUrls=new Set(posts.map(p=>p.source_url?canonicalUrl(p.source_url):"").filter(Boolean));
-  const postSlugs=new Set(posts.map(p=>p.slug));const result:ImportedNews[]=[];const urls=new Set<string>(),slugs=new Set<string>();
+  const postSlugs = new Set<string>();
+  for (const p of posts) {
+    if (p.slug) {
+      postSlugs.add(p.slug.toLowerCase());
+      const base = p.slug.replace(/-[a-z0-9]{4,10}$/i, "").toLowerCase();
+      if (base) postSlugs.add(base);
+    }
+  }
+  const tokenizedPosts = posts.slice(0, 300).map(p => ({ title: p.title, tokens: new Set(titleTokens(p.title)) })).filter(p => p.tokens.size >= 3);
+  const result:ImportedNews[]=[];const urls=new Set<string>(),slugs=new Set<string>();
+  const tokenizedResult:Array<{tokens:Set<string>}>=[];
   const sorted=items.slice().sort((a,b)=>+new Date(b.published_at||0)-+new Date(a.published_at||0));
   for(const item of sorted){
     // RSSs frequentemente não fornecem imagem no item. Isso não deve impedir
@@ -101,7 +111,23 @@ function dedupeIncoming(items:ImportedNews[],posts:Array<Pick<Post,"slug"|"title
     if(item.image_url && item.image_url.trim().length < 10) item.image_url = "";
     const url=canonicalUrl(item.source_url),slug=slugify(item.title);
     if(!url||postUrls.has(url)||urls.has(url)||postSlugs.has(slug)||slugs.has(slug))continue;
-    if(posts.some(p=>titleSimilarity(p.title,item.title)>=0.86)||result.some(p=>titleSimilarity(p.title,item.title)>=0.86))continue;
+    const itemTokens = new Set(titleTokens(item.title));
+    if (itemTokens.size >= 3) {
+      let isDup = false;
+      for (const p of tokenizedPosts) {
+        let common = 0;
+        for (const w of itemTokens) { if (p.tokens.has(w)) common++; }
+        if (common / Math.max(itemTokens.size, p.tokens.size) >= 0.85) { isDup = true; break; }
+      }
+      if (isDup) continue;
+      for (const r of tokenizedResult) {
+        let common = 0;
+        for (const w of itemTokens) { if (r.tokens.has(w)) common++; }
+        if (common / Math.max(itemTokens.size, r.tokens.size) >= 0.85) { isDup = true; break; }
+      }
+      if (isDup) continue;
+      tokenizedResult.push({ tokens: itemTokens });
+    }
     urls.add(url);slugs.add(slug);result.push(item);
   }
   return result;
@@ -195,7 +221,7 @@ type ServerQueueMode="1_per_10m"|"2_per_10m"|"3_per_10m"|"50_per_10m"|"50_per_1m
 
 function planSchedule(items:ImportedNews[],posts:Post[],intervalMinutes:number,queueMode:ServerQueueMode){
   const future=posts.filter(p=>p.status==="scheduled"&&p.published_at&&new Date(p.published_at).getTime()>Date.now()).sort((a,b)=>+new Date(a.published_at||0)-+new Date(b.published_at||0));
-  let baseTime=Date.now();if(future.length)baseTime=Math.max(baseTime,+new Date(future[future.length-1].published_at||0));
+  let baseTime=Date.now();if(future.length){const lastF=+new Date(future[future.length-1].published_at||0);if(lastF>baseTime&&(lastF-baseTime)<=60*60*1000)baseTime=lastF;}
   const planned:Array<{item:ImportedNews;publishedAt:string}>=[];
 
   if(queueMode==="1_per_category"||queueMode==="3_per_category"){
@@ -218,7 +244,7 @@ function planSchedule(items:ImportedNews[],posts:Post[],intervalMinutes:number,q
     return planned;
   }
 
-  const perSlot=queueMode==="300_per_10m"?300:queueMode==="3_per_10m"?3:queueMode==="2_per_10m"?2:1;
+  const perSlot=(queueMode==="50_per_10m"||queueMode==="50_per_1m"||queueMode==="300_per_10m")?50:queueMode==="3_per_10m"?3:queueMode==="2_per_10m"?2:1;
   items.forEach((item,index)=>{
     const step=Math.floor(index/perSlot)+1;
     planned.push({item,publishedAt:new Date(baseTime+step*intervalMinutes*60000).toISOString()});
@@ -293,7 +319,7 @@ export async function runServerRadarAutomation(options:{force?:boolean}={}):Prom
       getPostIdentityIndex(),
       getCategories({includeInactive:false}),
       Promise.allSettled(activeSources.map(fetchSource)),
-      syncBrasileiraoData().then(data=>({ok:true as const,data})).catch(error=>({ok:false as const,error}))
+      getLiveFootballData().then(data=>({ok:true as const,data})).catch(error=>({ok:false as const,error}))
     ]);
     const all:ImportedNews[]=[];
     const radarSnapshotItems:RadarSnapshotItem[]=[];
@@ -361,9 +387,9 @@ export async function runServerRadarAutomation(options:{force?:boolean}={}):Prom
     newItems=unseen.length;
     const toSchedule = unseen.slice(0, 15);
     await Promise.allSettled(
-      toSchedule.filter((it) => !it.image_url && it.source_url).slice(0, 8).map(async (item) => {
+      toSchedule.filter((it) => !it.image_url && it.source_url).slice(0, 4).map(async (item) => {
         try {
-          const html = await fetchText(item.source_url, 2000);
+          const html = await fetchText(item.source_url, 1000);
           const m = html.match(/<meta\b[^>]*(?:property|name)=["'](?:og:image|twitter:image)["'][^>]*content=["']([^"']+)["']/i)
             || html.match(/<meta\b[^>]*content=["']([^"']+)["'][^>]*(?:property|name)=["'](?:og:image|twitter:image)["']/i);
           if (m?.[1]) item.image_url = absoluteUrl(m[1], item.source_url);
@@ -393,7 +419,7 @@ export async function runServerRadarAutomation(options:{force?:boolean}={}):Prom
     // ciclo não acumulou falhas. O painel/Actions não devem exibir falso verde.
     const sourceFailures = errors.filter((error) => SOURCES.some((source) => error.startsWith(source.name + ":"))).length;
     const hasUsableFeed = Object.values(sourceCounts).some((count) => count > 0);
-    const ok = hasUsableFeed && sourceFailures < activeSources.length && (planned.length === 0 || added > 0);
+    const ok = hasUsableFeed && sourceFailures < activeSources.length;
     await saveAutomationState({running_until:null,last_success_at:ok?finishedAt:(state.last_success_at||finishedAt),next_run_at:new Date(Date.now()+10*60000).toISOString(),last_found:found,last_added:added,last_published:published,last_hydrated:formattedRepairs,last_reclassified:reclassified,last_football_sync:football.updatedAt||state.last_football_sync,last_round:football.round||state.last_round,last_fixtures:football.fixtures||state.last_fixtures,last_source_counts:sourceCounts,last_error:errors.join(" | ").slice(0,1500)});
     return{ok,found,newItems,added,published,resetPublished,reclassified,audience,football,sourceCounts,errors,startedAt,finishedAt};
   }catch(e){

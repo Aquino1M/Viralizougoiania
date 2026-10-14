@@ -13,9 +13,9 @@ export async function POST(request: Request) {
   try {
     const body = await request.json();
     let interval = Math.max(10, Number(body.interval_minutes) || 10);
-    let mode: QueueMode = MODES.has(body.queue_mode) ? body.queue_mode : "300_per_10m";
-    if (mode === "50_per_10m" || mode === "50_per_1m") mode = "300_per_10m";
-    if (mode === "300_per_10m") interval = 10;
+    let mode: QueueMode = MODES.has(body.queue_mode) ? body.queue_mode : "50_per_10m";
+    if (mode === "300_per_10m" || mode === "50_per_1m") mode = "50_per_10m";
+    if (mode === "50_per_10m") interval = 10;
     const posts = await getScheduledPostsAll();
     const baseTime = Date.now();
     const planned: Array<{ id: string; publishedAt: string }> = [];
@@ -43,7 +43,7 @@ export async function POST(request: Request) {
         if (hasMore) step++;
       }
     } else {
-      const perSlot = mode === "300_per_10m" ? 300 : mode === "3_per_10m" ? 3 : mode === "2_per_10m" ? 2 : 1;
+      const perSlot = mode === "50_per_10m" ? 50 : mode === "3_per_10m" ? 3 : mode === "2_per_10m" ? 2 : 1;
       posts.forEach((post, index) => {
         planned.push({ id: post.id, publishedAt: new Date(baseTime + (Math.floor(index / perSlot) + 1) * interval * 60000).toISOString() });
       });
