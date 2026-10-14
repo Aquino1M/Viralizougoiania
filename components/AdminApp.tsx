@@ -931,6 +931,13 @@ export default function AdminApp() {
     return () => clearInterval(statusTimer);
   }, []);
 
+  useEffect(() => {
+    const hasDue = queuedPosts.some((p) => p.published_at && new Date(p.published_at).getTime() <= Date.now());
+    if (hasDue && !loading) {
+      triggerPublishDue();
+    }
+  }, [queuedPosts, loading]);
+
   async function applyQueueScheduleMode(nextMode: QueueScheduleMode) {
     const normalizedMode =
       nextMode === "300_per_10m" || nextMode === "50_per_1m"

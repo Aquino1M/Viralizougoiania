@@ -297,7 +297,7 @@ export async function runServerRadarAutomation(options:{force?:boolean}={}):Prom
       }
     }
 
-    const released=await publishDuePostsBatch(50);published+=released.length;
+    const released=await publishDuePostsBatch(200);published+=released.length;
 
     // Audiência é contabilizada sob demanda no painel administrativo (sem sobrecarga no Actions).
     try{

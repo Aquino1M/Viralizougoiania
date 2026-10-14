@@ -2,22 +2,26 @@ name: Ciclo Unico 24x7
 
 on:
   schedule:
-    - cron: "4,14,24,34,44,54 * * * *"
+    - cron: "*/15 * * * *"
   workflow_dispatch:
 
 permissions:
-  contents: read
+  contents: write
+  actions: write
   id-token: write
 
 concurrency:
   group: viralizougoiania-ciclo-unico
-  cancel-in-progress: false
+  cancel-in-progress: true
 
 jobs:
   ciclo-unico:
     runs-on: ubuntu-latest
-    timeout-minutes: 9
+    timeout-minutes: 55
     steps:
+      - name: Checkout do repositorio
+        uses: actions/checkout@v4
+
       - name: Obter token OIDC temporario
         id: oidc
         shell: bash
@@ -30,47 +34,49 @@ jobs:
           echo "::add-mask::$TOKEN"
           echo "token=$TOKEN" >> "$GITHUB_OUTPUT"
 
-      - name: Executar ciclo unico completo - ate 50 posts + radar + futebol
+      - name: Executar cadeia de ciclos a cada 10 minutos (24/7)
         shell: bash
         env:
           OIDC_TOKEN: ${{ steps.oidc.outputs.token }}
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
           set -euo pipefail
-          BODY_FILE="$(mktemp)"
-          HTTP_CODE="$(curl -sS --connect-timeout 20 --max-time 420 --retry 2 --retry-all-errors --retry-delay 10 \
-            -o "$BODY_FILE" -w "%{http_code}" \
-            -X POST \
-            -H "Authorization: Bearer $OIDC_TOKEN" \
-            -H "x-vercel-trusted-oidc-idp-token: $OIDC_TOKEN" \
-            -H "x-automation-secret: viralizou-radar-secret-2026" \
-            -H "Content-Type: application/json" \
-            "https://viralizougoiania.vercel.app/api/automation/radar-cycle?secret=viralizou-radar-secret-2026")"
-          cat "$BODY_FILE"
-          echo
-          if [ "$HTTP_CODE" -lt 200 ] || [ "$HTTP_CODE" -ge 300 ]; then
-            echo "HTTP $HTTP_CODE"
-            exit 22
-          fi
-          python3 - "$BODY_FILE" <<'PY'
-          import json, sys
-          with open(sys.argv[1], encoding="utf-8") as f:
-              result = json.load(f)
-          print("Resumo radar: found={found} newItems={newItems} added={added} skipped={skipped} reason={reason}".format(
-              found=result.get("found", "?"),
-              newItems=result.get("newItems", "?"),
-              added=result.get("added", "?"),
-              skipped=result.get("skipped", False),
-              reason=result.get("reason", ""),
-          ))
-          if result.get("ok") is not True:
-              print("Falha do ciclo: API respondeu HTTP de sucesso mas ok não é true.", file=sys.stderr)
-              sys.exit(23)
-          if result.get("skipped") and result.get("reason") not in ("paused", "already-running"):
-              print("Ciclo não executado: " + str(result.get("reason", "ignorado")), file=sys.stderr)
-              sys.exit(24)
-          if result.get("newItems", 0) > 0 and result.get("added", 0) == 0:
-              print("Aviso: Foram encontradas notícias novas, mas zero foram adicionadas à fila neste ciclo.", file=sys.stderr)
-          if result.get("errors"):
-              print("Avisos do ciclo: " + " | ".join(map(str, result["errors"])), file=sys.stderr)
-          PY
-          rm -f "$BODY_FILE"
+          TOTAL_CYCLES=4
+          INTERVAL_SECONDS=600
+
+          for ((i=1; i<=TOTAL_CYCLES; i++)); do
+            echo "=========================================================="
+            echo "🚀 [CICLO $i/$TOTAL_CYCLES] Iniciando varredura 24/7 - $(date '+%Y-%m-%d %H:%M:%S UTC')"
+            echo "=========================================================="
+
+            BODY_FILE="$(mktemp)"
+            HTTP_CODE="$(curl -sS --connect-timeout 20 --max-time 120 --retry 2 --retry-all-errors --retry-delay 5 \
+              -o "$BODY_FILE" -w "%{http_code}" \
+              -X POST \
+              -H "Authorization: Bearer $OIDC_TOKEN" \
+              -H "x-vercel-trusted-oidc-idp-token: $OIDC_TOKEN" \
+              -H "x-automation-secret: viralizou-radar-secret-2026" \
+              -H "Content-Type: application/json" \
+              "https://viralizougoiania.vercel.app/api/automation/radar-cycle?secret=viralizou-radar-secret-2026")" || HTTP_CODE="000"
+
+            echo "Status HTTP recebido da Vercel: $HTTP_CODE"
+            if [ -f "$BODY_FILE" ] && [ -s "$BODY_FILE" ]; then
+              cat "$BODY_FILE"
+              echo
+              python3 .github/scripts/parse_radar_result.py "$BODY_FILE" || true
+              rm -f "$BODY_FILE"
+            fi
+
+            # Se for o último ciclo da sessão (minuto 30), agenda a próxima rodada da cadeia perpétua
+            if [ "$i" -eq "$TOTAL_CYCLES" ]; then
+              echo "----------------------------------------------------------"
+              echo "🔄 Disparando o próximo runner da cadeia perpétua 24/7..."
+              echo "----------------------------------------------------------"
+              gh workflow run radar-pilot.yml --ref main || true
+              echo "✅ Próximo ciclo delegado com sucesso para o novo runner!"
+              break
+            fi
+
+            echo "⏳ Aguardando exatamente 10 minutos ($INTERVAL_SECONDS segundos) para a próxima varredura e liberação de fila..."
+            sleep "$INTERVAL_SECONDS"
+          done

@@ -414,8 +414,13 @@ export async function getPosts(opts: { includeDrafts?: boolean; category?: strin
   if (hasSupabaseConfig()) {
     try {
       const selectFields = summaryOnly ? "id,slug,title,excerpt,category,city,author,image_url,image_credit,featured,status,published_at,created_at,updated_at" : "*";
+      const nowIso = new Date().toISOString();
       const filters = [`select=${selectFields}`, "order=published_at.desc.nullslast,created_at.desc"];
-      if (status) filters.push(`status=eq.${encodeURIComponent(status)}`); else if (!includeDrafts) filters.push("status=eq.published");
+      if (status) {
+        filters.push(`status=eq.${encodeURIComponent(status)}`);
+      } else if (!includeDrafts) {
+        filters.push(`or=(status.eq.published,and(status.eq.scheduled,published_at.lte.${encodeURIComponent(nowIso)}))`);
+      }
       if (category) filters.push(`category=eq.${encodeURIComponent(category)}`);
       if (limit) filters.push(`limit=${limit}`);
       let posts: Post[] = [];
@@ -448,12 +453,18 @@ export async function getPosts(opts: { includeDrafts?: boolean; category?: strin
 
   // Corrige status e editoria antes de renderizar.
   const nowMs = Date.now();
+  let hasDueToRelease = false;
   postsList = postsList.map((p) => {
     const normalizedStatus = p.status === "scheduled" && p.published_at && new Date(p.published_at).getTime() <= nowMs
-      ? { ...p, status: "published" as PostStatus }
+      ? ((hasDueToRelease = true), { ...p, status: "published" as PostStatus })
       : p;
     return normalizePostCategory(normalizedStatus as Post);
   });
+  if (hasDueToRelease && hasSupabaseConfig()) {
+    publishDuePostsBatch(200).catch((err) => {
+      console.warn("Auto-liberação em background no getPosts:", err.message);
+    });
+  }
 
   let result = postsList;
   if (status) { result = result.filter((p) => p.status === status); } else if (!includeDrafts) {
