@@ -266,8 +266,8 @@ export async function runServerRadarAutomation(options:{force?:boolean}={}):Prom
     await saveAutomationState({running_until:null});
   }
   const queueMode:ServerQueueMode=(
-    state.queue_mode==="50_per_10m"||state.queue_mode==="50_per_1m"
-      ?"300_per_10m"
+    state.queue_mode==="300_per_10m"||state.queue_mode==="50_per_1m"
+      ?"50_per_10m"
       :state.queue_mode
   ) as ServerQueueMode;
   const intervalMinutes=10;
@@ -287,7 +287,7 @@ export async function runServerRadarAutomation(options:{force?:boolean}={}):Prom
         resetPublished=await publishAllScheduledNow();
         published+=resetPublished;
         await saveAutomationState({
-          queue_mode:"300_per_10m",
+          queue_mode:"50_per_10m",
           interval_minutes:10,
           queue_reflow_version:1,
           queue_reset_version:1,
@@ -297,7 +297,7 @@ export async function runServerRadarAutomation(options:{force?:boolean}={}):Prom
       }
     }
 
-    const released=await publishDuePostsBatch(300);published+=released.length;
+    const released=await publishDuePostsBatch(50);published+=released.length;
 
     // Audiência é contabilizada sob demanda no painel administrativo (sem sobrecarga no Actions).
     try{
@@ -385,7 +385,7 @@ export async function runServerRadarAutomation(options:{force?:boolean}={}):Prom
     // Prioriza matérias de Goiás para agendamento em destaque
     unseen.sort((a,b) => (isGoiasOrigin(b)?1:0) - (isGoiasOrigin(a)?1:0));
     newItems=unseen.length;
-    const toSchedule = unseen.slice(0, 15);
+    const toSchedule = unseen.slice(0, 50);
     await Promise.allSettled(
       toSchedule.filter((it) => !it.image_url && it.source_url).slice(0, 4).map(async (item) => {
         try {

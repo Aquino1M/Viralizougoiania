@@ -305,7 +305,7 @@ export async function publishAllScheduledNow(): Promise<number> {
   }
 }
 
-export async function publishDuePostsBatch(limit = 300): Promise<Post[]> {
+export async function publishDuePostsBatch(limit = 50): Promise<Post[]> {
   const now = new Date().toISOString();
   const safeLimit = Math.max(1, Math.min(1000, Math.floor(limit)));
   let updatedPosts: Post[] = [];

@@ -199,12 +199,12 @@ export default function AdminApp() {
   const [queueScheduleMode, setQueueScheduleMode] = useState<QueueScheduleMode>(() => {
     if (typeof window !== "undefined") {
       const saved = localStorage.getItem("viralizou_radar_schedule_mode");
-      if (saved === "50_per_10m" || saved === "50_per_1m") return "300_per_10m";
+      if (saved === "300_per_10m" || saved === "50_per_1m") return "50_per_10m";
       if (saved === "1_per_10m" || saved === "2_per_10m" || saved === "3_per_10m" || saved === "300_per_10m" || saved === "1_per_category" || saved === "3_per_category") {
         return saved as QueueScheduleMode;
       }
     }
-    return "300_per_10m"; // Um único ciclo: até 300 matérias a cada 10 minutos.
+    return "50_per_10m"; // Um único ciclo: até 50 matérias a cada 10 minutos.
   });
 
   // Piloto Automático 24/7: estado real salvo no servidor/Supabase
@@ -909,7 +909,7 @@ export default function AdminApp() {
       if (state.scope_mode) setAutoPilotScope(state.scope_mode);
       const serverMode = state.queue_mode as QueueScheduleMode | undefined;
       if (serverMode && ["1_per_10m","2_per_10m","3_per_10m","50_per_10m","50_per_1m","300_per_10m","1_per_category","3_per_category"].includes(serverMode)) {
-        const normalizedMode = serverMode === "50_per_10m" || serverMode === "50_per_1m" ? "300_per_10m" : serverMode;
+        const normalizedMode = serverMode === "300_per_10m" || serverMode === "50_per_1m" ? "50_per_10m" : serverMode;
         setQueueScheduleMode(normalizedMode);
         setQueueInterval(10);
         try { localStorage.setItem("viralizou_radar_schedule_mode", normalizedMode); } catch {}
@@ -933,8 +933,8 @@ export default function AdminApp() {
 
   async function applyQueueScheduleMode(nextMode: QueueScheduleMode) {
     const normalizedMode =
-      nextMode === "50_per_10m" || nextMode === "50_per_1m"
-        ? "300_per_10m"
+      nextMode === "300_per_10m" || nextMode === "50_per_1m"
+        ? "50_per_10m"
         : nextMode;
     setQueueScheduleMode(normalizedMode);
     setQueueInterval(10);
@@ -1130,7 +1130,7 @@ export default function AdminApp() {
       }
     } else {
       // Modos numéricos: 1, 2, 3 ou 300 postagens por ciclo de 10 minutos.
-      const perSlot = queueScheduleMode === "300_per_10m" ? 300 : queueScheduleMode === "3_per_10m" ? 3 : queueScheduleMode === "2_per_10m" ? 2 : 1;
+      const perSlot = (queueScheduleMode === "50_per_10m" || queueScheduleMode === "300_per_10m") ? 50 : queueScheduleMode === "3_per_10m" ? 3 : queueScheduleMode === "2_per_10m" ? 2 : 1;
       plannedSchedule = uniqueItems.map((item, idx) => {
         const slotStep = Math.floor(idx / perSlot) + 1;
         return {
