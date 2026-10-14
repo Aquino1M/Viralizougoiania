@@ -1252,8 +1252,8 @@ export default function AdminApp() {
     setBatchProgress("");
 
     const modeDescription =
-      queueScheduleMode === "300_per_10m"
-        ? "🔥 300 matérias a cada 10 min"
+      (queueScheduleMode === "50_per_10m" || queueScheduleMode === "300_per_10m")
+        ? "🔥 50 matérias a cada 10 min"
         : queueScheduleMode === "3_per_category"
         ? "🚀 3 matérias por Aba/Editoria a cada 10 min"
         : queueScheduleMode === "1_per_category"
@@ -2596,7 +2596,7 @@ export default function AdminApp() {
                     {/* Indicador do Ritmo da Fila Ativo */}
                     <div style={{ display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap" }}>
                       <span style={{ fontSize: 12, fontWeight: 700, color: "#475569" }}>
-                        ⏱️ Ritmo da Fila: <b style={{ color: "#0284c7" }}>{queueScheduleMode === "300_per_10m" ? "🔥 300 a cada 10m" : queueScheduleMode === "3_per_category" ? "🚀 3 por Aba do Jornal" : queueScheduleMode === "1_per_category" ? "🌟 1 por Aba do Jornal" : queueScheduleMode === "2_per_10m" ? "2 a cada 10m" : queueScheduleMode === "3_per_10m" ? "3 a cada 10m" : "1 a cada 10m"}</b>
+                        ⏱️ Ritmo da Fila: <b style={{ color: "#0284c7" }}>{(queueScheduleMode === "50_per_10m" || queueScheduleMode === "300_per_10m") ? "🔥 50 a cada 10m" : queueScheduleMode === "3_per_category" ? "🚀 3 por Aba do Jornal" : queueScheduleMode === "1_per_category" ? "🌟 1 por Aba do Jornal" : queueScheduleMode === "2_per_10m" ? "2 a cada 10m" : queueScheduleMode === "3_per_10m" ? "3 a cada 10m" : "1 a cada 10m"}</b>
                       </span>
                       <button
                         type="button"
@@ -2839,11 +2839,11 @@ export default function AdminApp() {
                       </button>
                       <button
                         type="button"
-                        className={`radarPaceBtn special ${queueScheduleMode === "300_per_10m" ? "active" : ""}`}
-                        onClick={() => applyQueueScheduleMode("300_per_10m")}
-                        title="Um único ciclo do GitHub Actions publica até 300 matérias a cada 10 minutos"
+                        className={`radarPaceBtn special ${(queueScheduleMode === "50_per_10m" || queueScheduleMode === "300_per_10m") ? "active" : ""}`}
+                        onClick={() => applyQueueScheduleMode("50_per_10m")}
+                        title="Um único ciclo do GitHub Actions publica até 50 matérias a cada 10 minutos"
                       >
-                        🔥 300 a cada 10m
+                        🔥 50 a cada 10m
                       </button>
                       <button
                         type="button"
@@ -2883,8 +2883,8 @@ export default function AdminApp() {
                       {queueScheduleMode === "3_per_10m" && (
                         <><b>Modo 3 por Slot:</b> O portal publica 3 matérias juntas a cada 10 minutos (ritmo acelerado).</>
                       )}
-                      {queueScheduleMode === "300_per_10m" && (
-                        <><b>Ciclo Único 300/10m Ativo:</b> a cada execução do GitHub Actions o sistema faz Radar + fila + publicação de até 300 matérias + editorias + tabela/jogos + audiência, tudo no mesmo ciclo de 10 minutos.</>
+                      {(queueScheduleMode === "50_per_10m" || queueScheduleMode === "300_per_10m") && (
+                        <><b>Ciclo Único 50/10m Ativo:</b> a cada execução do GitHub Actions o sistema faz Radar + fila + publicação de até 50 matérias + editorias + tabela/jogos + audiência, tudo no mesmo ciclo de 10 minutos.</>
                       )}
                     </span>
                   </div>

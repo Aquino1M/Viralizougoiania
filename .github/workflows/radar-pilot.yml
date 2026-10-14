@@ -30,7 +30,7 @@ jobs:
           echo "::add-mask::$TOKEN"
           echo "token=$TOKEN" >> "$GITHUB_OUTPUT"
 
-      - name: Executar ciclo unico completo - ate 300 posts + radar + futebol
+      - name: Executar ciclo unico completo - ate 50 posts + radar + futebol
         shell: bash
         env:
           OIDC_TOKEN: ${{ steps.oidc.outputs.token }}
