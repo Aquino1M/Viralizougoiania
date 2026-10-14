@@ -112,7 +112,7 @@ export const VIDEO_FILTERS: Record<VideoFilterPreset, VideoFilterConfig> = {
     name: "Cinema",
     badge: "Teal & Orange",
     icon: "🎬",
-    canvasFilter: "contrast(1.15) brightness(1.02) saturate(1.22) hue-rotate(-6deg)",
+    canvasFilter: "contrast(1.15) brightness(1.02) saturate(1.22) hue-rotate(354deg)",
     ffmpegFilter: "eq=contrast=1.15:brightness=0.02:saturation=1.22,colorbalance=rs=0.08:gs=-0.04:bs=-0.12:rm=0.05:gm=-0.02:bm=-0.08",
     description: "Look de filme com sombras frias teal e realce de pele alaranjado.",
   },

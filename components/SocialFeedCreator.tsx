@@ -119,6 +119,8 @@ export interface LayoutPresetData {
   autoHookEnabled?: boolean;
   autoHookText?: string;
   videoCrop?: VideoCropRect | null;
+  hookPositionY?: number;
+  bgmVolume?: number;
 }
 
 export interface LayoutPresetSlot {
@@ -132,25 +134,25 @@ export interface LayoutPresetSlot {
 const DEFAULT_PRESET_SLOTS: LayoutPresetSlot[] = [
   {
     id: 1,
-    name: "🔥 Reels Viral",
-    summary: "Reels 9:16 · Caixa Escura · Mini IA Média",
+    name: "📺 Estilo Bacci TV",
+    summary: "Reels 9:16 · Tarja Vermelha · Bacci TV",
     savedAt: "Padrão",
     data: {
       format: "reel",
-      reelTextStyle: "box-banner",
-      reelFontFamily: "montserrat",
+      reelTextStyle: "bacci-red",
+      reelFontFamily: "impact",
       reelFontWeight: "900",
-      reelTextAlign: "center",
+      reelTextAlign: "left",
       reelTextCase: "uppercase",
       reelFontSize: 72,
       tagColor: "red",
       tagPositionY: 1670,
       handle: "@viralizougoiania",
       handleFontSize: 33,
-      logoColorStyle: "gif",
+      logoColorStyle: "original",
       logoScale: 100,
       logoPosition: DEFAULT_LOGO_POSITION,
-      titlePosition: DEFAULT_TITLE_POSITION,
+      titlePosition: { x: 0.5, y: 0.58 },
       feedTitlePosition: DEFAULT_FEED_TITLE_POSITION,
       feedTitleOffsetY: 0,
       feedTitleFontSize: 0,
@@ -169,9 +171,11 @@ const DEFAULT_PRESET_SLOTS: LayoutPresetSlot[] = [
       miniIaTrimSeconds: 3,
       videoFilter: "cinema",
       cutPauses: true,
-      bgmTrack: "energetic",
-      autoHookEnabled: true,
+      bgmTrack: "breaking",
+      autoHookEnabled: false,
       autoHookText: "",
+      hookPositionY: 307,
+      bgmVolume: 15,
     },
   },
   {
@@ -238,7 +242,7 @@ const DEFAULT_PRESET_SLOTS: LayoutPresetSlot[] = [
       logoColorStyle: "gif",
       logoScale: 100,
       logoPosition: DEFAULT_LOGO_POSITION,
-      titlePosition: DEFAULT_TITLE_POSITION,
+      titlePosition: { x: 0.5, y: 0.615 },
       feedTitlePosition: DEFAULT_FEED_TITLE_POSITION,
       feedTitleOffsetY: 0,
       feedTitleFontSize: 0,
@@ -258,7 +262,7 @@ const DEFAULT_PRESET_SLOTS: LayoutPresetSlot[] = [
       videoFilter: "none",
       cutPauses: true,
       bgmTrack: "energetic",
-      autoHookEnabled: true,
+      autoHookEnabled: false,
       autoHookText: "",
     },
   },
@@ -404,6 +408,77 @@ function drawContain(
   try { ctx.drawImage(img, cropX, cropY, sourceWidth, sourceHeight, dx, dy, dw, dh); } catch {}
 }
 
+function applyCanvasVideoFilterOverlay(
+  ctx: CanvasRenderingContext2D,
+  w: number,
+  h: number,
+  filterPreset?: VideoFilterPreset
+) {
+  if (!filterPreset || filterPreset === "none") return;
+  ctx.save();
+  ctx.imageSmoothingEnabled = true;
+
+  if (filterPreset === "noir") {
+    // Monocromático Preto & Branco 100% garantido em qualquer GPU/Browser
+    ctx.globalCompositeOperation = "color";
+    ctx.fillStyle = "#808080";
+    ctx.fillRect(0, 0, w, h);
+    // Realce de alto contraste noir
+    ctx.globalCompositeOperation = "multiply";
+    ctx.fillStyle = "rgba(0, 0, 0, 0.28)";
+    ctx.fillRect(0, 0, w, h);
+  } else if (filterPreset === "cinema") {
+    // Look Cinema Teal & Orange profissional
+    ctx.globalCompositeOperation = "soft-light";
+    const tealOrangeGrad = ctx.createLinearGradient(0, 0, 0, h);
+    tealOrangeGrad.addColorStop(0, "rgba(0, 180, 216, 0.28)");
+    tealOrangeGrad.addColorStop(0.5, "rgba(255, 140, 0, 0.18)");
+    tealOrangeGrad.addColorStop(1, "rgba(0, 150, 199, 0.25)");
+    ctx.fillStyle = tealOrangeGrad;
+    ctx.fillRect(0, 0, w, h);
+    ctx.globalCompositeOperation = "color-burn";
+    ctx.fillStyle = "rgba(255, 110, 0, 0.08)";
+    ctx.fillRect(0, 0, w, h);
+  } else if (filterPreset === "dark_moody") {
+    // Dark Moody: Sombras densas, visual dramático de notícia
+    ctx.globalCompositeOperation = "multiply";
+    ctx.fillStyle = "rgba(10, 18, 30, 0.35)";
+    ctx.fillRect(0, 0, w, h);
+    ctx.globalCompositeOperation = "overlay";
+    ctx.fillStyle = "rgba(0, 0, 0, 0.20)";
+    ctx.fillRect(0, 0, w, h);
+  } else if (filterPreset === "cyberpunk") {
+    // Cyberpunk Neon Pop: Magentas e Cyan vibrantes
+    ctx.globalCompositeOperation = "color-dodge";
+    const cyberGrad = ctx.createLinearGradient(0, 0, w, h);
+    cyberGrad.addColorStop(0, "rgba(255, 0, 128, 0.22)");
+    cyberGrad.addColorStop(1, "rgba(0, 245, 255, 0.22)");
+    ctx.fillStyle = cyberGrad;
+    ctx.fillRect(0, 0, w, h);
+    ctx.globalCompositeOperation = "soft-light";
+    ctx.fillStyle = "rgba(180, 0, 255, 0.15)";
+    ctx.fillRect(0, 0, w, h);
+  } else if (filterPreset === "vintage") {
+    // Vintage VHS / Anos 90: Tom sépia e tons quentes analógicos
+    ctx.globalCompositeOperation = "soft-light";
+    ctx.fillStyle = "rgba(215, 150, 75, 0.42)";
+    ctx.fillRect(0, 0, w, h);
+    ctx.globalCompositeOperation = "color";
+    ctx.fillStyle = "rgba(200, 140, 50, 0.16)";
+    ctx.fillRect(0, 0, w, h);
+  } else if (filterPreset === "hdr") {
+    // HDR Vivid: Saturação vibrante e nitidez visual
+    ctx.globalCompositeOperation = "overlay";
+    ctx.fillStyle = "rgba(255, 255, 255, 0.16)";
+    ctx.fillRect(0, 0, w, h);
+    ctx.globalCompositeOperation = "soft-light";
+    ctx.fillStyle = "rgba(255, 200, 100, 0.14)";
+    ctx.fillRect(0, 0, w, h);
+  }
+
+  ctx.restore();
+}
+
 function drawVideoWithFraming(
   ctx: CanvasRenderingContext2D,
   video: HTMLVideoElement,
@@ -446,11 +521,13 @@ function drawVideoWithFraming(
     let filterString = `contrast(${c}) brightness(${b}) saturate(${s})`;
     if (miniIaConfig.filterPreset && miniIaConfig.filterPreset !== "none") {
       const extra = VIDEO_FILTERS[miniIaConfig.filterPreset]?.canvasFilter;
-      if (extra) {
+      if (extra && extra !== "none") {
         filterString = `${filterString} ${extra}`;
       }
     }
-    ctx.filter = filterString;
+    try {
+      ctx.filter = filterString;
+    } catch {}
   }
 
   if (framingMode === "blur-fit") {
@@ -475,6 +552,12 @@ function drawVideoWithFraming(
     drawCover(ctx, video, 0, 0, w, h, vertical, crop);
   }
 
+  // Reseta ctx.filter para evitar contaminação
+  ctx.filter = "none";
+
+  // Aplica sobreposição visual de cor & estilo da Mini IA (garante 100% de fidelidade visual na tela)
+  applyCanvasVideoFilterOverlay(ctx, w, h, miniIaConfig?.filterPreset);
+
   ctx.restore();
 }
 
@@ -484,7 +567,8 @@ function drawViralHookBanner(
   canvasWidth: number,
   canvasHeight: number,
   currentTime: number,
-  format: PublicationFormat = "reel"
+  format: PublicationFormat = "reel",
+  hookPosY?: number
 ) {
   if (!hookText || !hookText.trim()) return;
   // Exibe durante os primeiros 3.6 segundos de gancho com fade-out suave a partir de 3.0s
@@ -496,7 +580,8 @@ function drawViralHookBanner(
   ctx.globalAlpha = alpha;
 
   const text = hookText.trim().toUpperCase();
-  const bannerY = format === "feed-square" ? canvasHeight * 0.22 : format === "feed" ? canvasHeight * 0.20 : canvasHeight * 0.16;
+  const defaultY = format === "feed-square" ? canvasHeight * 0.22 : format === "feed" ? canvasHeight * 0.20 : canvasHeight * 0.16;
+  const bannerY = typeof hookPosY === "number" && hookPosY > 0 ? hookPosY : defaultY;
   const fontSize = 38;
   ctx.font = `900 ${fontSize}px "Montserrat", -apple-system, sans-serif`;
   ctx.textAlign = "center";
@@ -1499,7 +1584,10 @@ function drawReelHeadline(
 ) {
   // Estilo Bloco Vermelho Notícia (TVT / Notícias): Fundo vermelho sólido cobrindo o terço inferior + manchete branca à esquerda + rodapé clean
   if (textStyle === "red-bottom") {
-    const bannerY = Math.round(canvasHeight * 0.615); // ~1180px em 1920
+    const defaultBannerY = Math.round(canvasHeight * 0.615); // ~1180px em 1920
+    const bannerY = typeof position?.y === "number" && position.y > 0 && position.y < 1
+      ? Math.round(position.y * canvasHeight)
+      : defaultBannerY;
     const bannerH = canvasHeight - bannerY;
 
     ctx.save();
@@ -1574,11 +1662,14 @@ function drawReelHeadline(
   if (textStyle === "bacci-red") {
     const isSquare = canvasHeight <= 1100;
     const isFeed = canvasHeight <= 1400 && !isSquare;
-    const topY = isSquare
+    const defaultTopY = isSquare
       ? Math.round(canvasHeight * 0.48)
       : isFeed
       ? Math.round(canvasHeight * 0.52)
       : Math.round(canvasHeight * 0.58);
+    const topY = typeof position?.y === "number" && position.y > 0 && position.y < 1
+      ? Math.round(position.y * canvasHeight)
+      : defaultTopY;
 
     const darkBoxH = isSquare ? 230 : isFeed ? 270 : 330;
     const redBarH = isSquare ? 120 : isFeed ? 136 : 156;
@@ -1710,52 +1801,58 @@ function drawReelHeadline(
     ctx.fillStyle = "rgba(255, 255, 255, 0.35)";
     ctx.fillRect(0, redBarY, W, 2.5);
 
-    // 6. ÍCONE DE REDE SOCIAL & CANAL (À ESQUERDA NA TARJA VERMELHA)
+    // 6. ÍCONE DE REDE SOCIAL & PERFIL DO INSTAGRAM (À ESQUERDA NA TARJA VERMELHA)
     const rawHandle = (category || "").toUpperCase().includes("GOIÁS") || (category || "").toUpperCase().includes("GOIÂNIA")
       ? "@VIRALIZOUGOIANIA"
       : "@VIRALIZOUGOIANIA";
     const socialText = (handle && handle.trim() ? handle.trim().toUpperCase() : rawHandle).replace(/^@/, "");
-    const socialLabel = `YOUTUBE.COM/@${socialText}`;
+    const socialLabel = `@${socialText}`;
 
-    // Ícone do YouTube (botão vermelho estilo player com triângulo branco)
-    const ytBadgeX = 46;
-    const ytBadgeY = redBarY + (isSquare ? 22 : isFeed ? 28 : 34);
-    const ytBadgeW = isSquare ? 46 : 54;
-    const ytBadgeH = isSquare ? 32 : 38;
+    // Ícone oficial do Instagram (câmera com cantos arredondados, lente central e flash)
+    const instaBadgeX = 46;
+    const instaBadgeSize = isSquare ? 38 : isFeed ? 44 : 48;
+    const instaBadgeY = redBarY + (isSquare ? 18 : isFeed ? 24 : 28);
 
     ctx.save();
-    ctx.fillStyle = "#ffffff";
+    ctx.strokeStyle = "#ffffff";
+    ctx.lineWidth = isSquare ? 3.5 : 4.2;
+    const radius = isSquare ? 10 : 12;
     if (typeof ctx.roundRect === "function") {
       ctx.beginPath();
-      ctx.roundRect(ytBadgeX, ytBadgeY, ytBadgeW, ytBadgeH, 8);
-      ctx.fill();
+      ctx.roundRect(instaBadgeX, instaBadgeY, instaBadgeSize, instaBadgeSize, radius);
+      ctx.stroke();
     } else {
-      ctx.fillRect(ytBadgeX, ytBadgeY, ytBadgeW, ytBadgeH);
+      ctx.strokeRect(instaBadgeX, instaBadgeY, instaBadgeSize, instaBadgeSize);
     }
-    // Triângulo vermelho do play
-    ctx.fillStyle = "#dc2626";
+    // Lente central da câmera
+    const lensRadius = isSquare ? 8.5 : 10.5;
     ctx.beginPath();
-    ctx.moveTo(ytBadgeX + (isSquare ? 18 : 22), ytBadgeY + (isSquare ? 9 : 11));
-    ctx.lineTo(ytBadgeX + (isSquare ? 32 : 37), ytBadgeY + (isSquare ? 16 : 19));
-    ctx.lineTo(ytBadgeX + (isSquare ? 18 : 22), ytBadgeY + (isSquare ? 23 : 27));
-    ctx.closePath();
+    ctx.arc(instaBadgeX + instaBadgeSize / 2, instaBadgeY + instaBadgeSize / 2, lensRadius, 0, Math.PI * 2);
+    ctx.stroke();
+
+    // Flash da câmera (canto superior direito)
+    ctx.fillStyle = "#ffffff";
+    const flashRadius = isSquare ? 2.4 : 3;
+    const flashOffset = isSquare ? 9 : 11;
+    ctx.beginPath();
+    ctx.arc(instaBadgeX + instaBadgeSize - flashOffset, instaBadgeY + flashOffset, flashRadius, 0, Math.PI * 2);
     ctx.fill();
     ctx.restore();
 
-    // Texto do canal do YouTube / Handle
+    // Texto do perfil do Instagram (@viralizougoiania)
     ctx.save();
-    const handleFSize = isSquare ? 30 : isFeed ? 34 : 38;
+    const handleFSize = isSquare ? 32 : isFeed ? 38 : 42;
     ctx.font = `900 ${handleFSize}px "Montserrat", "Arial Black", sans-serif`;
     ctx.fillStyle = "#ffffff";
     ctx.textBaseline = "middle";
     ctx.textAlign = "left";
-    ctx.shadowColor = "rgba(0, 0, 0, 0.75)";
-    ctx.shadowBlur = 8;
-    ctx.fillText(socialLabel, ytBadgeX + ytBadgeW + 14, ytBadgeY + ytBadgeH / 2);
+    ctx.shadowColor = "rgba(0, 0, 0, 0.85)";
+    ctx.shadowBlur = 10;
+    ctx.fillText(socialLabel, instaBadgeX + instaBadgeSize + 16, instaBadgeY + instaBadgeSize / 2);
     ctx.restore();
 
     // 7. SLOGAN COM LINHA DECORATIVA (Embaixo do canal)
-    const sloganY = redBarY + (isSquare ? 80 : isFeed ? 94 : 106);
+    const sloganY = redBarY + (isSquare ? 78 : isFeed ? 92 : 104);
     const sloganText = "O PORTAL QUE VIRALIZA GOIÂNIA!";
     ctx.save();
     const sloganFSize = isSquare ? 17 : isFeed ? 19 : 21;
@@ -1768,11 +1865,11 @@ function drawReelHeadline(
     ctx.strokeStyle = "rgba(255, 255, 255, 0.6)";
     ctx.lineWidth = 2;
     ctx.beginPath();
-    ctx.moveTo(ytBadgeX, sloganY);
-    ctx.lineTo(ytBadgeX + 65, sloganY);
+    ctx.moveTo(instaBadgeX, sloganY);
+    ctx.lineTo(instaBadgeX + 65, sloganY);
     ctx.stroke();
 
-    ctx.fillText(sloganText, ytBadgeX + 78, sloganY);
+    ctx.fillText(sloganText, instaBadgeX + 78, sloganY);
     ctx.restore();
 
     // 8. SELO CIRCULAR DE CANAL DE TV (À DIREITA NA TARJA VERMELHA)
@@ -1985,6 +2082,7 @@ function drawReelFrame(
     filterPreset?: VideoFilterPreset;
     autoHookEnabled?: boolean;
     autoHookText?: string;
+    hookPositionY?: number;
   },
   crop?: VideoCropRect | null
 ) {
@@ -2098,7 +2196,7 @@ function drawReelFrame(
 
   // Banner de Gancho Viral Auto-Edit (primeiros 3.5s)
   if (video && miniIaConfig?.autoHookEnabled && miniIaConfig.autoHookText) {
-    drawViralHookBanner(ctx, miniIaConfig.autoHookText, W, REEL_H, video.currentTime, format);
+    drawViralHookBanner(ctx, miniIaConfig.autoHookText, W, REEL_H, video.currentTime, format, miniIaConfig.hookPositionY);
   }
 
   // Guia opcional de área segura do Instagram
@@ -2265,6 +2363,10 @@ export default function SocialFeedCreator({ posts, onBack, initialPost, onOpenCo
   const titleDragRef = useRef<{ pointerId: number; offsetX: number; offsetY: number } | null>(null);
   const tagDragRef = useRef<{ pointerId: number; offsetY: number } | null>(null);
   const tagPositionYRef = useRef<number>(1670);
+  const hookDragRef = useRef<{ pointerId: number; offsetY: number } | null>(null);
+  const hookPositionYRef = useRef<number>(307);
+  const bgmAudioRef = useRef<HTMLAudioElement | null>(null);
+  const bgmTimerRef = useRef<any>(null);
   const audioContextRef = useRef<AudioContext | null>(null);
   const audioSourceRef = useRef<MediaElementAudioSourceNode | null>(null);
   const isRecordingRef = useRef<boolean>(false);
@@ -2335,10 +2437,36 @@ export default function SocialFeedCreator({ posts, onBack, initialPost, onOpenCo
   const [miniIaMirror, setMiniIaMirror] = useState<boolean>(false);
   const [miniIaTrimSeconds, setMiniIaTrimSeconds] = useState<number>(3); // Padrão sempre corta 3 segundos
   const [videoFilter, setVideoFilter] = useState<VideoFilterPreset>("none");
+  const videoFilterRef = useRef<VideoFilterPreset>("none");
   const [cutPauses, setCutPauses] = useState<boolean>(true);
   const [bgmTrack, setBgmTrack] = useState<BgmTrackPreset>("energetic");
-  const [autoHookEnabled, setAutoHookEnabled] = useState<boolean>(true);
+  const [autoHookEnabled, setAutoHookEnabled] = useState<boolean>(false);
+  const autoHookEnabledRef = useRef<boolean>(false);
   const [autoHookText, setAutoHookText] = useState<string>("");
+  const [hookPositionY, setHookPositionY] = useState<number>(() => {
+    try {
+      const saved = localStorage.getItem("viralizou_hook_pos_y");
+      if (saved) return Number(saved);
+    } catch {}
+    return 307;
+  });
+  const [bgmVolume, setBgmVolume] = useState<number>(() => {
+    try {
+      const saved = localStorage.getItem("viralizou_bgm_volume");
+      if (saved) return Math.max(0, Math.min(100, Number(saved)));
+    } catch {}
+    return 15;
+  });
+  const [isPlayingBgm, setIsPlayingBgm] = useState<boolean>(false);
+  const [bgmCountdown, setBgmCountdown] = useState<number>(10);
+
+  useEffect(() => {
+    autoHookEnabledRef.current = autoHookEnabled;
+  }, [autoHookEnabled]);
+
+  useEffect(() => {
+    hookPositionYRef.current = hookPositionY;
+  }, [hookPositionY]);
   const [videoDuration, setVideoDuration] = useState<number>(0);
   const [videoCrop, setVideoCrop] = useState<VideoCropRect | null>(null);
   const [showCropModal, setShowCropModal] = useState<boolean>(false);
@@ -2367,7 +2495,7 @@ export default function SocialFeedCreator({ posts, onBack, initialPost, onOpenCo
 
   useEffect(() => {
     try {
-      const raw = localStorage.getItem("viralizou_layout_presets_v1");
+      const raw = localStorage.getItem("viralizou_layout_presets_v4");
       if (raw) {
         const parsed = JSON.parse(raw);
         if (Array.isArray(parsed) && parsed.length === 3) {
@@ -2393,8 +2521,16 @@ export default function SocialFeedCreator({ posts, onBack, initialPost, onOpenCo
     if (d.logoColorStyle) setLogoColorStyle(d.logoColorStyle);
     if (typeof d.logoScale === "number") setLogoScale(d.logoScale);
     if (d.logoPosition) setLogoPosition(d.logoPosition);
-    if (d.titlePosition) setTitlePosition(d.titlePosition);
-    if (d.feedTitlePosition) setFeedTitlePosition(d.feedTitlePosition);
+    if (d.titlePosition) {
+      setTitlePosition(d.titlePosition);
+      titlePositionRef.current = d.titlePosition;
+      try { localStorage.setItem("viralizou_reel_title_position", JSON.stringify(d.titlePosition)); } catch {}
+    }
+    if (d.feedTitlePosition) {
+      setFeedTitlePosition(d.feedTitlePosition);
+      feedTitlePositionRef.current = d.feedTitlePosition;
+      try { localStorage.setItem("viralizou_feed_title_position", JSON.stringify(d.feedTitlePosition)); } catch {}
+    }
     if (typeof d.feedTitleOffsetY === "number") setFeedTitleOffsetY(d.feedTitleOffsetY);
     if (typeof d.feedTitleFontSize === "number") setFeedTitleFontSize(d.feedTitleFontSize);
     if (d.feedFontFamily) setFeedFontFamily(d.feedFontFamily);
@@ -2410,12 +2546,26 @@ export default function SocialFeedCreator({ posts, onBack, initialPost, onOpenCo
     if (d.miniIaLevel) setMiniIaLevel(d.miniIaLevel);
     if (typeof d.miniIaMirror === "boolean") setMiniIaMirror(d.miniIaMirror);
     if (typeof d.miniIaTrimSeconds === "number") setMiniIaTrimSeconds(d.miniIaTrimSeconds);
-    if (d.videoFilter) setVideoFilter(d.videoFilter);
+    if (d.videoFilter) {
+      setVideoFilter(d.videoFilter);
+      videoFilterRef.current = d.videoFilter;
+      try { localStorage.setItem("viralizou_video_filter", d.videoFilter); } catch {}
+    }
     if (typeof d.cutPauses === "boolean") setCutPauses(d.cutPauses);
     if (d.bgmTrack) setBgmTrack(d.bgmTrack);
-    if (typeof d.autoHookEnabled === "boolean") setAutoHookEnabled(d.autoHookEnabled);
+    if (typeof d.autoHookEnabled === "boolean") {
+      setAutoHookEnabled(d.autoHookEnabled);
+      autoHookEnabledRef.current = d.autoHookEnabled;
+    }
     if (typeof d.autoHookText === "string") setAutoHookText(d.autoHookText);
     if (d.videoCrop !== undefined) setVideoCrop(d.videoCrop);
+    if (typeof d.hookPositionY === "number") {
+      setHookPositionY(d.hookPositionY);
+      hookPositionYRef.current = d.hookPositionY;
+    }
+    if (typeof d.bgmVolume === "number") {
+      chooseBgmVolume(d.bgmVolume);
+    }
 
     setActiveSlotId(slot.id);
     setSlotFeedback(`⚡ ${slot.name} carregado no preview!`);
@@ -2471,6 +2621,8 @@ export default function SocialFeedCreator({ posts, onBack, initialPost, onOpenCo
           autoHookEnabled,
           autoHookText,
           videoCrop,
+          hookPositionY: hookPositionYRef.current || hookPositionY,
+          bgmVolume,
         },
       };
     });
@@ -2478,7 +2630,7 @@ export default function SocialFeedCreator({ posts, onBack, initialPost, onOpenCo
     setPresetSlots(newSlots);
     setActiveSlotId(slotId);
     try {
-      localStorage.setItem("viralizou_layout_presets_v1", JSON.stringify(newSlots));
+      localStorage.setItem("viralizou_layout_presets_v4", JSON.stringify(newSlots));
     } catch {}
     setSlotFeedback(`💾 Layout salvo no Slot ${slotId}!`);
     setTimeout(() => setSlotFeedback(""), 3500);
@@ -2496,6 +2648,7 @@ export default function SocialFeedCreator({ posts, onBack, initialPost, onOpenCo
   }
 
   function chooseVideoFilter(f: VideoFilterPreset) {
+    videoFilterRef.current = f;
     setVideoFilter(f);
     try { localStorage.setItem("viralizou_video_filter", f); } catch {}
     cachedOverlayCanvasRef.current = null;
@@ -2507,12 +2660,80 @@ export default function SocialFeedCreator({ posts, onBack, initialPost, onOpenCo
     try { localStorage.setItem("viralizou_cut_pauses", String(val)); } catch {}
   }
 
+  const BGM_URLS: Record<BgmTrackPreset, string> = {
+    energetic: "https://cdn.realoficial.com.br/auto-edit-library/music/cc0-energetic-phonk-remix.mp3",
+    breaking: "https://cdn.realoficial.com.br/auto-edit-library/music/ai-podcast-news-bed.mp3",
+    suspense: "https://cdn.realoficial.com.br/auto-edit-library/music/ai-emotional-strings.mp3",
+    chill: "https://cdn.realoficial.com.br/auto-edit-library/music/cc0-chill-roof-tops.mp3",
+    none: "",
+  };
+
+  function stopPreviewBgm() {
+    if (bgmTimerRef.current) {
+      clearInterval(bgmTimerRef.current);
+      bgmTimerRef.current = null;
+    }
+    if (bgmAudioRef.current) {
+      bgmAudioRef.current.pause();
+      bgmAudioRef.current.currentTime = 0;
+    }
+    setIsPlayingBgm(false);
+    setBgmCountdown(10);
+  }
+
+  function handleTogglePreviewBgm() {
+    if (isPlayingBgm) {
+      stopPreviewBgm();
+      return;
+    }
+    if (bgmTrack === "none") return;
+    const url = BGM_URLS[bgmTrack];
+    if (!url) return;
+
+    stopPreviewBgm();
+    try {
+      const audio = new Audio(url);
+      audio.volume = Math.max(0.01, Math.min(1, bgmVolume / 100));
+      bgmAudioRef.current = audio;
+      setIsPlayingBgm(true);
+      setBgmCountdown(10);
+
+      audio.play().catch((err) => {
+        console.warn("Falha ao tocar áudio da prévia:", err);
+        stopPreviewBgm();
+      });
+
+      let remaining = 10;
+      bgmTimerRef.current = setInterval(() => {
+        remaining--;
+        if (remaining <= 0) {
+          stopPreviewBgm();
+        } else {
+          setBgmCountdown(remaining);
+        }
+      }, 1000);
+    } catch {
+      stopPreviewBgm();
+    }
+  }
+
+  function chooseBgmVolume(val: number) {
+    const safe = Math.max(0, Math.min(100, Math.round(val)));
+    setBgmVolume(safe);
+    if (bgmAudioRef.current) {
+      bgmAudioRef.current.volume = Math.max(0.01, Math.min(1, safe / 100));
+    }
+    try { localStorage.setItem("viralizou_bgm_volume", String(safe)); } catch {}
+  }
+
   function chooseBgmTrack(tr: BgmTrackPreset) {
+    stopPreviewBgm();
     setBgmTrack(tr);
     try { localStorage.setItem("viralizou_bgm_track", tr); } catch {}
   }
 
   function toggleAutoHook(val: boolean) {
+    autoHookEnabledRef.current = val;
     setAutoHookEnabled(val);
     try { localStorage.setItem("viralizou_auto_hook_enabled", String(val)); } catch {}
     cachedOverlayCanvasRef.current = null;
@@ -2553,7 +2774,7 @@ export default function SocialFeedCreator({ posts, onBack, initialPost, onOpenCo
   useEffect(() => () => { if (videoUrl) URL.revokeObjectURL(videoUrl); }, [videoUrl]);
   useEffect(() => () => { if (videoExport?.url) URL.revokeObjectURL(videoExport.url); }, [videoExport?.url]);
   useEffect(() => () => { if (customImageUrl && customImageUrl.startsWith("blob:")) URL.revokeObjectURL(customImageUrl); }, [customImageUrl]);
-  useEffect(() => () => { audioContextRef.current?.close().catch(() => {}); }, []);
+  useEffect(() => () => { audioContextRef.current?.close().catch(() => {}); stopPreviewBgm(); }, []);
   useEffect(() => {
     const handleLogoReady = () => {
       cachedOverlayCanvasRef.current = null;
@@ -2664,6 +2885,7 @@ export default function SocialFeedCreator({ posts, onBack, initialPost, onOpenCo
       }
       const savedFilter = localStorage.getItem("viralizou_video_filter") as VideoFilterPreset | null;
       if (savedFilter && savedFilter in VIDEO_FILTERS) {
+        videoFilterRef.current = savedFilter;
         setVideoFilter(savedFilter);
       }
       const savedCutPauses = localStorage.getItem("viralizou_cut_pauses");
@@ -2674,10 +2896,9 @@ export default function SocialFeedCreator({ posts, onBack, initialPost, onOpenCo
       if (savedBgmTrack && savedBgmTrack in BGM_TRACKS) {
         setBgmTrack(savedBgmTrack);
       }
-      const savedHookEnabled = localStorage.getItem("viralizou_auto_hook_enabled");
-      if (savedHookEnabled !== null) {
-        setAutoHookEnabled(savedHookEnabled === "true");
-      }
+      // Gancho viral inicia sempre desmarcado como padrão conforme solicitado
+      setAutoHookEnabled(false);
+      autoHookEnabledRef.current = false;
       const savedHookText = localStorage.getItem("viralizou_auto_hook_text");
       if (savedHookText) {
         setAutoHookText(savedHookText);
@@ -2927,8 +3148,9 @@ export default function SocialFeedCreator({ posts, onBack, initialPost, onOpenCo
             zoomMax: (MINI_IA_LEVELS[miniIaLevel] || MINI_IA_LEVELS.media).zoomMax,
             zoomPeriod: (MINI_IA_LEVELS[miniIaLevel] || MINI_IA_LEVELS.media).zoomPeriod,
             filterPreset: videoFilter,
-            autoHookEnabled,
+            autoHookEnabled: autoHookEnabledRef.current,
             autoHookText: effectiveHookText,
+            hookPositionY: hookPositionYRef.current || hookPositionY,
           },
           videoCrop
         );
@@ -3003,6 +3225,10 @@ export default function SocialFeedCreator({ posts, onBack, initialPost, onOpenCo
         } catch (e) {
           console.warn("Erro ao carregar imagem da notícia:", e);
         }
+      }
+
+      if (mediaDrawn) {
+        applyCanvasVideoFilterOverlay(ctx, currentW, coverH, videoFilterRef.current || videoFilter);
       }
 
       // 4. Fallback sem mídia
@@ -3257,12 +3483,12 @@ export default function SocialFeedCreator({ posts, onBack, initialPost, onOpenCo
                 punchZoom: miniIaCfg.punchZoom,
                 zoomMax: miniIaCfg.zoomMax,
                 zoomPeriod: miniIaCfg.zoomPeriod,
-                filterPreset: videoFilter,
+                filterPreset: videoFilterRef.current || videoFilter,
               },
               videoCrop
             );
             // Ultra-rápido: usa o overlay cacheado apenas quando não estiver arrastando elementos interativos
-            const isDraggingAny = Boolean(tagDragRef.current || titleDragRef.current || logoDragRef.current);
+            const isDraggingAny = Boolean(tagDragRef.current || titleDragRef.current || logoDragRef.current || hookDragRef.current);
             if (cachedOverlayCanvasRef.current && !isDraggingAny) {
               ctx.drawImage(cachedOverlayCanvasRef.current, 0, 0);
               if (showLogoLayer && logoColorStyle === "gif") {
@@ -3279,8 +3505,8 @@ export default function SocialFeedCreator({ posts, onBack, initialPost, onOpenCo
                   );
                 }
               }
-              if (autoHookEnabled && effectiveHookText && video.currentTime <= 3.6) {
-                drawViralHookBanner(ctx, effectiveHookText, W, REEL_H, video.currentTime, format);
+              if (autoHookEnabledRef.current && autoHookEnabled && effectiveHookText && video.currentTime <= 3.6) {
+                drawViralHookBanner(ctx, effectiveHookText, W, REEL_H, video.currentTime, format, hookPositionYRef.current || hookPositionY);
               }
             } else {
               drawReelFrame(
@@ -3322,9 +3548,10 @@ export default function SocialFeedCreator({ posts, onBack, initialPost, onOpenCo
                   punchZoom: miniIaCfg.punchZoom,
                   zoomMax: miniIaCfg.zoomMax,
                   zoomPeriod: miniIaCfg.zoomPeriod,
-                  filterPreset: videoFilter,
-                  autoHookEnabled,
+                  filterPreset: videoFilterRef.current || videoFilter,
+                  autoHookEnabled: autoHookEnabledRef.current && autoHookEnabled,
                   autoHookText: effectiveHookText,
+                  hookPositionY: hookPositionYRef.current || hookPositionY,
                 },
                 videoCrop
               );
@@ -3368,7 +3595,7 @@ export default function SocialFeedCreator({ posts, onBack, initialPost, onOpenCo
       video.removeEventListener("timeupdate", handleTimeCheck);
       cancelAnimationFrame(frameId);
     };
-  }, [format, videoUrl, title, handle, logoData, selectedPost?.title, reelTextStyle, reelFontFamily, reelFontWeight, reelTextAlign, reelTextCase, reelFontSize, tagColor, tagPositionY, showSafeZone, reelTextAnimation, showStrongSceneWarning, logoScale, handleFontSize, shadeOpacity, showOverlayLayer, showLogoLayer, showTitleLayer, showHandleLayer, showStorySticker, logoColorStyle, recording, videoFramingMode, imagePosition, miniIaTrimSeconds, miniIaLevel, miniIaMirror, videoFilter, autoHookEnabled, effectiveHookText, videoCrop]);
+  }, [format, videoUrl, title, handle, logoData, selectedPost?.title, reelTextStyle, reelFontFamily, reelFontWeight, reelTextAlign, reelTextCase, reelFontSize, tagColor, tagPositionY, showSafeZone, reelTextAnimation, showStrongSceneWarning, logoScale, handleFontSize, shadeOpacity, showOverlayLayer, showLogoLayer, showTitleLayer, showHandleLayer, showStorySticker, logoColorStyle, recording, videoFramingMode, imagePosition, miniIaTrimSeconds, miniIaLevel, miniIaMirror, videoFilter, autoHookEnabled, effectiveHookText, videoCrop, hookPositionY]);
 
   async function loadArticle() {
     const slug = slugFromInput(articleUrl);
@@ -3662,6 +3889,21 @@ export default function SocialFeedCreator({ posts, onBack, initialPost, onOpenCo
   function chooseReelTextStyle(style: ReelTextStyle) {
     setReelTextStyle(style);
     try { localStorage.setItem("viralizou_reel_text_style", style); } catch {}
+    if (style === "bacci-red") {
+      if (!titlePositionRef.current?.y || titlePositionRef.current.y > 0.72 || titlePositionRef.current.y < 0.30) {
+        const pos = { x: 0.5, y: 0.58 };
+        titlePositionRef.current = pos;
+        setTitlePosition(pos);
+        try { localStorage.setItem("viralizou_reel_title_position", JSON.stringify(pos)); } catch {}
+      }
+    } else if (style === "red-bottom") {
+      if (!titlePositionRef.current?.y || titlePositionRef.current.y > 0.78 || titlePositionRef.current.y < 0.35) {
+        const pos = { x: 0.5, y: 0.615 };
+        titlePositionRef.current = pos;
+        setTitlePosition(pos);
+        try { localStorage.setItem("viralizou_reel_title_position", JSON.stringify(pos)); } catch {}
+      }
+    }
     cachedOverlayCanvasRef.current = null;
     renderCard();
   }
@@ -3806,22 +4048,68 @@ export default function SocialFeedCreator({ posts, onBack, initialPost, onOpenCo
 
   function onPreviewPointerDown(event: ReactPointerEvent<HTMLCanvasElement>) {
     const { width: currentW, height: currentH } = getCanvasDimensions(format);
+    // 0. GANCHO VIRAL AUTO-EDIT (se ativo)
+    if (autoHookEnabled && effectiveHookText) {
+      const hookY = hookPositionYRef.current || hookPositionY;
+      const hookH = 75;
+      const rect = event.currentTarget.getBoundingClientRect();
+      const y = ((event.clientY - rect.top) / rect.height) * currentH;
+      if (y >= hookY - 25 && y <= hookY + hookH + 25) {
+        event.preventDefault();
+        event.currentTarget.setPointerCapture(event.pointerId);
+        hookDragRef.current = { pointerId: event.pointerId, offsetY: y - hookY };
+        setDraggingLogo(true);
+        return;
+      }
+    }
 
     if (format === "reel" || format === "story") {
       const ctx = event.currentTarget.getContext("2d");
       if (ctx) {
-        const layout = getCachedReelTitleLayout(ctx, title || selectedPost?.title || "", reelFontFamily, reelFontWeight, reelTextCase, reelFontSize, 820);
         const rect = event.currentTarget.getBoundingClientRect();
         const x = ((event.clientX - rect.left) / rect.width) * currentW;
         const y = ((event.clientY - rect.top) / rect.height) * currentH;
-        const centerX = titlePositionRef.current.x * currentW;
-        const centerY = titlePositionRef.current.y * currentH;
-        if (x >= centerX - layout.width / 2 - 20 && x <= centerX + layout.width / 2 + 20 && y >= centerY - layout.height / 2 - 20 && y <= centerY + layout.height / 2 + 20) {
-          event.preventDefault();
-          event.currentTarget.setPointerCapture(event.pointerId);
-          titleDragRef.current = { pointerId: event.pointerId, offsetX: x / currentW - titlePositionRef.current.x, offsetY: y / currentH - titlePositionRef.current.y };
-          setDraggingLogo(true);
-          return;
+
+        if (reelTextStyle === "bacci-red") {
+          const darkBoxH = currentH <= 1100 ? 230 : currentH <= 1400 ? 270 : 330;
+          const redBarH = currentH <= 1100 ? 120 : currentH <= 1400 ? 136 : 156;
+          const currentTopY = Math.round((titlePositionRef.current.y || 0.58) * currentH);
+          const totalBacciH = darkBoxH + redBarH;
+          if (y >= currentTopY - 20 && y <= currentTopY + totalBacciH + 20) {
+            event.preventDefault();
+            event.currentTarget.setPointerCapture(event.pointerId);
+            titleDragRef.current = {
+              pointerId: event.pointerId,
+              offsetX: 0,
+              offsetY: y / currentH - (titlePositionRef.current.y || 0.58),
+            };
+            setDraggingLogo(true);
+            return;
+          }
+        } else if (reelTextStyle === "red-bottom") {
+          const currentBannerY = Math.round((titlePositionRef.current.y || 0.615) * currentH);
+          if (y >= currentBannerY - 20 && y <= currentH) {
+            event.preventDefault();
+            event.currentTarget.setPointerCapture(event.pointerId);
+            titleDragRef.current = {
+              pointerId: event.pointerId,
+              offsetX: 0,
+              offsetY: y / currentH - (titlePositionRef.current.y || 0.615),
+            };
+            setDraggingLogo(true);
+            return;
+          }
+        } else {
+          const layout = getCachedReelTitleLayout(ctx, title || selectedPost?.title || "", reelFontFamily, reelFontWeight, reelTextCase, reelFontSize, 820);
+          const centerX = titlePositionRef.current.x * currentW;
+          const centerY = titlePositionRef.current.y * currentH;
+          if (x >= centerX - layout.width / 2 - 20 && x <= centerX + layout.width / 2 + 20 && y >= centerY - layout.height / 2 - 20 && y <= centerY + layout.height / 2 + 20) {
+            event.preventDefault();
+            event.currentTarget.setPointerCapture(event.pointerId);
+            titleDragRef.current = { pointerId: event.pointerId, offsetX: x / currentW - titlePositionRef.current.x, offsetY: y / currentH - titlePositionRef.current.y };
+            setDraggingLogo(true);
+            return;
+          }
         }
       }
     }
@@ -3904,6 +4192,20 @@ export default function SocialFeedCreator({ posts, onBack, initialPost, onOpenCo
 
   function onPreviewPointerMove(event: ReactPointerEvent<HTMLCanvasElement>) {
     const { width: currentW, height: currentH } = getCanvasDimensions(format);
+    const hookDrag = hookDragRef.current;
+    if (hookDrag?.pointerId === event.pointerId) {
+      const rect = event.currentTarget.getBoundingClientRect();
+      const y = ((event.clientY - rect.top) / rect.height) * currentH;
+      const newY = Math.min(currentH - 120, Math.max(80, Math.round(y - hookDrag.offsetY)));
+      hookPositionYRef.current = newY;
+      setHookPositionY(newY);
+      cachedOverlayCanvasRef.current = null;
+      if (format !== "reel" && (!videoUrl || !videoPreviewRef.current)) {
+        renderCard();
+      }
+      return;
+    }
+
     const tagDrag = tagDragRef.current;
     if (tagDrag?.pointerId === event.pointerId) {
       const rect = event.currentTarget.getBoundingClientRect();
@@ -3923,13 +4225,27 @@ export default function SocialFeedCreator({ posts, onBack, initialPost, onOpenCo
       const ctx = event.currentTarget.getContext("2d");
       const rect = event.currentTarget.getBoundingClientRect();
       if (format === "reel" || format === "story") {
-        const layout = ctx ? getCachedReelTitleLayout(ctx, title || selectedPost?.title || "", reelFontFamily, reelFontWeight, reelTextCase, reelFontSize, 820) : { width: 0, height: 0 };
-        const position = {
-          x: Math.min(1 - layout.width / (2 * currentW), Math.max(layout.width / (2 * currentW), (event.clientX - rect.left) / rect.width - titleDrag.offsetX)),
-          y: Math.min(1 - layout.height / (2 * currentH), Math.max(layout.height / (2 * currentH), (event.clientY - rect.top) / rect.height - titleDrag.offsetY)),
-        };
-        titlePositionRef.current = position;
-        setTitlePosition(position);
+        if (reelTextStyle === "bacci-red") {
+          const rawY = (event.clientY - rect.top) / rect.height - titleDrag.offsetY;
+          const newY = Math.min(0.75, Math.max(0.30, rawY));
+          const position = { x: 0.5, y: Number(newY.toFixed(3)) };
+          titlePositionRef.current = position;
+          setTitlePosition(position);
+        } else if (reelTextStyle === "red-bottom") {
+          const rawY = (event.clientY - rect.top) / rect.height - titleDrag.offsetY;
+          const newY = Math.min(0.80, Math.max(0.40, rawY));
+          const position = { x: 0.5, y: Number(newY.toFixed(3)) };
+          titlePositionRef.current = position;
+          setTitlePosition(position);
+        } else {
+          const layout = ctx ? getCachedReelTitleLayout(ctx, title || selectedPost?.title || "", reelFontFamily, reelFontWeight, reelTextCase, reelFontSize, 820) : { width: 0, height: 0 };
+          const position = {
+            x: Math.min(1 - layout.width / (2 * currentW), Math.max(layout.width / (2 * currentW), (event.clientX - rect.left) / rect.width - titleDrag.offsetX)),
+            y: Math.min(1 - layout.height / (2 * currentH), Math.max(layout.height / (2 * currentH), (event.clientY - rect.top) / rect.height - titleDrag.offsetY)),
+          };
+          titlePositionRef.current = position;
+          setTitlePosition(position);
+        }
       } else if (ctx) {
         const fitted = fitHeadline(ctx, (title || selectedPost?.title || "Título da notícia").trim(), 920, feedTitleFontSize, feedFontFamily);
         ctx.font = getReelFont(feedFontFamily, fitted.size);
@@ -3968,7 +4284,14 @@ export default function SocialFeedCreator({ posts, onBack, initialPost, onOpenCo
   }
 
   function onPreviewPointerUp(event: ReactPointerEvent<HTMLCanvasElement>) {
-    if (tagDragRef.current?.pointerId === event.pointerId) {
+    if (hookDragRef.current?.pointerId === event.pointerId) {
+      hookDragRef.current = null;
+      setDraggingLogo(false);
+      try {
+        localStorage.setItem("viralizou_hook_pos_y", String(hookPositionYRef.current || hookPositionY));
+      } catch {}
+      renderCard();
+    } else if (tagDragRef.current?.pointerId === event.pointerId) {
       tagDragRef.current = null;
       setDraggingLogo(false);
       try {
@@ -4116,6 +4439,8 @@ async function fixWebmDuration(blob: Blob, durationSec: number): Promise<Blob> {
         formData.append("trimStart", String(miniIaTrimSeconds));
         formData.append("format", format);
         formData.append("videoFilter", videoFilter);
+        formData.append("bgmTrack", bgmTrack);
+        formData.append("bgmVolume", String(bgmVolume));
 
         if (videoCrop) {
           formData.append("cropX", String(Math.round(videoCrop.x)));
@@ -4405,8 +4730,8 @@ async function fixWebmDuration(blob: Blob, durationSec: number): Promise<Blob> {
               );
             }
           }
-          if (autoHookEnabled && effectiveHookText && video.currentTime <= 3.6) {
-            drawViralHookBanner(ctx, effectiveHookText, W, REEL_H, video.currentTime, format);
+          if (autoHookEnabledRef.current && autoHookEnabled && effectiveHookText && video.currentTime <= 3.6) {
+            drawViralHookBanner(ctx, effectiveHookText, W, REEL_H, video.currentTime, format, hookPositionYRef.current || hookPositionY);
           }
           ctx.restore();
           renderedFramesCount++;
@@ -5236,6 +5561,83 @@ async function fixWebmDuration(blob: Blob, durationSec: number): Promise<Blob> {
                     />
                   </div>
 
+                  {/* Controle de Posição / Mover Gancho na Tela (quando ativado) */}
+                  {autoHookEnabled && (
+                    <div style={{ background: "rgba(15, 23, 42, 0.75)", border: "1px solid rgba(250, 204, 21, 0.3)", borderRadius: 8, padding: "8px 10px", marginTop: 2, marginBottom: 4 }}>
+                      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 5 }}>
+                        <span style={{ fontSize: 11, fontWeight: 700, color: "#fef08a", display: "flex", alignItems: "center", gap: 5 }}>
+                          <span>↕️</span> Mover Gancho na Tela:
+                        </span>
+                        <span style={{ fontSize: 11, fontWeight: 800, color: "#facc15", background: "rgba(250, 204, 21, 0.2)", padding: "2px 6px", borderRadius: 4 }}>
+                          {hookPositionY} px
+                        </span>
+                      </div>
+                      <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+                        <input
+                          type="range"
+                          min={100}
+                          max={1650}
+                          step={5}
+                          value={hookPositionY}
+                          onChange={(e) => {
+                            const val = Number(e.target.value);
+                            setHookPositionY(val);
+                            hookPositionYRef.current = val;
+                            cachedOverlayCanvasRef.current = null;
+                            try { localStorage.setItem("viralizou_hook_pos_y", String(val)); } catch {}
+                            if (format !== "reel" && (!videoUrl || !videoPreviewRef.current)) renderCard();
+                          }}
+                          style={{ flex: 1, accentColor: "#eab308", cursor: "pointer" }}
+                          title="Arraste para mover a tarja amarela para cima ou para baixo"
+                        />
+                      </div>
+                      <div style={{ display: "flex", gap: 5, marginTop: 6, flexWrap: "wrap", alignItems: "center" }}>
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setHookPositionY(307);
+                            hookPositionYRef.current = 307;
+                            cachedOverlayCanvasRef.current = null;
+                            try { localStorage.setItem("viralizou_hook_pos_y", "307"); } catch {}
+                            if (format !== "reel" && (!videoUrl || !videoPreviewRef.current)) renderCard();
+                          }}
+                          style={{ fontSize: 10, padding: "3px 7px", background: hookPositionY === 307 ? "#eab308" : "rgba(255,255,255,0.08)", color: hookPositionY === 307 ? "#000" : "#cbd5e1", border: "1px solid rgba(255,255,255,0.12)", borderRadius: 5, fontWeight: 700, cursor: "pointer" }}
+                        >
+                          🔼 Topo (307px)
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setHookPositionY(850);
+                            hookPositionYRef.current = 850;
+                            cachedOverlayCanvasRef.current = null;
+                            try { localStorage.setItem("viralizou_hook_pos_y", "850"); } catch {}
+                            if (format !== "reel" && (!videoUrl || !videoPreviewRef.current)) renderCard();
+                          }}
+                          style={{ fontSize: 10, padding: "3px 7px", background: hookPositionY === 850 ? "#eab308" : "rgba(255,255,255,0.08)", color: hookPositionY === 850 ? "#000" : "#cbd5e1", border: "1px solid rgba(255,255,255,0.12)", borderRadius: 5, fontWeight: 700, cursor: "pointer" }}
+                        >
+                          ↔️ Meio (850px)
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setHookPositionY(1400);
+                            hookPositionYRef.current = 1400;
+                            cachedOverlayCanvasRef.current = null;
+                            try { localStorage.setItem("viralizou_hook_pos_y", "1400"); } catch {}
+                            if (format !== "reel" && (!videoUrl || !videoPreviewRef.current)) renderCard();
+                          }}
+                          style={{ fontSize: 10, padding: "3px 7px", background: hookPositionY === 1400 ? "#eab308" : "rgba(255,255,255,0.08)", color: hookPositionY === 1400 ? "#000" : "#cbd5e1", border: "1px solid rgba(255,255,255,0.12)", borderRadius: 5, fontWeight: 700, cursor: "pointer" }}
+                        >
+                          🔽 Base (1400px)
+                        </button>
+                        <span style={{ fontSize: 9.5, color: "#94a3b8", marginLeft: "auto" }}>
+                          💡 Ou arraste direto no vídeo
+                        </span>
+                      </div>
+                    </div>
+                  )}
+
                   {/* Palavras-chave */}
                   <div className="miniIaAutoEditRow">
                     <span className="miniIaAutoEditLabel">Palavras-chave</span>
@@ -5267,8 +5669,34 @@ async function fixWebmDuration(blob: Blob, durationSec: number): Promise<Blob> {
                   </div>
 
                   {/* Trilha */}
-                  <div className="miniIaAutoEditRow">
-                    <span className="miniIaAutoEditLabel">Trilha</span>
+                  <div className="miniIaAutoEditRow" style={{ alignItems: "center" }}>
+                    <div style={{ display: "flex", alignItems: "center", gap: 7 }}>
+                      <span className="miniIaAutoEditLabel">Trilha</span>
+                      {bgmTrack !== "none" && (
+                        <button
+                          type="button"
+                          onClick={handleTogglePreviewBgm}
+                          title={isPlayingBgm ? "Parar prévia do áudio" : "Ouvir 10 segundos da trilha selecionada"}
+                          style={{
+                            display: "inline-flex",
+                            alignItems: "center",
+                            gap: 5,
+                            background: isPlayingBgm ? "#dc2626" : "#6366f1",
+                            color: "#ffffff",
+                            border: "none",
+                            borderRadius: 6,
+                            padding: "3px 8px",
+                            fontSize: 11,
+                            fontWeight: 800,
+                            cursor: "pointer",
+                            transition: "all 0.15s ease",
+                            boxShadow: isPlayingBgm ? "0 0 10px rgba(220, 38, 38, 0.65)" : "0 2px 6px rgba(99, 102, 241, 0.35)",
+                          }}
+                        >
+                          {isPlayingBgm ? `⏹️ Parar (${bgmCountdown}s)` : "▶️ Ouvir 10s"}
+                        </button>
+                      )}
+                    </div>
                     <select
                       className="miniIaTrackSelect"
                       value={bgmTrack}
@@ -5281,6 +5709,62 @@ async function fixWebmDuration(blob: Blob, durationSec: number): Promise<Blob> {
                       ))}
                     </select>
                   </div>
+
+                  {/* Volume da Trilha de Fundo */}
+                  {bgmTrack !== "none" && (
+                    <div style={{ background: "rgba(15, 23, 42, 0.75)", border: "1px solid rgba(99, 102, 241, 0.25)", borderRadius: 8, padding: "8px 10px", marginTop: 2, marginBottom: 2 }}>
+                      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 5 }}>
+                        <span style={{ fontSize: 11, fontWeight: 700, color: "#c7d2fe", display: "flex", alignItems: "center", gap: 5 }}>
+                          <span>🔊</span> Volume da Trilha de Fundo:
+                        </span>
+                        <span style={{ fontSize: 11, fontWeight: 800, color: "#818cf8", background: "rgba(129, 140, 248, 0.18)", padding: "2px 6px", borderRadius: 4 }}>
+                          {bgmVolume}%
+                        </span>
+                      </div>
+                      <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+                        <input
+                          type="range"
+                          min={1}
+                          max={100}
+                          step={1}
+                          value={bgmVolume}
+                          onChange={(e) => chooseBgmVolume(Number(e.target.value))}
+                          style={{ flex: 1, accentColor: "#6366f1", cursor: "pointer" }}
+                          title="Ajuste o volume da trilha no fundo do vídeo"
+                        />
+                      </div>
+                      <div style={{ display: "flex", gap: 5, marginTop: 6, flexWrap: "wrap" }}>
+                        <button
+                          type="button"
+                          onClick={() => chooseBgmVolume(8)}
+                          style={{ fontSize: 10, padding: "3px 7px", background: bgmVolume === 8 ? "#6366f1" : "rgba(255,255,255,0.08)", color: "#fff", border: "1px solid rgba(255,255,255,0.12)", borderRadius: 5, fontWeight: 700, cursor: "pointer" }}
+                        >
+                          8% (Suave)
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => chooseBgmVolume(15)}
+                          style={{ fontSize: 10, padding: "3px 7px", background: bgmVolume === 15 ? "#6366f1" : "rgba(255,255,255,0.08)", color: "#fff", border: "1px solid rgba(255,255,255,0.12)", borderRadius: 5, fontWeight: 700, cursor: "pointer" }}
+                        >
+                          15% (Padrão ⭐)
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => chooseBgmVolume(30)}
+                          style={{ fontSize: 10, padding: "3px 7px", background: bgmVolume === 30 ? "#6366f1" : "rgba(255,255,255,0.08)", color: "#fff", border: "1px solid rgba(255,255,255,0.12)", borderRadius: 5, fontWeight: 700, cursor: "pointer" }}
+                        >
+                          30% (Marcante)
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => chooseBgmVolume(50)}
+                          style={{ fontSize: 10, padding: "3px 7px", background: bgmVolume === 50 ? "#6366f1" : "rgba(255,255,255,0.08)", color: "#fff", border: "1px solid rgba(255,255,255,0.12)", borderRadius: 5, fontWeight: 700, cursor: "pointer" }}
+                        >
+                          50% (Alta)
+                        </button>
+                      </div>
+                    </div>
+                  )}
                 </div>
 
                 {/* Checkbox: Cortar pausas */}
@@ -5734,6 +6218,182 @@ async function fixWebmDuration(blob: Blob, durationSec: number): Promise<Blob> {
               placeholder="O título da notícia aparece automaticamente e você pode ajustar antes de baixar."
             />
             <small>Arraste o título na prévia para escolher onde ele aparece{format === "feed" ? "; a posição é salva neste navegador." : "."}</small>
+
+            {reelTextStyle === "bacci-red" && (
+              <div style={{ marginTop: 12, padding: "12px 14px", background: "rgba(220, 38, 38, 0.08)", border: "1px solid rgba(220, 38, 38, 0.3)", borderRadius: 10 }}>
+                <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 8 }}>
+                  <label style={{ fontSize: 13, fontWeight: 750, color: "#fca5a5", display: "flex", alignItems: "center", gap: 6, margin: 0 }}>
+                    ↕️ Altura do Layout Bacci: <span style={{ color: "#ffffff", fontFamily: "monospace", fontSize: 14 }}>{Math.round((titlePosition.y || 0.58) * 100)}%</span> ({Math.round((titlePosition.y || 0.58) * 1920)}px)
+                  </label>
+                  <button
+                    type="button"
+                    style={{ fontSize: 11, padding: "3px 9px", background: "#374151", color: "#f3f4f6", border: "none", borderRadius: 6, cursor: "pointer", fontWeight: 700 }}
+                    onClick={() => {
+                      const pos = { x: 0.5, y: 0.58 };
+                      titlePositionRef.current = pos;
+                      setTitlePosition(pos);
+                      try { localStorage.setItem("viralizou_reel_title_position", JSON.stringify(pos)); } catch {}
+                      cachedOverlayCanvasRef.current = null;
+                      renderCard();
+                    }}
+                  >
+                    Reset (58%)
+                  </button>
+                </div>
+                <input
+                  type="range"
+                  min={30}
+                  max={75}
+                  step={1}
+                  value={Math.round((titlePosition.y || 0.58) * 100)}
+                  onChange={(e) => {
+                    const val = Number(e.target.value) / 100;
+                    const pos = { x: titlePosition.x || 0.5, y: val };
+                    titlePositionRef.current = pos;
+                    setTitlePosition(pos);
+                    try { localStorage.setItem("viralizou_reel_title_position", JSON.stringify(pos)); } catch {}
+                    cachedOverlayCanvasRef.current = null;
+                    renderCard();
+                  }}
+                  style={{ width: "100%", accentColor: "#ef4444" }}
+                />
+                <div style={{ display: "flex", gap: 6, marginTop: 8, flexWrap: "wrap" }}>
+                  <button
+                    type="button"
+                    className="captionTagBadge"
+                    onClick={() => {
+                      const pos = { x: 0.5, y: 0.46 };
+                      titlePositionRef.current = pos;
+                      setTitlePosition(pos);
+                      try { localStorage.setItem("viralizou_reel_title_position", JSON.stringify(pos)); } catch {}
+                      cachedOverlayCanvasRef.current = null;
+                      renderCard();
+                    }}
+                  >
+                    🔼 Mais Alto (46%)
+                  </button>
+                  <button
+                    type="button"
+                    className="captionTagBadge"
+                    onClick={() => {
+                      const pos = { x: 0.5, y: 0.58 };
+                      titlePositionRef.current = pos;
+                      setTitlePosition(pos);
+                      try { localStorage.setItem("viralizou_reel_title_position", JSON.stringify(pos)); } catch {}
+                      cachedOverlayCanvasRef.current = null;
+                      renderCard();
+                    }}
+                  >
+                    ↔️ Padrão Bacci (58%)
+                  </button>
+                  <button
+                    type="button"
+                    className="captionTagBadge"
+                    onClick={() => {
+                      const pos = { x: 0.5, y: 0.68 };
+                      titlePositionRef.current = pos;
+                      setTitlePosition(pos);
+                      try { localStorage.setItem("viralizou_reel_title_position", JSON.stringify(pos)); } catch {}
+                      cachedOverlayCanvasRef.current = null;
+                      renderCard();
+                    }}
+                  >
+                    🔽 Mais Baixo (68%)
+                  </button>
+                </div>
+                <small style={{ display: "block", marginTop: 6, color: "#cbd5e1", fontSize: 11 }}>
+                  💡 Dica: Você também pode clicar e arrastar o layout Bacci diretamente na tela de prévia!
+                </small>
+              </div>
+            )}
+
+            {reelTextStyle === "red-bottom" && (
+              <div style={{ marginTop: 12, padding: "12px 14px", background: "rgba(229, 0, 20, 0.08)", border: "1px solid rgba(229, 0, 20, 0.3)", borderRadius: 10 }}>
+                <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 8 }}>
+                  <label style={{ fontSize: 13, fontWeight: 750, color: "#fca5a5", display: "flex", alignItems: "center", gap: 6, margin: 0 }}>
+                    ↕️ Altura do Bloco Vermelho (TVT): <span style={{ color: "#ffffff", fontFamily: "monospace", fontSize: 14 }}>{Math.round((titlePosition.y || 0.615) * 100)}%</span> ({Math.round((titlePosition.y || 0.615) * 1920)}px)
+                  </label>
+                  <button
+                    type="button"
+                    style={{ fontSize: 11, padding: "3px 9px", background: "#374151", color: "#f3f4f6", border: "none", borderRadius: 6, cursor: "pointer", fontWeight: 700 }}
+                    onClick={() => {
+                      const pos = { x: 0.5, y: 0.615 };
+                      titlePositionRef.current = pos;
+                      setTitlePosition(pos);
+                      try { localStorage.setItem("viralizou_reel_title_position", JSON.stringify(pos)); } catch {}
+                      cachedOverlayCanvasRef.current = null;
+                      renderCard();
+                    }}
+                  >
+                    Reset (61.5%)
+                  </button>
+                </div>
+                <input
+                  type="range"
+                  min={40}
+                  max={80}
+                  step={1}
+                  value={Math.round((titlePosition.y || 0.615) * 100)}
+                  onChange={(e) => {
+                    const val = Number(e.target.value) / 100;
+                    const pos = { x: titlePosition.x || 0.5, y: val };
+                    titlePositionRef.current = pos;
+                    setTitlePosition(pos);
+                    try { localStorage.setItem("viralizou_reel_title_position", JSON.stringify(pos)); } catch {}
+                    cachedOverlayCanvasRef.current = null;
+                    renderCard();
+                  }}
+                  style={{ width: "100%", accentColor: "#e50014" }}
+                />
+                <div style={{ display: "flex", gap: 6, marginTop: 8, flexWrap: "wrap" }}>
+                  <button
+                    type="button"
+                    className="captionTagBadge"
+                    onClick={() => {
+                      const pos = { x: 0.5, y: 0.50 };
+                      titlePositionRef.current = pos;
+                      setTitlePosition(pos);
+                      try { localStorage.setItem("viralizou_reel_title_position", JSON.stringify(pos)); } catch {}
+                      cachedOverlayCanvasRef.current = null;
+                      renderCard();
+                    }}
+                  >
+                    🔼 Mais Alto (50%)
+                  </button>
+                  <button
+                    type="button"
+                    className="captionTagBadge"
+                    onClick={() => {
+                      const pos = { x: 0.5, y: 0.615 };
+                      titlePositionRef.current = pos;
+                      setTitlePosition(pos);
+                      try { localStorage.setItem("viralizou_reel_title_position", JSON.stringify(pos)); } catch {}
+                      cachedOverlayCanvasRef.current = null;
+                      renderCard();
+                    }}
+                  >
+                    ↔️ Padrão TVT (61.5%)
+                  </button>
+                  <button
+                    type="button"
+                    className="captionTagBadge"
+                    onClick={() => {
+                      const pos = { x: 0.5, y: 0.72 };
+                      titlePositionRef.current = pos;
+                      setTitlePosition(pos);
+                      try { localStorage.setItem("viralizou_reel_title_position", JSON.stringify(pos)); } catch {}
+                      cachedOverlayCanvasRef.current = null;
+                      renderCard();
+                    }}
+                  >
+                    🔽 Mais Baixo (72%)
+                  </button>
+                </div>
+                <small style={{ display: "block", marginTop: 6, color: "#cbd5e1", fontSize: 11 }}>
+                  💡 Dica: Você também pode clicar e arrastar o bloco vermelho diretamente na tela de prévia!
+                </small>
+              </div>
+            )}
           </div>
 
           <div className="field">

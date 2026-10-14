@@ -37,7 +37,7 @@ echo [1/3] Adicionando arquivos modificados (git add -A)...
 git add -A
 
 set COMMIT_MSG=%*
-if "%COMMIT_MSG%"=="" set COMMIT_MSG=fix: remove snapshot de audiencia do actions, otimiza consultas supabase e adiciona estilo bacci-red
+if "%COMMIT_MSG%"=="" set COMMIT_MSG=feat: Instagram no lugar de YouTube, preview 100% sem corte, controle de altura Bacci e TVT, e filtros de cor no preview ao vivo
 
 echo.
 echo [2/3] Criando commit...

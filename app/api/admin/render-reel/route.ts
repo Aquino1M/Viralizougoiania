@@ -38,6 +38,8 @@ export async function POST(request: Request) {
     const crop = (cropW && cropH && cropW > 0 && cropH > 0)
       ? { x: cropX || 0, y: cropY || 0, width: cropW, height: cropH }
       : undefined;
+    const bgmTrack = (formData.get("bgmTrack") as string | null) || "none";
+    const bgmVolume = Number(formData.get("bgmVolume") || 15);
 
     if (!videoFile || !overlayFile) {
       return NextResponse.json({ error: "Vídeo ou imagem de sobreposição ausente." }, { status: 400 });

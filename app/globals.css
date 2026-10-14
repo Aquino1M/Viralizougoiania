@@ -403,14 +403,14 @@ main{min-height:65vh}.heroSection{padding:30px 0 25px}.cityEyebrow{font-size:12p
 .adminFeedControls{display:flex;flex-direction:column;gap:15px}
 .adminFeedUrlRow{display:grid;grid-template-columns:minmax(0,1fr) auto;gap:8px}
 .adminFeedUrlRow input{min-width:0}
-.adminFeedPreview{display:flex;flex-direction:column;gap:8px;align-items:center;position:sticky;top:88px}
-.adminFeedCanvasFrame{background:#0b0b0b;border-radius:18px;overflow:hidden;box-shadow:0 14px 36px rgba(15,23,42,.18);border:1px solid #dce2ea;margin:0 auto}
-.adminFeedCanvasFrame canvas{width:100%;height:100%;display:block}
-.adminFeedCanvasFrame[data-format="feed"]{width:min(100%,450px);aspect-ratio:4/5}
-.adminFeedCanvasFrame[data-format="feed-square"]{width:min(100%,450px);aspect-ratio:1/1}
-.adminFeedCanvasFrame[data-format="reel-cover"]{width:min(100%,450px);aspect-ratio:4/5}
+.adminFeedPreview{display:flex;flex-direction:column;gap:6px;align-items:center;position:sticky;top:76px;max-height:calc(100vh - 86px)}
+.adminFeedCanvasFrame{background:#0b0b0b;border-radius:16px;overflow:hidden;box-shadow:0 12px 32px rgba(15,23,42,.22);border:1px solid #334155;margin:0 auto;display:flex;align-items:center;justify-content:center;max-width:100%}
+.adminFeedCanvasFrame canvas{width:100%;height:100%;max-height:100%;object-fit:contain;display:block}
+.adminFeedCanvasFrame[data-format="feed"]{height:min(calc(100vh - 138px), 520px);aspect-ratio:4/5;width:auto;max-width:100%}
+.adminFeedCanvasFrame[data-format="feed-square"]{height:min(calc(100vh - 138px), 460px);aspect-ratio:1/1;width:auto;max-width:100%}
+.adminFeedCanvasFrame[data-format="reel-cover"]{height:min(calc(100vh - 138px), 520px);aspect-ratio:4/5;width:auto;max-width:100%}
 .adminFeedCanvasFrame[data-format="story"],
-.adminFeedCanvasFrame[data-format="reel"]{width:min(100%,350px);aspect-ratio:9/16}
+.adminFeedCanvasFrame[data-format="reel"]{height:min(calc(100vh - 138px), 590px);aspect-ratio:9/16;width:auto;max-width:340px}
 .adminFeedVideoResult{width:min(100%,350px);display:flex;flex-direction:column;gap:8px;padding:12px;border:1px solid #dce2ea;border-radius:12px;background:#fff}
 .adminFeedVideoResult video{width:100%;max-height:60vh;background:#000;border-radius:8px}
 .adminFeedRecordingProgress{width:100%;height:8px;accent-color:#ff5a1f}
