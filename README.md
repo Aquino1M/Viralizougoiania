@@ -139,7 +139,7 @@ Estilo visual: portal moderno, rápido, forte em manchetes e leitura móvel.
 
 ## Rotina diária manual
 
-Não há mais execução agendada pelo GitHub Actions. No painel **Radar**, clique em **Rodar rotina do dia** para executar uma vez:
+Não há execução automática pelo GitHub Actions ou pelo `pg_cron`. No painel **Radar**, clique em **Rodar rotina do dia** para executar uma vez:
 
 - atualizar notícias de Goiás, Brasil, Futebol e Fofocas;
 - evitar matérias repetidas e colocar novidades na fila;
