@@ -5,6 +5,7 @@
 -- ============================================================
 
 create extension if not exists pgcrypto;
+create extension if not exists pg_cron;
 
 -- 1. Tabela de Notícias (posts)
 create table if not exists public.posts (
@@ -221,15 +222,16 @@ A fonte original pode ser registrada no próprio editor do painel administrativo
    'Segurança', 'Goiânia', 'Redação Viralizougoiania', 'https://images.unsplash.com/photo-1453873531674-2151bcd01707?auto=format&fit=crop&w=1600&q=85', false, 'published', now())
 on conflict (slug) do nothing;
 
--- A fila e as publicações são processadas somente pela rotina manual do painel.
-do $$
-begin
-  if exists (select 1 from pg_extension where extname = 'pg_cron') then
-    if exists (select 1 from cron.job where jobname = 'publicar-fila-viralizougoiania') then
-      perform cron.unschedule('publicar-fila-viralizougoiania');
-    end if;
-  end if;
-end $$;
+-- O Postgres libera automaticamente as matérias agendadas a cada minuto.
+select cron.schedule(
+  'publicar-fila-viralizougoiania',
+  '* * * * *',
+  $$
+    update public.posts
+    set status = 'published', updated_at = now()
+    where status = 'scheduled' and published_at <= now();
+  $$
+);
 
 -- =========================================================
 -- TABELA DE FUTEBOL & BRASILEIRÃO (atualizada pela rotina manual do Radar)

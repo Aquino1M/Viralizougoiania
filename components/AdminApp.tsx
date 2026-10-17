@@ -294,7 +294,7 @@ export default function AdminApp() {
     return next.toISOString();
   }
 
-  // A fila e as publicações vencidas são atualizadas ao rodar a rotina manual.
+  // O Postgres publica os itens vencidos; o painel atualiza a fila quando aberto.
   // Sem polling de 20 segundos no navegador: economiza invocações da Vercel.
 
   function syncCategoryDrafts(nextCategories: Category[]) {
@@ -614,7 +614,7 @@ export default function AdminApp() {
       await load();
       const d = new Date(nextSlot);
       const timeStr = d.toLocaleTimeString("pt-BR", { hour: "2-digit", minute: "2-digit" });
-      setImportMessage(`✅ Notícia agendada na Fila para ${timeStr}; será liberada na próxima rotina manual após esse horário.`);
+      setImportMessage(`✅ Notícia agendada para ${timeStr}; será publicada automaticamente após esse horário.`);
     } catch (err: any) {
       setImportMessage(`Erro ao agendar na fila: ${err.message}`);
     } finally {
@@ -2583,7 +2583,7 @@ export default function AdminApp() {
                   <div>
                     <h1>🕒 Fila de publicações</h1>
                     <div style={{ color: "#68736e", fontSize: 13 }}>
-                      A fila organiza as matérias por horário; a rotina manual publica as que já venceram.
+                      O Radar continua manual; o Postgres libera cada matéria no horário após ativar o cron uma vez.
                     </div>
                   </div>
                   <div style={{ display: "flex", gap: 8 }}>
@@ -2605,7 +2605,7 @@ export default function AdminApp() {
                         </h3>
                       </div>
                       <p style={{ margin: "4px 0 0", fontSize: 12, color: "#64748b" }}>
-                        Configure como as notícias serão distribuídas na fila; a rotina manual publica as vencidas:
+                        Configure o ritmo da fila. As matérias são liberadas automaticamente no horário:
                       </p>
                     </div>
 
@@ -2615,7 +2615,7 @@ export default function AdminApp() {
                         type="button"
                         className={`radarPaceBtn ${queueScheduleMode === "1_per_10m" ? "active" : ""}`}
                         onClick={() => applyQueueScheduleMode("1_per_10m")}
-                        title="Organiza 1 matéria por horário, espaçada a cada 10 minutos; a rotina manual libera as vencidas"
+                        title="Organiza 1 matéria por horário, espaçada a cada 10 minutos; publicação automática no horário"
                       >
                         1 a cada 10m
                       </button>
@@ -2623,7 +2623,7 @@ export default function AdminApp() {
                         type="button"
                         className={`radarPaceBtn ${queueScheduleMode === "2_per_10m" ? "active" : ""}`}
                         onClick={() => applyQueueScheduleMode("2_per_10m")}
-                        title="Organiza 2 matérias por horário a cada 10 minutos; a rotina manual libera as vencidas"
+                        title="Organiza 2 matérias por horário a cada 10 minutos; publicação automática no horário"
                       >
                         2 a cada 10m
                       </button>
@@ -2631,7 +2631,7 @@ export default function AdminApp() {
                         type="button"
                         className={`radarPaceBtn ${queueScheduleMode === "3_per_10m" ? "active" : ""}`}
                         onClick={() => applyQueueScheduleMode("3_per_10m")}
-                        title="Organiza 3 matérias por horário a cada 10 minutos; a rotina manual libera as vencidas"
+                        title="Organiza 3 matérias por horário a cada 10 minutos; publicação automática no horário"
                       >
                         3 a cada 10m
                       </button>
@@ -2639,7 +2639,7 @@ export default function AdminApp() {
                         type="button"
                         className={`radarPaceBtn special ${(queueScheduleMode === "50_per_10m" || queueScheduleMode === "300_per_10m") ? "active" : ""}`}
                         onClick={() => applyQueueScheduleMode("50_per_10m")}
-                        title="Organiza até 50 matérias por horário a cada 10 minutos; a rotina manual libera as vencidas"
+                        title="Organiza até 50 matérias por horário a cada 10 minutos; publicação automática no horário"
                       >
                         🔥 50 a cada 10m
                       </button>
@@ -2647,7 +2647,7 @@ export default function AdminApp() {
                         type="button"
                         className={`radarPaceBtn special ${queueScheduleMode === "1_per_category" ? "active" : ""}`}
                         onClick={() => applyQueueScheduleMode("1_per_category")}
-                        title="🌟 Organiza 1 matéria por editoria em cada horário; a rotina manual libera as vencidas"
+                        title="🌟 Organiza 1 matéria por editoria em cada horário; publicação automática no horário"
                       >
                         🌟 1 por Aba do Jornal
                       </button>
@@ -2655,7 +2655,7 @@ export default function AdminApp() {
                         type="button"
                         className={`radarPaceBtn special ${queueScheduleMode === "3_per_category" ? "active" : ""}`}
                         onClick={() => applyQueueScheduleMode("3_per_category")}
-                        title="🚀 Organiza até 3 matérias por editoria em cada horário; a rotina manual libera as vencidas"
+                        title="🚀 Organiza até 3 matérias por editoria em cada horário; publicação automática no horário"
                       >
                         🚀 3 por Aba a cada 10m
                       </button>
@@ -2667,22 +2667,22 @@ export default function AdminApp() {
                     <span>💡</span>
                     <span>
                       {queueScheduleMode === "1_per_category" && (
-                        <><b>Modo Inteligente:</b> A rotina distribui 1 matéria de cada editoria (Goiânia, Segurança, Política, Esportes...) por horário. A publicação acontece na próxima execução manual depois do horário.</>
+                        <><b>Modo Inteligente:</b> A fila distribui 1 matéria de cada editoria por horário; o Postgres publica automaticamente quando o horário chega.</>
                       )}
                       {queueScheduleMode === "3_per_category" && (
-                        <><b>Modo 3 por Aba:</b> A fila organiza até 3 matérias de cada editoria por horário. A publicação acontece na próxima execução manual depois do horário.</>
+                        <><b>Modo 3 por Aba:</b> A fila organiza até 3 matérias de cada editoria por horário; o Postgres publica automaticamente quando o horário chega.</>
                       )}
                       {queueScheduleMode === "1_per_10m" && (
-                        <><b>Modo 1 por horário:</b> A fila organiza 1 matéria a cada 10 minutos; a publicação acontece na próxima execução manual depois do horário.</>
+                        <><b>Modo 1 por horário:</b> A fila organiza 1 matéria a cada 10 minutos; o Postgres publica automaticamente quando o horário chega.</>
                       )}
                       {queueScheduleMode === "2_per_10m" && (
-                        <><b>Modo 2 por horário:</b> A fila organiza 2 matérias a cada 10 minutos; a publicação acontece na próxima execução manual depois do horário.</>
+                        <><b>Modo 2 por horário:</b> A fila organiza 2 matérias a cada 10 minutos; o Postgres publica automaticamente quando o horário chega.</>
                       )}
                       {queueScheduleMode === "3_per_10m" && (
-                        <><b>Modo 3 por horário:</b> A fila organiza 3 matérias a cada 10 minutos; a publicação acontece na próxima execução manual depois do horário.</>
+                        <><b>Modo 3 por horário:</b> A fila organiza 3 matérias a cada 10 minutos; o Postgres publica automaticamente quando o horário chega.</>
                       )}
                       {(queueScheduleMode === "50_per_10m" || queueScheduleMode === "300_per_10m") && (
-                        <><b>Modo 50 por horário:</b> a rotina diária faz Radar + fila + publicação das matérias vencidas + editorias + tabela/jogos. As novas ficam na fila para a próxima execução manual.</>
+                        <><b>Modo 50 por horário:</b> o botão diário atualiza Radar, fila, editorias e tabela; depois, o Postgres publica cada matéria no horário agendado.</>
                       )}
                     </span>
                   </div>
@@ -3557,7 +3557,7 @@ export default function AdminApp() {
                         value={form.published_at}
                         onChange={(e) => setForm({ ...form, published_at: e.target.value })}
                       />
-                      <small>A notícia será publicada na próxima rotina manual depois desse horário.</small>
+                      <small>A notícia será liberada automaticamente pelo banco depois desse horário.</small>
                     </div>
                   )}
 
