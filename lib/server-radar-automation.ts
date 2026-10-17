@@ -6,7 +6,7 @@ import { getAutomationState, saveAutomationState, saveRadarSnapshot, type RadarS
 import { classifyEditorial, getCategoryFallbackImage, inferLocation, isGoiasOrigin } from "@/lib/category-classifier";
 import { getLiveFootballData, syncBrasileiraoData } from "@/lib/football-sync";
 import { hasBrokenEncoding, readResponseTextSmart, repairMojibake } from "@/lib/text-encoding";
-// Audiência contabilizada sob demanda no painel, sem sobrecarga no GitHub Actions.
+// Audiência contabilizada sob demanda no painel.
 
 type RadarGroup = "goias" | "brasil" | "futebol" | "fofocas";
 type RadarSource = { name:string; feedUrl:string; hosts:string[]; group:RadarGroup; category?: "Futebol" | "Fofocas" };
@@ -254,11 +254,11 @@ function planSchedule(items:ImportedNews[],posts:Post[],intervalMinutes:number,q
 
 export type AutomationRunResult={ok:boolean;skipped?:boolean;reason?:string;found:number;newItems:number;added:number;published:number;resetPublished?:number;reclassified:number;audience?:{updatedAt:string;pageviewsToday:number;articleViewsToday:number}|null;football:{updated:boolean;round:number;fixtures:number;updatedAt:string|null};sourceCounts:Record<string,number>;errors:string[];startedAt:string;finishedAt:string;};
 
-export async function runServerRadarAutomation(options:{force?:boolean}={}):Promise<AutomationRunResult>{
+export async function runServerRadarAutomation(options:{force?:boolean;scopeMode?:"goias_priority"|"all_news"}={}):Promise<AutomationRunResult>{
   const startedAt=new Date().toISOString();const state=await getAutomationState();
   const emptyFootball={updated:false,round:0,fixtures:0,updatedAt:null as string|null};
   if(!options.force&&!state.enabled)return{ok:true,skipped:true,reason:"paused",found:0,newItems:0,added:0,published:0,reclassified:0,football:emptyFootball,sourceCounts:{},errors:[],startedAt,finishedAt:new Date().toISOString()};
-  if (!options.force && state.running_until) {
+  if (state.running_until) {
     const lockExpiry = Date.parse(state.running_until);
     if (Number.isFinite(lockExpiry) && lockExpiry > Date.now() && (lockExpiry - Date.now()) <= 150000) {
       return {ok:true,skipped:true,reason:"already-running",found:0,newItems:0,added:0,published:0,reclassified:0,football:emptyFootball,sourceCounts:{},errors:[],startedAt,finishedAt:new Date().toISOString()};
@@ -274,7 +274,7 @@ export async function runServerRadarAutomation(options:{force?:boolean}={}):Prom
   // O ciclo pode levar vários minutos (feeds, banco, futebol e agendamento).
   // Um lease curto deixava o painel afirmar que o próximo ciclo estava livre
   // antes que o anterior realmente terminasse.
-  await saveAutomationState({running_until:new Date(Date.now()+60*1000).toISOString(),last_run_at:startedAt,last_error:""});
+  await saveAutomationState({enabled:false,running_until:new Date(Date.now()+60*1000).toISOString(),last_run_at:startedAt,last_error:""});
   const errors:string[]=[];let found=0,newItems=0,added=0,published=0,resetPublished=0,reclassified=0;const sourceCounts:Record<string,number>={goias:0,brasil:0,futebol:0,fofocas:0};let football=emptyFootball;let audience:null|{updatedAt:string;pageviewsToday:number;articleViewsToday:number}=null;
   try{
     if (options.force) {
@@ -307,7 +307,7 @@ export async function runServerRadarAutomation(options:{force?:boolean}={}):Prom
     }
 
     const activeSources = SOURCES.filter((src) => {
-      if (state.scope_mode === "goias_priority") {
+      if ((options.scopeMode || state.scope_mode) === "goias_priority") {
         // Modo Foco Goiânia & Goiás: todas de Goiás + Futebol + Fofocas + Política
         return src.group === "goias" || src.group === "futebol" || src.group === "fofocas" || src.name === "G1 Política";
       }
@@ -420,11 +420,11 @@ export async function runServerRadarAutomation(options:{force?:boolean}={}):Prom
     const sourceFailures = errors.filter((error) => SOURCES.some((source) => error.startsWith(source.name + ":"))).length;
     const hasUsableFeed = Object.values(sourceCounts).some((count) => count > 0);
     const ok = hasUsableFeed && sourceFailures < activeSources.length;
-    await saveAutomationState({running_until:null,last_success_at:ok?finishedAt:(state.last_success_at||finishedAt),next_run_at:new Date(Date.now()+10*60000).toISOString(),last_found:found,last_added:added,last_published:published,last_hydrated:formattedRepairs,last_reclassified:reclassified,last_football_sync:football.updatedAt||state.last_football_sync,last_round:football.round||state.last_round,last_fixtures:football.fixtures||state.last_fixtures,last_source_counts:sourceCounts,last_error:errors.join(" | ").slice(0,1500)});
+    await saveAutomationState({enabled:false,running_until:null,last_success_at:ok?finishedAt:(state.last_success_at||finishedAt),next_run_at:null,last_found:found,last_added:added,last_published:published,last_hydrated:formattedRepairs,last_reclassified:reclassified,last_football_sync:football.updatedAt||state.last_football_sync,last_round:football.round||state.last_round,last_fixtures:football.fixtures||state.last_fixtures,last_source_counts:sourceCounts,last_error:errors.join(" | ").slice(0,1500)});
     return{ok,found,newItems,added,published,resetPublished,reclassified,audience,football,sourceCounts,errors,startedAt,finishedAt};
   }catch(e){
     const message=e instanceof Error?e.message:"Erro inesperado";errors.push(message);const finishedAt=new Date().toISOString();
-    try{await saveAutomationState({running_until:null,last_run_at:startedAt,next_run_at:new Date(Date.now()+10*60000).toISOString(),last_error:errors.join(" | ").slice(0,1500)});}catch{}
+    try{await saveAutomationState({enabled:false,running_until:null,last_run_at:startedAt,next_run_at:null,last_error:errors.join(" | ").slice(0,1500)});}catch{}
     return{ok:false,found,newItems,added,published,resetPublished,reclassified,audience,football,sourceCounts,errors,startedAt,finishedAt};
   }
 }

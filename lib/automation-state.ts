@@ -24,7 +24,7 @@ export type AutomationState = {
 
 const DEFAULT_STATE: AutomationState = {
   scope_mode: "goias_priority",
-  enabled: true,
+  enabled: false,
   interval_minutes: 10,
   queue_mode: "50_per_10m",
   queue_reflow_version: 1,

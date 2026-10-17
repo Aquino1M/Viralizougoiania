@@ -9,7 +9,7 @@ export async function GET() {
   return NextResponse.json({
     configured: automationConfigured(),
     state,
-    scheduler: "GitHub Actions → Vercel",
+    scheduler: "manual",
   });
 }
 

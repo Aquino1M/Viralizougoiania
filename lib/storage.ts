@@ -352,74 +352,19 @@ export async function publishDuePostsBatch(limit = 50): Promise<Post[]> {
   return updatedPosts;
 }
 
-export async function publishDuePosts(): Promise<Post[]> {
-  const now = new Date().toISOString();
-  let updatedPosts: Post[] = [];
-
-  if (hasSupabaseConfig()) {
-    try {
-      const res = await sb(`posts?status=eq.scheduled&published_at=lte.${encodeURIComponent(now)}`, {
-        method: "PATCH",
-        headers: { Prefer: "return=representation" },
-        body: JSON.stringify({ status: "published", updated_at: now }),
-      });
-      if (Array.isArray(res)) {
-        updatedPosts = res;
-      }
-    } catch (err: any) {
-      console.warn("Erro ao liberar agendamentos no Supabase:", err.message);
-    }
-  }
-
-  try {
-    const posts = await readLocal();
-    let changed = false;
-    for (const post of posts) {
-      if (post.status === "scheduled" && post.published_at && new Date(post.published_at).getTime() <= Date.now()) {
-        post.status = "published";
-        post.updated_at = now;
-        changed = true;
-        if (!updatedPosts.some((p) => p.id === post.id)) {
-          updatedPosts.push(post);
-        }
-      }
-    }
-    if (changed) {
-      try {
-        await writeLocal(posts);
-      } catch {}
-    }
-  } catch {}
-
-  return updatedPosts;
-}
-
-let hasAutoReclassified = false;
-
 export async function getPosts(opts: { includeDrafts?: boolean; category?: string; limit?: number; status?: string; summaryOnly?: boolean } = {}) {
   const { includeDrafts = false, category, limit, status, summaryOnly = false } = opts;
-
-  if (!hasAutoReclassified && hasSupabaseConfig()) {
-    hasAutoReclassified = true;
-    reclassifyExternalPosts().catch((err) => {
-      console.warn("Reclassificação automática em background:", err.message);
-    });
-  }
-
-  // O Ciclo Único 24/7 é a única automação que libera agendamentos.
-  // Leituras do painel e do portal não publicam nada por efeito colateral.
 
   let postsList: Post[] = [];
 
   if (hasSupabaseConfig()) {
     try {
       const selectFields = summaryOnly ? "id,slug,title,excerpt,category,city,author,image_url,image_credit,featured,status,published_at,created_at,updated_at" : "*";
-      const nowIso = new Date().toISOString();
       const filters = [`select=${selectFields}`, "order=published_at.desc.nullslast,created_at.desc"];
       if (status) {
         filters.push(`status=eq.${encodeURIComponent(status)}`);
       } else if (!includeDrafts) {
-        filters.push(`or=(status.eq.published,and(status.eq.scheduled,published_at.lte.${encodeURIComponent(nowIso)}))`);
+        filters.push("status=eq.published");
       }
       if (category) filters.push(`category=eq.${encodeURIComponent(category)}`);
       if (limit) filters.push(`limit=${limit}`);
@@ -451,20 +396,7 @@ export async function getPosts(opts: { includeDrafts?: boolean; category?: strin
     postsList = await readLocal();
   }
 
-  // Corrige status e editoria antes de renderizar.
-  const nowMs = Date.now();
-  let hasDueToRelease = false;
-  postsList = postsList.map((p) => {
-    const normalizedStatus = p.status === "scheduled" && p.published_at && new Date(p.published_at).getTime() <= nowMs
-      ? ((hasDueToRelease = true), { ...p, status: "published" as PostStatus })
-      : p;
-    return normalizePostCategory(normalizedStatus as Post);
-  });
-  if (hasDueToRelease && hasSupabaseConfig()) {
-    publishDuePostsBatch(200).catch((err) => {
-      console.warn("Auto-liberação em background no getPosts:", err.message);
-    });
-  }
+  postsList = postsList.map(normalizePostCategory);
 
   let result = postsList;
   if (status) { result = result.filter((p) => p.status === status); } else if (!includeDrafts) {

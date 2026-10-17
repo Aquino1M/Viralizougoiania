@@ -204,17 +204,13 @@ export default function AdminApp() {
         return saved as QueueScheduleMode;
       }
     }
-    return "50_per_10m"; // Um único ciclo: até 50 matérias a cada 10 minutos.
+    return "50_per_10m"; // Ritmo em que a rotina manual organiza as matérias na fila.
   });
 
-  // Piloto Automático 24/7: estado real salvo no servidor/Supabase
-  const [autoPilot, setAutoPilot] = useState<boolean>(false);
-  const [autoPilotCountdown, setAutoPilotCountdown] = useState<number>(600);
-  const [autoPilotRunning, setAutoPilotRunning] = useState<boolean>(false);
+  const [radarCycleRunning, setRadarCycleRunning] = useState<boolean>(false);
   const [automationConfigured, setAutomationConfigured] = useState<boolean>(false);
   const [automationLastRun, setAutomationLastRun] = useState<string>("");
   const [deduplicatingQueue, setDeduplicatingQueue] = useState<boolean>(false);
-  const [autoPilotScope, setAutoPilotScope] = useState<"goias_priority" | "all_news">("goias_priority");
   const [postSortOrder, setPostSortOrder] = useState<"asc" | "desc">("asc");
 
   useEffect(() => {
@@ -296,7 +292,7 @@ export default function AdminApp() {
     return next.toISOString();
   }
 
-  // A fila/publicação é atualizada pelo ciclo único do servidor a cada 10 minutos.
+  // A fila e as publicações vencidas são atualizadas ao rodar a rotina manual.
   // Sem polling de 20 segundos no navegador: economiza invocações da Vercel.
 
   function syncCategoryDrafts(nextCategories: Category[]) {
@@ -599,7 +595,7 @@ export default function AdminApp() {
       await load();
       const d = new Date(nextSlot);
       const timeStr = d.toLocaleTimeString("pt-BR", { hour: "2-digit", minute: "2-digit" });
-      setImportMessage(`✅ Notícia agendada na Fila! Será liberada automaticamente às ${timeStr}.`);
+      setImportMessage(`✅ Notícia agendada na Fila para ${timeStr}; será liberada na próxima rotina manual após esse horário.`);
     } catch (err: any) {
       setImportMessage(`Erro ao agendar na fila: ${err.message}`);
     } finally {
@@ -760,7 +756,7 @@ export default function AdminApp() {
     return deduplicateImportedItems(combined);
   }
 
-  // O Radar lê o snapshot gerado pelo mesmo Ciclo Único 24/7.
+  // O Radar lê o snapshot atualizado pela rotina manual do dia.
   // Trocar de aba não varre novamente os jornais e não cria novas execuções pesadas.
   async function importAllFeeds(region: RadarRegion = radarRegion, forceLive = false) {
     setImporting(true);
@@ -809,7 +805,7 @@ export default function AdminApp() {
       if (isLive) {
         setImportMessage(`⚡ Radar ao vivo: ${items.length} notícias frescas varridas em tempo real (${label}) às ${nowTime}!`);
       } else {
-        setImportMessage(`📡 Snapshot 24/7: ${items.length} notícias de ${label} • Atualizado às ${snapshotTime || nowTime}.`);
+        setImportMessage(`📡 Radar atualizado: ${items.length} notícias de ${label} • Snapshot das ${snapshotTime || nowTime}.`);
       }
     } catch (err: any) {
       setImportItems([]);
@@ -905,8 +901,6 @@ export default function AdminApp() {
       const data = await res.json();
       const state = data.state || {};
       setAutomationConfigured(Boolean(data.configured));
-      setAutoPilot(Boolean(state.enabled));
-      if (state.scope_mode) setAutoPilotScope(state.scope_mode);
       const serverMode = state.queue_mode as QueueScheduleMode | undefined;
       if (serverMode && ["1_per_10m","2_per_10m","3_per_10m","50_per_10m","50_per_1m","300_per_10m","1_per_category","3_per_category"].includes(serverMode)) {
         const normalizedMode = serverMode === "300_per_10m" || serverMode === "50_per_1m" ? "50_per_10m" : serverMode;
@@ -918,25 +912,12 @@ export default function AdminApp() {
       const lastSuccess = state.last_success_at ? new Date(state.last_success_at).getTime() : 0;
       const effectiveLastRun = lastRun > lastSuccess ? (state.last_run_at || "") : (state.last_success_at || state.last_run_at || "");
       setAutomationLastRun(effectiveLastRun);
-      if (state.next_run_at) {
-        const diff = Math.ceil((new Date(state.next_run_at).getTime() - Date.now()) / 1000);
-        setAutoPilotCountdown(diff > 0 && diff <= 600 ? diff : 600);
-      }
     } catch {}
   }
 
   useEffect(() => {
     refreshAutomationStatus();
-    const statusTimer = setInterval(refreshAutomationStatus, 60000);
-    return () => clearInterval(statusTimer);
   }, []);
-
-  useEffect(() => {
-    const hasDue = queuedPosts.some((p) => p.published_at && new Date(p.published_at).getTime() <= Date.now());
-    if (hasDue && !loading) {
-      triggerPublishDue();
-    }
-  }, [queuedPosts, loading]);
 
   async function applyQueueScheduleMode(nextMode: QueueScheduleMode) {
     const normalizedMode =
@@ -955,63 +936,36 @@ export default function AdminApp() {
     } catch {}
   }
 
-  // Um único comando atualiza Radar, fila, publicações, editorias, tabela e jogos.
-  async function runAutoPilotCycle() {
-    if (autoPilotRunning || batchQueueing) return;
-    setAutoPilotRunning(true);
-    setImportMessage("🤖 Ciclo Único 24/7: atualizando todos os canais + fila + publicações + classificação + tabela + jogos...");
+  // Um clique atualiza o Radar, a fila, as publicações vencidas e o Brasileirão.
+  async function runDailyRadarRoutine() {
+    if (radarCycleRunning || batchQueueing) return;
+    setRadarCycleRunning(true);
+    setImportMessage("🤖 Executando a rotina manual do dia: Radar, fila, publicações vencidas e Brasileirão...");
     try {
-      const res = await fetch("/api/automation/radar-cycle?force=1", {
+      const res = await fetch("/api/automation/radar-cycle", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
       });
       const data = await res.json().catch(() => ({}));
-      if (!res.ok) throw new Error(data.error || data.errors?.[0] || "Falha no Ciclo Único do servidor.");
+      if (!res.ok) throw new Error(data.error || data.errors?.[0] || "Falha ao executar a rotina do dia.");
 
-      if (data.skipped) {
-        setImportMessage("🤖 Ciclo Único já está sendo executado pelo servidor.");
-      } else {
-        setImportMessage(
-          "🤖 Ciclo Único concluído: " +
-          Number(data.found || 0) + " notícias lidas • " +
-          Number(data.newItems || 0) + " inéditas • " +
-          Number(data.added || 0) + " na fila • " +
-          Number(data.published || 0) + " publicadas • " +
-          Number(data.reclassified || 0) + " editorias corrigidas • " +
-          (data.football?.round ? "Brasileirão " + data.football.round + "ª rodada/tabela atualizados." : "Tabela consultada.")
-        );
-      }
       await Promise.all([load(), refreshAutomationStatus()]);
-      await importAllFeeds(radarRegion, true);
-    } catch (err: any) {
-      setImportMessage("Erro no Ciclo Único 24/7: " + err.message);
-    } finally {
-      setAutoPilotRunning(false);
-    }
-  }
-
-  async function setAutoPilotWithScope(scope: "goias_priority" | "all_news", enabled = true) {
-    try {
-      const res = await fetch("/api/automation/status", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ enabled, scope_mode: scope, interval_minutes: 10 }),
-      });
-      const data = await res.json().catch(() => ({}));
-      if (!res.ok) throw new Error(data.error || "Não foi possível alterar o Piloto.");
-      setAutoPilot(Boolean(data.state?.enabled));
-      setAutoPilotScope(data.state?.scope_mode || scope);
-      setAutoPilotCountdown(600);
+      await importAllFeeds(radarRegion);
       setImportMessage(
-        enabled
-          ? (scope === "goias_priority"
-            ? "🟢 Piloto Automático ATIVO: 📍 Goiânia & Goiás, ⚽ Futebol & Brasileirão, ✨ Fofocas & Famosos. Varrendo a cada 10 minutos."
-            : "🌐 Piloto Automático ATIVO: 🌐 Todos os Canais (Goiás + Nacional + Futebol + Fofocas). Varrendo a cada 10 minutos.")
-          : "⏸️ Piloto Automático pausado no servidor."
+        data.skipped
+          ? "🤖 A rotina do Radar já está em execução."
+          : "🤖 Rotina do dia concluída: " +
+            Number(data.found || 0) + " notícias lidas • " +
+            Number(data.newItems || 0) + " inéditas • " +
+            Number(data.added || 0) + " na fila • " +
+            Number(data.published || 0) + " publicadas • " +
+            Number(data.reclassified || 0) + " editorias corrigidas • " +
+            (data.football?.round ? "Brasileirão " + data.football.round + "ª rodada/tabela atualizados." : "Tabela consultada.")
       );
-      if (enabled) await runAutoPilotCycle();
     } catch (err: any) {
-      setImportMessage("Erro ao alterar Piloto 24/7: " + err.message);
+      setImportMessage("Erro na rotina do dia: " + err.message);
+    } finally {
+      setRadarCycleRunning(false);
     }
   }
 
@@ -1030,64 +984,6 @@ export default function AdminApp() {
     }
   }
 
-  async function toggleAutoPilot() {
-    await setAutoPilotWithScope(autoPilotScope, !autoPilot);
-  }
-
-  async function _dupSetAutoPilotWithScope(enabled: boolean, scope: "goias_priority" | "all_news" = "goias_priority") {
-    try {
-      const res = await fetch("/api/automation/status", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ enabled, interval_minutes: 10, scope_mode: scope }),
-      });
-      const data = await res.json().catch(() => ({}));
-      if (!res.ok) throw new Error(data.error || "Não foi possível alterar o Piloto.");
-      setAutoPilot(Boolean(data.state?.enabled));
-      if (data.state?.scope_mode) {
-        setAutoPilotScope(data.state.scope_mode);
-      } else {
-        setAutoPilotScope(scope);
-      }
-      setAutoPilotCountdown(600);
-      setImportMessage(enabled
-        ? `🟢 Piloto Automático 24/7 ligado (${scope === "goias_priority" ? "📍 Goiânia & Goiás, ⚽ Futebol & Brasileirão, ✨ Fofocas & Famosos" : "🌐 Todos os Canais (Goiás + Nacional + Futebol + Fofocas)"}). Próximo ciclo em 10 min.`
-        : "⏸️ Piloto Automático 24/7 pausado no servidor.");
-      if (enabled) await runAutoPilotCycle();
-    } catch (err: any) {
-      setImportMessage("Erro ao alterar Piloto 24/7: " + err.message);
-    }
-  }
-
-  async function oldToggleAutoPilot() {
-    try {
-      const nextEnabled = !autoPilot;
-      const res = await fetch("/api/automation/status", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ enabled: nextEnabled, interval_minutes: 10 }),
-      });
-      const data = await res.json().catch(() => ({}));
-      if (!res.ok) throw new Error(data.error || "Não foi possível alterar o Piloto.");
-      setAutoPilot(Boolean(data.state?.enabled));
-      setAutoPilotCountdown(600);
-      setImportMessage(nextEnabled
-        ? "🟢 Piloto Automático 24/7 ligado no servidor. O GitHub Actions acionará o Vercel a cada 10 minutos."
-        : "⏸️ Piloto Automático 24/7 pausado no servidor.");
-      if (nextEnabled) await runAutoPilotCycle();
-    } catch (err: any) {
-      setImportMessage("Erro ao alterar Piloto 24/7: " + err.message);
-    }
-  }
-
-  // O contador da interface é apenas visual. A execução real ocorre fora do navegador.
-  useEffect(() => {
-    if (!autoPilot) return;
-    const countdownTimer = setInterval(() => {
-      setAutoPilotCountdown((prev) => prev <= 1 ? 600 : prev - 1);
-    }, 1000);
-    return () => clearInterval(countdownTimer);
-  }, [autoPilot]);
 
   // Enfileiramento em lote com garantia de ordenação pelas mais recentes, sem repetição e com ritmo configurável
   async function queueItemsInBatch(rawItems: ImportedNews[], batchTypeLabel: string, currentPostsList?: Post[]) {
@@ -1281,16 +1177,6 @@ export default function AdminApp() {
     await queueItemsInBatch(selectedItems, "selecionadas");
   }
 
-  // 2. Postar todas as notícias do Radar que ainda não foram postadas (mais recentes primeiro, sem repetição)
-  async function queueAllUnpostedFromRadar() {
-    const unposted = importItems.filter((item) => !isItemAlreadyPosted(item));
-    if (unposted.length === 0) {
-      setImportMessage("⚠️ Todas as notícias carregadas no Radar já foram postadas ou já estão na fila de postagem!");
-      return;
-    }
-    await queueItemsInBatch(unposted, "todas as não postadas");
-  }
-
   async function reorderQueue(intervalMin = queueInterval) {
     if (postStats.scheduled === 0 && queuedPosts.length === 0) return;
     setLoading(true);
@@ -1333,26 +1219,6 @@ export default function AdminApp() {
       setMessage(`Erro: ${e.message}`);
     }
     await load();
-  }
-
-  async function triggerPublishDue() {
-    setLoading(true);
-    try {
-      const res = await fetch("/api/posts/publish-due");
-      if (res.ok) {
-        const data = await res.json();
-        if (data.publishedCount > 0) {
-          setMessage(`🚀 ${data.publishedCount} matéria(s) agendada(s) foram publicadas no portal agora!`);
-        } else {
-          setMessage("Nenhuma matéria agendada com horário vencido no momento.");
-        }
-      }
-      await load();
-    } catch (err: any) {
-      setMessage(`Erro: ${err.message}`);
-    } finally {
-      setLoading(false);
-    }
   }
 
   async function publishNextQueueSlotNow() {
@@ -1877,7 +1743,7 @@ export default function AdminApp() {
             <a href="#" onClick={(e) => { e.preventDefault(); create(); }}>✍️ Nova postagem</a>
             <a href="#" onClick={(e) => { e.preventDefault(); openRadar(); }}>📡 Radar Notícias</a>
             <a href="#" onClick={(e) => { e.preventDefault(); setView("queue"); setMessage(""); }} style={{ display: "flex", alignItems: "center" }}>
-              🕒 Fila de Postagem Automática
+              🕒 Fila de publicações
               {scheduled > 0 && <span className="sidebarBadge">{scheduled.toLocaleString("pt-BR")}</span>}
             </a>
             <a href="#" onClick={(e) => { e.preventDefault(); setView("categories"); setCategoryMessage(""); }}>🗂️ Abas / editorias</a>
@@ -2247,108 +2113,25 @@ export default function AdminApp() {
                     </div>
                   </div>
                   <div style={{ display: "flex", gap: 8, flexWrap: "wrap", alignItems: "center" }}>
-                    {importItems.length > 0 && (
-                      <button
-                        type="button"
-                        className="btnQueueAllHeader"
-                        disabled={batchQueueing || unpostedItemsCount === 0}
-                        onClick={queueAllUnpostedFromRadar}
-                        title="Adiciona todas as matérias ainda não postadas na fila (+10m cada), da mais recente para a mais antiga e sem repetir nenhuma matéria"
-                      >
-                        {batchQueueing ? "⏳ Agendando..." : `🚀 Postar Todas Não Postadas (${unpostedItemsCount})`}
-                      </button>
-                    )}
                     <button
                       className="btn"
-                      disabled={autoPilotRunning || batchQueueing}
-                      onClick={runAutoPilotCycle}
-                      title="Um único comando atualiza Radar, fila, publicações, classificação, tabela e jogos"
+                      disabled={radarCycleRunning || batchQueueing || !automationConfigured}
+                      onClick={runDailyRadarRoutine}
+                      title="Atualiza todos os canais, organiza novas notícias na fila, publica as vencidas e sincroniza tabela e jogos"
                     >
-                      {autoPilotRunning ? "⏳ Atualizando tudo..." : "⚡ Atualizar Tudo Agora"}
+                      {radarCycleRunning ? "⏳ Executando tudo..." : "⚡ Rodar rotina do dia"}
                     </button>
                     <button className="btn secondary" onClick={() => setView("list")}>Voltar</button>
                   </div>
                 </div>
 
-                {/* Barra do Piloto Automático */}
-                <div className="radarAutoPilotBar">
-                  <div className="radarAutoPilotInfo">
-                    {autoPilot ? (
-                      <span className="radarAutoPilotBadgeActive">
-                        {autoPilotScope === "goias_priority" ? "🟢 PILOTO 10M: GOIÁS, FUTEBOL & FOFOCAS" : "🌐 PILOTO 10M: TODOS OS CANAIS"}
-                      </span>
-                    ) : (
-                      <span style={{ fontSize: 13, opacity: 0.9 }}>
-                        🤖 Piloto Automático
-                      </span>
-                    )}
+                <div className="radarManualRunBar">
+                  <div className="radarManualRunInfo">
                     <span>
-                      {autoPilot
-                        ? `Servidor 24/7 ativo: GitHub Actions → Vercel a cada 10 min atualiza ${autoPilotScope === "goias_priority" ? "📍 Goiânia & Goiás + ⚽ Futebol & Brasileirão + ✨ Fofocas & Famosos + 🏛️ Política" : "🌐 Todos os Canais (Goiás + Nacional + Futebol + Fofocas + Política)"} • Próximo ciclo aprox. em ${Math.floor(autoPilotCountdown / 60).toString().padStart(2, "0")}:${(autoPilotCountdown % 60).toString().padStart(2, "0")}${automationLastRun ? " • Última execução: " + new Date(automationLastRun).toLocaleTimeString("pt-BR", { hour: "2-digit", minute: "2-digit" }) : ""}`
-                        : automationConfigured
-                        ? `Piloto 24/7 pausado no servidor. Clique em ligar para voltar a varrer automaticamente.`
-                        : `Configure o Supabase para habilitar o Piloto Automático 24/7 no servidor.`}
+                      {automationConfigured
+                        ? `Execução manual: um clique atualiza Goiás, Brasil, Futebol, Fofocas, fila, publicações vencidas e Brasileirão${automationLastRun ? " • Última execução: " + new Date(automationLastRun).toLocaleString("pt-BR", { day: "2-digit", month: "2-digit", hour: "2-digit", minute: "2-digit" }) : ""}.`
+                        : "Configure o Supabase para habilitar a rotina manual do Radar."}
                     </span>
-                  </div>
-                  <div style={{ display: "flex", gap: 8, alignItems: "center", flexWrap: "wrap" }}>
-                    {autoPilot && (
-                      <button
-                        type="button"
-                        className="btn secondary"
-                        style={{ padding: "6px 12px", fontSize: 11, fontWeight: 700 }}
-                        disabled={autoPilotRunning || batchQueueing}
-                        onClick={runAutoPilotCycle}
-                        title="Executa agora mesmo o ciclo de busca em todos os sites e agendamento sem esperar os 10 minutos"
-                      >
-                        {autoPilotRunning ? "⏳ Varrendo Todos os Sites..." : "⚡ Executar Ciclo Único Agora"}
-                      </button>
-                    )}
-                    <button
-                      type="button"
-                      className={`btnAutoPilotToggle ${!(autoPilot && autoPilotScope === "goias_priority") ? "btnAutoPilotOff" : ""}`}
-                      style={{
-                        background: autoPilot && autoPilotScope === "goias_priority" ? "#059669" : undefined,
-                        borderColor: autoPilot && autoPilotScope === "goias_priority" ? "#047857" : undefined,
-                      }}
-                      onClick={() => setAutoPilotWithScope("goias_priority", !(autoPilot && autoPilotScope === "goias_priority"))}
-                    >
-                      {autoPilot && autoPilotScope === "goias_priority"
-                        ? "🟢 1. ATIVO: 📍 Goiânia & Goiás, ⚽ Futebol & Brasileirão, ✨ Fofocas & Famosos"
-                        : "📍 Goiânia & Goiás , ⚽ Futebol & Brasileirão, ✨ Fofocas & Famosos"}
-                    </button>
-                    <button
-                      type="button"
-                      className={`btnAutoPilotToggle ${!(autoPilot && autoPilotScope === "all_news") ? "btnAutoPilotOff" : ""}`}
-                      style={{
-                        background: autoPilot && autoPilotScope === "all_news" ? "#2563eb" : undefined,
-                        borderColor: autoPilot && autoPilotScope === "all_news" ? "#1d4ed8" : undefined,
-                      }}
-                      onClick={() => setAutoPilotWithScope("all_news", !(autoPilot && autoPilotScope === "all_news"))}
-                      title="Varre automaticamente a cada 10 min todas as matérias em geral do Brasil + Goiás, Futebol, Fofocas e Política"
-                    >
-                      {autoPilot && autoPilotScope === "all_news"
-                        ? "🌐 2. ATIVO: Todos os Canais (Goiás + Nacional + Futebol + Fofocas)"
-                        : "🌐 Todos os Canais (Goiás + Nacional + Futebol + Fofocas)"}
-                    </button>
-                    {autoPilot && (
-                      <button
-                        type="button"
-                        style={{
-                          padding: "8px 12px",
-                          fontSize: 12,
-                          fontWeight: 700,
-                          borderRadius: 8,
-                          background: "#fee2e2",
-                          border: "1px solid #fca5a5",
-                          color: "#b91c1c",
-                          cursor: "pointer",
-                        }}
-                        onClick={() => setAutoPilotWithScope(autoPilotScope, false)}
-                        title="Pausar o ciclo automático no servidor"
-                      >
-                        ⏸️ Pausar
-                      </button>
-                    )}
                   </div>
                 </div>
 
@@ -2439,7 +2222,7 @@ export default function AdminApp() {
                   </button>
                 </div>
 
-                {/* Futebol também é atualizado pelo mesmo Ciclo Único 24/7 */}
+                        {/* Futebol também é atualizado pela rotina manual do dia */}
                 {radarRegion === "futebol" && (
                   <div
                     style={{
@@ -2455,10 +2238,10 @@ export default function AdminApp() {
                       <span style={{ fontSize: 22, background: "#dcfce7", padding: "6px", borderRadius: 8 }}>🏆</span>
                       <div>
                         <b style={{ color: "#065f46", fontSize: 13, display: "block" }}>
-                          Tabela, classificação e jogos fazem parte do Ciclo Único 24/7
+                          Tabela, classificação e jogos fazem parte da rotina do dia
                         </b>
                         <span style={{ color: "#047857", fontSize: 11 }}>
-                          Sem botão separado: a mesma execução de 10 minutos atualiza Radar, fila, tabela e rodada.
+                          Use “Rodar rotina do dia” para atualizar Radar, fila, tabela e rodada de uma vez.
                         </span>
                       </div>
                     </div>
@@ -2610,7 +2393,7 @@ export default function AdminApp() {
                         className="btn secondary"
                         style={{ padding: "4px 10px", fontSize: 11, fontWeight: 700 }}
                         onClick={() => setView("queue")}
-                        title="Configurar ritmo e intervalos na aba 🕒 Fila de Postagem Automática"
+                        title="Configurar o ritmo da fila de publicações"
                       >
                         ⚙️ Configurar Ritmo na Fila
                       </button>
@@ -2631,17 +2414,6 @@ export default function AdminApp() {
                             : `🕒 Enviar ${selectedUrls.length} Selecionada(s) p/ Fila`}
                         </button>
                       )}
-                      <button
-                        type="button"
-                        className="btnQueueAll"
-                        disabled={batchQueueing || unpostedItemsCount === 0}
-                        onClick={queueAllUnpostedFromRadar}
-                        title="Posta todas as notícias não postadas na fila com o ritmo escolhido, ordenando da mais recente para a mais antiga e sem repetir nenhuma notícia"
-                      >
-                        {batchQueueing
-                          ? "⏳ Agendando na Fila..."
-                          : `🚀 Postar Todas Não Postadas na Fila (${unpostedItemsCount})`}
-                      </button>
                     </div>
                   </div>
                 )}
@@ -2769,7 +2541,7 @@ export default function AdminApp() {
                             className="btnQueue"
                             disabled={importing || batchQueueing}
                             onClick={() => queueFromRadar(item)}
-                            title="Programa esta matéria para ser postada automaticamente na ordem da fila"
+                            title="Coloca esta matéria na fila com o horário configurado"
                           >
                             🕒 Enviar p/ Fila (+{queueInterval}m)
                           </button>
@@ -2785,14 +2557,14 @@ export default function AdminApp() {
               </section>
             )}
 
-            {/* Fila de Postagem Automática */}
+            {/* Fila de publicações */}
             {view === "queue" && (
               <section className="panel">
                 <div className="toolbar">
                   <div>
-                    <h1>🕒 Fila de Postagem Automática</h1>
+                    <h1>🕒 Fila de publicações</h1>
                     <div style={{ color: "#68736e", fontSize: 13 }}>
-                      As matérias agendadas entram na fila e são liberadas automaticamente pelo portal no horário programado.
+                      A fila organiza as matérias por horário; a rotina manual publica as que já venceram.
                     </div>
                   </div>
                   <div style={{ display: "flex", gap: 8 }}>
@@ -2803,18 +2575,18 @@ export default function AdminApp() {
                   </div>
                 </div>
 
-                {/* Configuração do Ritmo da Fila Automática */}
+                {/* Configuração do ritmo da fila */}
                 <div style={{ background: "#ffffff", border: "1px solid #e2e8f0", borderRadius: 12, padding: "16px 20px", marginBottom: 18, boxShadow: "0 2px 6px rgba(0,0,0,0.04)" }}>
                   <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", flexWrap: "wrap", gap: 14 }}>
                     <div>
                       <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
                         <span style={{ fontSize: 18 }}>⏱️</span>
                         <h3 style={{ margin: 0, fontSize: 15, fontWeight: 800, color: "#0f172a" }}>
-                          Ritmo da Fila de Postagem Automática
+                          Ritmo da fila de publicação
                         </h3>
                       </div>
                       <p style={{ margin: "4px 0 0", fontSize: 12, color: "#64748b" }}>
-                        Configure quantas postagens devem ser liberadas a cada intervalo e a distribuição por editoria:
+                        Configure como as notícias serão distribuídas na fila; a rotina manual publica as vencidas:
                       </p>
                     </div>
 
@@ -2824,7 +2596,7 @@ export default function AdminApp() {
                         type="button"
                         className={`radarPaceBtn ${queueScheduleMode === "1_per_10m" ? "active" : ""}`}
                         onClick={() => applyQueueScheduleMode("1_per_10m")}
-                        title="Programa 1 matéria a cada 10 minutos (+10m, +20m, +30m...)"
+                        title="Organiza 1 matéria por horário, espaçada a cada 10 minutos; a rotina manual libera as vencidas"
                       >
                         1 a cada 10m
                       </button>
@@ -2832,7 +2604,7 @@ export default function AdminApp() {
                         type="button"
                         className={`radarPaceBtn ${queueScheduleMode === "2_per_10m" ? "active" : ""}`}
                         onClick={() => applyQueueScheduleMode("2_per_10m")}
-                        title="Programa 2 matérias juntas a cada 10 minutos"
+                        title="Organiza 2 matérias por horário a cada 10 minutos; a rotina manual libera as vencidas"
                       >
                         2 a cada 10m
                       </button>
@@ -2840,7 +2612,7 @@ export default function AdminApp() {
                         type="button"
                         className={`radarPaceBtn ${queueScheduleMode === "3_per_10m" ? "active" : ""}`}
                         onClick={() => applyQueueScheduleMode("3_per_10m")}
-                        title="Programa 3 matérias juntas a cada 10 minutos"
+                        title="Organiza 3 matérias por horário a cada 10 minutos; a rotina manual libera as vencidas"
                       >
                         3 a cada 10m
                       </button>
@@ -2848,7 +2620,7 @@ export default function AdminApp() {
                         type="button"
                         className={`radarPaceBtn special ${(queueScheduleMode === "50_per_10m" || queueScheduleMode === "300_per_10m") ? "active" : ""}`}
                         onClick={() => applyQueueScheduleMode("50_per_10m")}
-                        title="Um único ciclo do GitHub Actions publica até 50 matérias a cada 10 minutos"
+                        title="Organiza até 50 matérias por horário a cada 10 minutos; a rotina manual libera as vencidas"
                       >
                         🔥 50 a cada 10m
                       </button>
@@ -2856,7 +2628,7 @@ export default function AdminApp() {
                         type="button"
                         className={`radarPaceBtn special ${queueScheduleMode === "1_per_category" ? "active" : ""}`}
                         onClick={() => applyQueueScheduleMode("1_per_category")}
-                        title="🌟 Inteligente: 1 matéria por Aba/Editoria do jornal a cada 10 minutos (Segurança, Goiânia, Trânsito, etc.)"
+                        title="🌟 Organiza 1 matéria por editoria em cada horário; a rotina manual libera as vencidas"
                       >
                         🌟 1 por Aba do Jornal
                       </button>
@@ -2864,7 +2636,7 @@ export default function AdminApp() {
                         type="button"
                         className={`radarPaceBtn special ${queueScheduleMode === "3_per_category" ? "active" : ""}`}
                         onClick={() => applyQueueScheduleMode("3_per_category")}
-                        title="🚀 Publica até 3 matérias de cada Aba/Editoria a cada 10 minutos"
+                        title="🚀 Organiza até 3 matérias por editoria em cada horário; a rotina manual libera as vencidas"
                       >
                         🚀 3 por Aba a cada 10m
                       </button>
@@ -2876,22 +2648,22 @@ export default function AdminApp() {
                     <span>💡</span>
                     <span>
                       {queueScheduleMode === "1_per_category" && (
-                        <><b>Modo Inteligente Ativo:</b> O sistema alterna as matérias enviando 1 de cada Aba/Editoria (Goiânia, Segurança, Política, Esportes...) a cada 10 minutos, mantendo a capa do portal equilibrada e diversificada.</>
+                        <><b>Modo Inteligente:</b> A rotina distribui 1 matéria de cada editoria (Goiânia, Segurança, Política, Esportes...) por horário. A publicação acontece na próxima execução manual depois do horário.</>
                       )}
                       {queueScheduleMode === "3_per_category" && (
-                        <><b>Modo 3 por Aba Ativo:</b> A cada 10 minutos o sistema libera até 3 matérias de cada Aba/Editoria disponível. Ex.: até 3 de Goiânia + 3 de Política + 3 de Futebol no mesmo slot.</>
+                        <><b>Modo 3 por Aba:</b> A fila organiza até 3 matérias de cada editoria por horário. A publicação acontece na próxima execução manual depois do horário.</>
                       )}
                       {queueScheduleMode === "1_per_10m" && (
-                        <><b>Modo 1 por Slot:</b> O portal publica rigorosamente 1 matéria a cada 10 minutos de forma contínua.</>
+                        <><b>Modo 1 por horário:</b> A fila organiza 1 matéria a cada 10 minutos; a publicação acontece na próxima execução manual depois do horário.</>
                       )}
                       {queueScheduleMode === "2_per_10m" && (
-                        <><b>Modo 2 por Slot:</b> O portal publica 2 matérias juntas a cada 10 minutos.</>
+                        <><b>Modo 2 por horário:</b> A fila organiza 2 matérias a cada 10 minutos; a publicação acontece na próxima execução manual depois do horário.</>
                       )}
                       {queueScheduleMode === "3_per_10m" && (
-                        <><b>Modo 3 por Slot:</b> O portal publica 3 matérias juntas a cada 10 minutos (ritmo acelerado).</>
+                        <><b>Modo 3 por horário:</b> A fila organiza 3 matérias a cada 10 minutos; a publicação acontece na próxima execução manual depois do horário.</>
                       )}
                       {(queueScheduleMode === "50_per_10m" || queueScheduleMode === "300_per_10m") && (
-                        <><b>Ciclo Único 50/10m Ativo:</b> a cada execução do GitHub Actions o sistema faz Radar + fila + publicação de até 50 matérias + editorias + tabela/jogos + audiência, tudo no mesmo ciclo de 10 minutos.</>
+                        <><b>Modo 50 por horário:</b> a rotina diária faz Radar + fila + publicação das matérias vencidas + editorias + tabela/jogos. As novas ficam na fila para a próxima execução manual.</>
                       )}
                     </span>
                   </div>
@@ -2910,7 +2682,7 @@ export default function AdminApp() {
                         setQueueInterval(val);
                       }}
                     >
-                      <option value={10}>A cada 10 minutos (Ciclo Único)</option>
+                      <option value={10}>Intervalo de 10 minutos</option>
                       <option value={15}>A cada 15 minutos</option>
                       <option value={20}>A cada 20 minutos</option>
                       <option value={30}>A cada 30 minutos</option>
@@ -2935,17 +2707,6 @@ export default function AdminApp() {
                         </span>
                       )}
                     </div>
-                    {queuedPosts.length > 0 && (
-                      <button
-                        type="button"
-                        className="btn secondary"
-                        style={{ padding: "5px 12px", fontSize: 11, background: "#ecfdf5", borderColor: "#a7f3d0", color: "#065f46", borderRadius: 6, fontWeight: 700 }}
-                        onClick={triggerPublishDue}
-                        title="Verifica agora se há matérias no horário de publicação e publica imediatamente"
-                      >
-                        ⚡ Liberar Prontas Agora
-                      </button>
-                    )}
                     {queuedPosts.length > 0 && (
                       <button
                         type="button"
@@ -2977,7 +2738,7 @@ export default function AdminApp() {
                     <div style={{ fontSize: 32, marginBottom: 10 }}>🕒</div>
                     <b>A fila de postagem está vazia!</b>
                     <p style={{ margin: "6px 0 16px", color: "#64748b", fontSize: 13 }}>
-                      Vá até o <b>Radar Notícias</b> e clique no botão azul <b>"Enviar p/ Fila"</b> em qualquer notícia para agendar sua publicação automática.
+                      Vá até o <b>Radar Notícias</b> e clique em <b>Rodar rotina do dia</b> para atualizar o Radar e colocar novidades na fila.
                     </p>
                     <button className="btn" onClick={() => openRadar()}>
                       Ir para o Radar Notícias
@@ -3775,7 +3536,7 @@ export default function AdminApp() {
                         value={form.published_at}
                         onChange={(e) => setForm({ ...form, published_at: e.target.value })}
                       />
-                      <small>A notícia será liberada automaticamente quando esse horário chegar.</small>
+                      <small>A notícia será publicada na próxima rotina manual depois desse horário.</small>
                     </div>
                   )}
 
