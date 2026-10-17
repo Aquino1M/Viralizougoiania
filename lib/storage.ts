@@ -209,21 +209,8 @@ export async function getPostIdentityIndex(): Promise<Array<Pick<Post, "id" | "s
 
 export async function getScheduledPostsAll(): Promise<Post[]> {
   if (hasSupabaseConfig()) {
-    const pageSize = 1000;
-    const all: Post[] = [];
-    try {
-      const rows = await sb("posts?select=id,status,published_at,category&status=eq.scheduled&order=published_at.asc.nullslast,created_at.asc&limit=1000");
-      if (Array.isArray(rows)) return (rows as Post[]).map((p) => normalizePostCategory(p));
-    } catch {}
-    if (false) for (let offset = 0; offset < 100000; offset += pageSize) {
-      const rows = await sb(
-        `posts?select=*&status=eq.scheduled&order=published_at.asc.nullslast,created_at.asc&limit=${pageSize}&offset=${offset}`
-      );
-      if (!Array.isArray(rows) || rows.length === 0) break;
-      all.push(...(rows as Post[]).map((p) => normalizePostCategory(p)));
-      if (rows.length < pageSize) break;
-    }
-    return all;
+    const rows = await sb("posts?select=id,status,published_at,category&status=eq.scheduled&order=published_at.asc.nullslast,created_at.asc&limit=1000");
+    return (Array.isArray(rows) ? rows : []).map((p) => normalizePostCategory(p as Post));
   }
   const posts = await readLocal();
   return posts
@@ -265,54 +252,13 @@ async function writeLocal(posts: Post[]) {
   } catch {}
 }
 
-export async function publishAllScheduledNow(): Promise<number> {
-  const now = new Date().toISOString();
-  let total = 0;
-
-  if (hasSupabaseConfig()) {
-    try {
-      total = await sbExactCount("posts?select=id&status=eq.scheduled");
-      await sb("posts?status=eq.scheduled", {
-        method: "PATCH",
-        headers: { Prefer: "return=minimal" },
-        body: JSON.stringify({
-          status: "published",
-          published_at: now,
-          updated_at: now,
-        }),
-      });
-      return total;
-    } catch (err: any) {
-      console.warn("Erro ao publicar toda a fila no Supabase:", err.message);
-    }
-  }
-
-  try {
-    const posts = await readLocal();
-    let changed = 0;
-    for (const post of posts) {
-      if (post.status === "scheduled") {
-        post.status = "published";
-        post.published_at = now;
-        post.updated_at = now;
-        changed++;
-      }
-    }
-    if (changed) await writeLocal(posts);
-    return changed;
-  } catch {
-    return total;
-  }
-}
-
 export async function publishDuePostsBatch(limit = 50): Promise<Post[]> {
   const now = new Date().toISOString();
   const safeLimit = Math.max(1, Math.min(1000, Math.floor(limit)));
   let updatedPosts: Post[] = [];
 
   if (hasSupabaseConfig()) {
-    try {
-      const dueRows = await sb(
+    const dueRows = await sb(
         `posts?select=id&status=eq.scheduled&published_at=lte.${encodeURIComponent(now)}&order=published_at.asc.nullslast,created_at.asc&limit=${safeLimit}`
       );
       const ids = Array.isArray(dueRows) ? dueRows.map((row: any) => String(row.id || "")).filter(Boolean) : [];
@@ -324,10 +270,7 @@ export async function publishDuePostsBatch(limit = 50): Promise<Post[]> {
         });
         if (Array.isArray(res)) updatedPosts = res;
       }
-      return updatedPosts;
-    } catch (err: any) {
-      console.warn("Erro ao liberar lote de agendamentos no Supabase:", err.message);
-    }
+    return updatedPosts;
   }
 
   try {
@@ -359,7 +302,7 @@ export async function getPosts(opts: { includeDrafts?: boolean; category?: strin
 
   if (hasSupabaseConfig()) {
     try {
-      const selectFields = summaryOnly ? "id,slug,title,excerpt,category,city,author,image_url,image_credit,featured,status,published_at,created_at,updated_at" : "*";
+      const selectFields = summaryOnly ? "id,slug,title,excerpt,category,city,author,image_url,image_credit,featured,status,published_at,created_at,updated_at,source_name,source_url,source_author" : "*";
       const filters = [`select=${selectFields}`, "order=published_at.desc.nullslast,created_at.desc"];
       if (status) {
         filters.push(`status=eq.${encodeURIComponent(status)}`);
@@ -383,16 +326,12 @@ export async function getPosts(opts: { includeDrafts?: boolean; category?: strin
           throw subErr;
         }
       }
-      if (Array.isArray(posts) && posts.length > 0) {
-        postsList = posts;
-      }
+      postsList = Array.isArray(posts) ? posts : [];
     } catch (err: any) {
-      console.warn("Aviso ao ler posts do Supabase (fallback local acionado):", err.message);
+      console.warn("Aviso ao ler posts do Supabase:", err.message);
+      throw err;
     }
-  }
-
-  if (postsList.length === 0) {
-    // O fallback local preserva o acervo; o corte público é aplicado após normalizar as linhas.
+  } else {
     postsList = await readLocal();
   }
 
@@ -500,65 +439,34 @@ export async function createPost(input: PostInput) {
   const post: Post = { ...input, category: autoCategory, city, author, id: randomUUID(), created_at: now, updated_at: now };
   if (hasSupabaseConfig()) {
     try {
+      const payload: Partial<Post> = { ...post };
+      let slugRetries = 0;
       let rows: any;
-      try {
-        rows = await sb("posts", {
-          method: "POST",
-          headers: { Prefer: "return=representation" },
-          body: JSON.stringify(post),
-        });
-      } catch (err: any) {
-        // Se houver conflito de slug único no Supabase, adiciona sufixo único e tenta novamente
-        if (err.message && err.message.includes("posts_slug_key")) {
-          const uniqueSuffix = `${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 6)}`;
-          post.slug = `${post.slug.slice(0, 75)}-${uniqueSuffix}`;
-          try {
-            rows = await sb("posts", {
-              method: "POST",
-              headers: { Prefer: "return=representation" },
-              body: JSON.stringify(post),
-            });
-          } catch (retryErr: any) {
-            if (retryErr.message && retryErr.message.includes("video_url")) {
-              const { video_url: _, ...withoutVideo } = post;
-              rows = await sb("posts", {
-                method: "POST",
-                headers: { Prefer: "return=representation" },
-                body: JSON.stringify(withoutVideo),
-              });
-            } else {
-              try {
-                const { video_url: _, ...withoutVideo } = post;
-                rows = await sb("posts", {
-                  method: "POST",
-                  headers: { Prefer: "return=representation" },
-                  body: JSON.stringify(withoutVideo),
-                });
-              } catch {
-                return null;
-              }
-            }
-          }
-        } else if (err.message && err.message.includes("video_url")) {
-          // Se a coluna video_url ainda não foi adicionada no Supabase pelo schema.sql, tenta sem ela
-          const { video_url: _, ...withoutVideo } = post;
+      while (true) {
+        try {
           rows = await sb("posts", {
             method: "POST",
             headers: { Prefer: "return=representation" },
-            body: JSON.stringify(withoutVideo),
+            body: JSON.stringify(payload),
           });
-        } else {
+          break;
+        } catch (err: any) {
+          const message = String(err?.message || "");
+          if (message.includes("video_url") && payload.video_url !== undefined) {
+            delete payload.video_url;
+            continue;
+          }
+          if (message.includes("posts_slug_key") && slugRetries < 2) {
+            slugRetries += 1;
+            const suffix = `${post.id.replace(/-/g, "").slice(0, 12)}${slugRetries > 1 ? `-${slugRetries}` : ""}`;
+            payload.slug = `${post.slug.slice(0, 70)}-${suffix}`;
+            continue;
+          }
           throw err;
         }
       }
-      if (rows?.[0]) {
-        try {
-          const posts = await readLocal();
-          posts.unshift({ ...post, ...rows[0] });
-          await writeLocal(posts);
-        } catch {}
-        return { ...post, ...rows[0] } as Post;
-      }
+      if (!rows?.[0]) return null;
+      return { ...post, ...rows[0] } as Post;
     } catch (err: any) {
       console.warn("Erro ao salvar post no Supabase:", err.message);
       return null;
@@ -646,13 +554,13 @@ export async function reclassifyExternalPosts(): Promise<{ checked: number; chan
   let rawPosts: Post[] = [];
   if (hasSupabaseConfig()) {
     try {
-      const rows = await sb("posts?select=*&order=created_at.desc&limit=2000");
+      const rows = await sb("posts?select=id,title,excerpt,category,city,author,source_name,source_url,source_author,featured,status,published_at,created_at&order=created_at.desc&limit=2000");
       if (Array.isArray(rows)) rawPosts = rows as Post[];
     } catch (err: any) {
       console.warn("Erro ao carregar matérias para reclassificação:", err.message);
+      throw err;
     }
-  }
-  if (!rawPosts.length) {
+  } else {
     try { rawPosts = await readLocal(); } catch { rawPosts = []; }
   }
 

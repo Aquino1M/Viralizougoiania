@@ -14,9 +14,10 @@ function normalizePublishing(status: unknown, publishedAt: unknown) {
   return { status: nextStatus, published_at: iso };
 }
 
-export async function GET() {
+export async function GET(req: Request) {
   const admin = await isAdmin();
-  const posts = await getPosts({ includeDrafts: admin });
+  const status = admin && new URL(req.url).searchParams.get("status") === "scheduled" ? "scheduled" : undefined;
+  const posts = await getPosts({ includeDrafts: admin, status, summaryOnly: admin });
   return NextResponse.json({ posts, mode: storageMode() });
 }
 

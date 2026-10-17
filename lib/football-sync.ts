@@ -136,7 +136,7 @@ async function saveToSupabase(data: StoredFootballData) {
       current_round: data.currentRound,
       updated_at: data.updated_at,
     };
-    await fetch(`${url}/rest/v1/football_data?on_conflict=id`, {
+    const response = await fetch(`${url}/rest/v1/football_data?on_conflict=id`, {
       method: "POST",
       headers: {
         apikey: key,
@@ -146,6 +146,7 @@ async function saveToSupabase(data: StoredFootballData) {
       },
       body: JSON.stringify(payload),
     });
+    if (!response.ok) throw new Error(`Supabase ${response.status}: ${await response.text()}`);
   } catch (err) {
     console.warn("Aviso ao salvar football_data no Supabase:", err);
   }
@@ -230,11 +231,8 @@ export async function syncBrasileiraoData(): Promise<StoredFootballData> {
       updated_at: new Date().toISOString(),
     };
 
-    // Salva em paralelo localmente e no Supabase
-    await Promise.all([
-      writeLocalFootballData(data),
-      saveToSupabase(data),
-    ]);
+    if (hasSupabaseConfig()) await saveToSupabase(data);
+    else await writeLocalFootballData(data);
 
     return data;
   } catch (err: any) {

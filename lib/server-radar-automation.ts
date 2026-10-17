@@ -1,11 +1,11 @@
-import { createPost, getCategories, getPostIdentityIndex, getPosts, getScheduledPostsAll, publishAllScheduledNow, publishDuePostsBatch, reclassifyExternalPosts, updatePost } from "@/lib/storage";
-import { buildEditorialExcerpt, formatViralizouArticle, needsEditorialRepair } from "@/lib/rewrite";
+import { createPost, getCategories, getPostIdentityIndex, getScheduledPostsAll, publishDuePostsBatch, reclassifyExternalPosts } from "@/lib/storage";
+import { buildEditorialExcerpt, formatViralizouArticle } from "@/lib/rewrite";
 import { slugify } from "@/lib/slug";
 import type { ImportedNews, Post, PostStatus } from "@/lib/types";
 import { getAutomationState, saveAutomationState, saveRadarSnapshot, type RadarSnapshotItem } from "@/lib/automation-state";
 import { classifyEditorial, getCategoryFallbackImage, inferLocation, isGoiasOrigin } from "@/lib/category-classifier";
 import { getLiveFootballData, syncBrasileiraoData } from "@/lib/football-sync";
-import { hasBrokenEncoding, readResponseTextSmart, repairMojibake } from "@/lib/text-encoding";
+import { readResponseTextSmart, repairMojibake } from "@/lib/text-encoding";
 // Audiência contabilizada sob demanda no painel.
 
 type RadarGroup = "goias" | "brasil" | "futebol" | "fofocas";
@@ -134,89 +134,6 @@ function dedupeIncoming(items:ImportedNews[],posts:Array<Pick<Post,"slug"|"title
 }
 async function parallelMap<T,R>(items:T[],concurrency:number,worker:(item:T,index:number)=>Promise<R>){const out=new Array<R>(items.length);let cursor=0;async function runner(){while(true){const index=cursor++;if(index>=items.length)return;out[index]=await worker(items[index],index);}}await Promise.all(Array.from({length:Math.min(concurrency,items.length)},()=>runner()));return out;}
 
-async function repairSavedEncoding(posts:Post[],items:ImportedNews[],errors:string[]){
-  const freshByUrl=new Map<string,ImportedNews>();
-  for(const item of items){
-    const key=canonicalUrl(item.source_url||"");
-    if(key&&!freshByUrl.has(key))freshByUrl.set(key,item);
-  }
-
-  const candidates=posts.flatMap(post=>{
-    const broken=[post.title,post.excerpt,post.content,post.source_content,post.seo_title,post.seo_description].some(hasBrokenEncoding);
-    if(!broken||!post.source_url)return[];
-    const fresh=freshByUrl.get(canonicalUrl(post.source_url));
-    return fresh?[{post,fresh}]:[];
-  });
-
-  if(!candidates.length)return 0;
-
-  const results=await parallelMap(candidates,4,async({post,fresh})=>{
-    const sourceText=repairMojibake(fresh.source_content||fresh.excerpt||fresh.title||"");
-    const cleanTitle=repairMojibake(fresh.title||"");
-    const cleanExcerpt=repairMojibake(fresh.excerpt||"");
-    const patch:Record<string,unknown>={
-      source_name:post.source_name||fresh.source_name,
-      source_url:post.source_url,
-    };
-    let changed=false;
-
-    if(hasBrokenEncoding(post.title)&&cleanTitle&&!hasBrokenEncoding(cleanTitle)){patch.title=cleanTitle;changed=true;}
-    if(hasBrokenEncoding(post.excerpt)&&cleanExcerpt&&!hasBrokenEncoding(cleanExcerpt)){patch.excerpt=cleanExcerpt;changed=true;}
-    if(hasBrokenEncoding(post.source_content)&&sourceText&&!hasBrokenEncoding(sourceText)){patch.source_content=sourceText;changed=true;}
-    if(hasBrokenEncoding(post.seo_title)&&cleanTitle&&!hasBrokenEncoding(cleanTitle)){patch.seo_title=cleanTitle;changed=true;}
-    if(hasBrokenEncoding(post.seo_description)&&cleanExcerpt&&!hasBrokenEncoding(cleanExcerpt)){patch.seo_description=cleanExcerpt;changed=true;}
-
-    if(hasBrokenEncoding(post.content)&&sourceText&&!hasBrokenEncoding(sourceText)){
-      patch.content=formatViralizouArticle({
-        title:(patch.title as string)||post.title,
-        excerpt:(patch.excerpt as string)||post.excerpt,
-        sourceText,
-        sourceName:fresh.source_name||post.source_name||"Fonte",
-        category:post.category,
-      });
-      changed=true;
-    }
-
-    if(!changed)return false;
-    try{
-      await updatePost(post.id,patch);
-      return true;
-    }catch(e){
-      errors.push("Correção de acentuação: "+(e instanceof Error?e.message:"falha ao atualizar"));
-      return false;
-    }
-  });
-  return results.filter(Boolean).length;
-}
-async function repairSavedEditorialFormatting(posts:Post[],errors:string[]){
-  const candidates=posts.filter((post)=>Boolean(post.source_name||post.source_url)&&needsEditorialRepair(post)).slice(0,50);
-  if(!candidates.length)return 0;
-
-  const results=await parallelMap(candidates,6,async(post)=>{
-    const sourceText=post.source_content||post.content||post.excerpt||post.title;
-    const excerpt=buildEditorialExcerpt(post.excerpt||sourceText,post.title,240);
-    const content=formatViralizouArticle({
-      title:post.title,
-      excerpt:post.excerpt,
-      sourceText,
-      sourceName:post.source_name,
-      category:post.category,
-    });
-    try{
-      await updatePost(post.id,{
-        excerpt:excerpt||post.excerpt,
-        content:content||post.content,
-        seo_description:buildEditorialExcerpt(post.seo_description||post.excerpt||sourceText,post.title,240),
-      });
-      return true;
-    }catch(e){
-      errors.push("Formatação editorial: "+(e instanceof Error?e.message:"falha ao atualizar"));
-      return false;
-    }
-  });
-  return results.filter(Boolean).length;
-}
-
 type ServerQueueMode="1_per_10m"|"2_per_10m"|"3_per_10m"|"50_per_10m"|"50_per_1m"|"300_per_10m"|"1_per_category"|"3_per_category";
 
 function planSchedule(items:ImportedNews[],posts:Post[],intervalMinutes:number,queueMode:ServerQueueMode){
@@ -278,23 +195,8 @@ export async function runServerRadarAutomation(options:{force?:boolean;scopeMode
   const errors:string[]=[];let found=0,newItems=0,added=0,published=0,resetPublished=0,reclassified=0;const sourceCounts:Record<string,number>={goias:0,brasil:0,futebol:0,fofocas:0};let football=emptyFootball;let audience:null|{updatedAt:string;pageviewsToday:number;articleViewsToday:number}=null;
   try{
     if (options.force) {
-      try { const recat = await reclassifyExternalPosts(); reclassified = recat.changed; } catch {}
-    }
-
-    // Publica toda a fila antiga uma única vez para começar do zero.
-    if(Number(state.queue_reset_version||0)<1){
-      try{
-        resetPublished=await publishAllScheduledNow();
-        published+=resetPublished;
-        await saveAutomationState({
-          queue_mode:"50_per_10m",
-          interval_minutes:10,
-          queue_reflow_version:1,
-          queue_reset_version:1,
-        });
-      }catch(e){
-        errors.push("Reset da fila: "+(e instanceof Error?e.message:"falha ao publicar fila antiga"));
-      }
+      try { const recat = await reclassifyExternalPosts(); reclassified = recat.changed; }
+      catch (e) { errors.push("Reclassificação: " + (e instanceof Error ? e.message : "falha ao consultar matérias")); }
     }
 
     const released=await publishDuePostsBatch(200);published+=released.length;
@@ -347,14 +249,6 @@ export async function runServerRadarAutomation(options:{force?:boolean;scopeMode
       }
     });
     found=all.length;
-
-    // Corrige acentuação e formatação quando executado via botão Forçar
-    let formattedRepairs = 0;
-    if (options.force) {
-      const allPosts = await getPosts({includeDrafts:true});
-      await repairSavedEncoding(allPosts,all,errors);
-      formattedRepairs = await repairSavedEditorialFormatting(allPosts,errors);
-    }
 
     try {
       await saveRadarSnapshot({
@@ -419,8 +313,9 @@ export async function runServerRadarAutomation(options:{force?:boolean;scopeMode
     // ciclo não acumulou falhas. O painel/Actions não devem exibir falso verde.
     const sourceFailures = errors.filter((error) => SOURCES.some((source) => error.startsWith(source.name + ":"))).length;
     const hasUsableFeed = Object.values(sourceCounts).some((count) => count > 0);
-    const ok = hasUsableFeed && sourceFailures < activeSources.length;
-    await saveAutomationState({enabled:false,running_until:null,last_success_at:ok?finishedAt:(state.last_success_at||finishedAt),next_run_at:null,last_found:found,last_added:added,last_published:published,last_hydrated:formattedRepairs,last_reclassified:reclassified,last_football_sync:football.updatedAt||state.last_football_sync,last_round:football.round||state.last_round,last_fixtures:football.fixtures||state.last_fixtures,last_source_counts:sourceCounts,last_error:errors.join(" | ").slice(0,1500)});
+    const queueWriteFailed = planned.length > 0 && added === 0;
+    const ok = hasUsableFeed && sourceFailures < activeSources.length && !queueWriteFailed;
+    await saveAutomationState({enabled:false,running_until:null,last_success_at:ok?finishedAt:(state.last_success_at||finishedAt),next_run_at:null,last_found:found,last_added:added,last_published:published,last_hydrated:0,last_reclassified:reclassified,last_football_sync:football.updatedAt||state.last_football_sync,last_round:football.round||state.last_round,last_fixtures:football.fixtures||state.last_fixtures,last_source_counts:sourceCounts,last_error:errors.join(" | ").slice(0,1500)});
     return{ok,found,newItems,added,published,resetPublished,reclassified,audience,football,sourceCounts,errors,startedAt,finishedAt};
   }catch(e){
     const message=e instanceof Error?e.message:"Erro inesperado";errors.push(message);const finishedAt=new Date().toISOString();

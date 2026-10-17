@@ -69,7 +69,7 @@ export async function POST(req: Request) {
             const loc = inferLocation(item);
             const postCity = loc.city || (loc.isGoias ? "Goiás" : "Brasil");
 
-            await createPost({
+            const created = await createPost({
               title: item.title,
               slug: slugify(item.title),
               excerpt: item.excerpt || item.title,
@@ -92,6 +92,7 @@ export async function POST(req: Request) {
               seo_keywords: loc.isGoias ? `Goiás, Goiânia, ${targetCategory}` : `${targetCategory}, Brasil`,
             });
 
+            if (!created) throw new Error("A matéria não foi gravada no banco.");
             countSuccess++;
           } catch (err: any) {
             errors.push(`${item.title.slice(0, 30)}: ${err.message}`);
@@ -106,7 +107,7 @@ export async function POST(req: Request) {
     } catch {}
 
     return NextResponse.json({
-      ok: true,
+      ok: errors.length === 0,
       queued: countSuccess,
       total: items.length,
       errors: errors.slice(0, 10),

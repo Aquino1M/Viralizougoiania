@@ -153,6 +153,8 @@ function statusLabel(status: PostStatus) {
 
 export default function AdminApp() {
   const [posts, setPosts] = useState<Post[]>([]);
+  const [queuePosts, setQueuePosts] = useState<Post[]>([]);
+  const [queueLoadError, setQueueLoadError] = useState("");
   const [categories, setCategories] = useState<Category[]>([]);
   const [categoryDrafts, setCategoryDrafts] = useState<Record<string, CategoryDraft>>({});
   const [newCategoryName, setNewCategoryName] = useState("");
@@ -273,10 +275,10 @@ export default function AdminApp() {
   // Matérias agendadas na fila, ordenadas por horário de publicação
   const queuedPosts = useMemo(
     () =>
-      posts
+      queuePosts
         .filter((p) => p.status === "scheduled")
         .sort((a, b) => +new Date(a.published_at || 0) - +new Date(b.published_at || 0)),
-    [posts],
+    [queuePosts],
   );
 
   // Calcula o próximo horário livre na fila (ciclo mínimo de 10 minutos)
@@ -313,19 +315,26 @@ export default function AdminApp() {
 
   async function load() {
     setLoading(true);
-    const [postsResponse, categoriesResponse, settingsResponse, adminsResponse, statsResponse] = await Promise.all([
+    const [postsResponse, queueResponse, categoriesResponse, settingsResponse, adminsResponse, statsResponse] = await Promise.all([
       fetch("/api/posts", { cache: "no-store" }),
+      fetch("/api/posts?status=scheduled", { cache: "no-store" }).catch(() => null),
       fetch("/api/categories", { cache: "no-store" }),
       fetch("/api/settings", { cache: "no-store" }),
       fetch("/api/admins", { cache: "no-store" }).catch(() => null),
       fetch("/api/posts/stats", { cache: "no-store" }).catch(() => null),
     ]);
-    if (postsResponse.status === 401 || categoriesResponse.status === 401) {
+    if (postsResponse.status === 401 || categoriesResponse.status === 401 || queueResponse?.status === 401) {
       router.push("/admin/login");
       return;
     }
-    const [postsData, categoriesData, settingsData] = await Promise.all([
+    if (!postsResponse.ok || !categoriesResponse.ok) {
+      setMessage("Não foi possível carregar os dados do painel. Tente atualizar a página.");
+      setLoading(false);
+      return;
+    }
+    const [postsData, queueData, categoriesData, settingsData] = await Promise.all([
       postsResponse.json(),
+      queueResponse?.ok ? queueResponse.json() : Promise.resolve(null),
       categoriesResponse.json(),
       settingsResponse.ok ? settingsResponse.json() : { settings: {} },
     ]);
@@ -342,6 +351,8 @@ export default function AdminApp() {
       } catch {}
     }
     setPosts(postsData.posts || []);
+    setQueuePosts(queueData?.posts || []);
+    setQueueLoadError(queueData ? "" : "Não foi possível carregar a fila. Tente atualizar a página.");
     const nextCategories = (categoriesData.categories || []) as Category[];
     setCategories(nextCategories);
     syncCategoryDrafts(nextCategories);
@@ -451,7 +462,15 @@ export default function AdminApp() {
     [categories],
   );
 
-  function edit(p: Post) {
+  async function edit(p: Post) {
+    try {
+      const response = await fetch(`/api/posts/${p.id}`, { cache: "no-store" });
+      if (!response.ok) throw new Error("Não foi possível carregar a matéria completa.");
+      p = await response.json();
+    } catch (error) {
+      setMessage(error instanceof Error ? error.message : "Falha ao carregar matéria.");
+      return;
+    }
     setForm({
       id: p.id,
       title: p.title,
@@ -951,8 +970,7 @@ export default function AdminApp() {
 
       await Promise.all([load(), refreshAutomationStatus()]);
       await importAllFeeds(radarRegion);
-      setImportMessage(
-        data.skipped
+      const resultMessage = data.skipped
           ? "🤖 A rotina do Radar já está em execução."
           : "🤖 Rotina do dia concluída: " +
             Number(data.found || 0) + " notícias lidas • " +
@@ -960,8 +978,9 @@ export default function AdminApp() {
             Number(data.added || 0) + " na fila • " +
             Number(data.published || 0) + " publicadas • " +
             Number(data.reclassified || 0) + " editorias corrigidas • " +
-            (data.football?.round ? "Brasileirão " + data.football.round + "ª rodada/tabela atualizados." : "Tabela consultada.")
-      );
+            (data.football?.round ? "Brasileirão " + data.football.round + "ª rodada/tabela atualizados." : "Tabela consultada.");
+      const warnings = Array.isArray(data.errors) ? data.errors.slice(0, 2).join(" • ") : "";
+      setImportMessage(resultMessage + (warnings ? " Avisos: " + warnings : ""));
     } catch (err: any) {
       setImportMessage("Erro na rotina do dia: " + err.message);
     } finally {
@@ -2694,7 +2713,9 @@ export default function AdminApp() {
 
                   <div style={{ display: "flex", gap: 12, alignItems: "center", flexWrap: "wrap" }}>
                     <div style={{ fontSize: 12, color: "#475569", fontWeight: 700 }}>
-                      {queuedPosts.length === 0 ? (
+                      {queueLoadError ? (
+                        queueLoadError
+                      ) : queuedPosts.length === 0 ? (
                         "Nenhuma matéria na fila de espera."
                       ) : (
                         <span>
@@ -2733,7 +2754,7 @@ export default function AdminApp() {
                   </div>
                 </div>
 
-                {queuedPosts.length === 0 && (
+                {queuedPosts.length === 0 && !queueLoadError && (
                   <div className="empty" style={{ padding: 40 }}>
                     <div style={{ fontSize: 32, marginBottom: 10 }}>🕒</div>
                     <b>A fila de postagem está vazia!</b>
