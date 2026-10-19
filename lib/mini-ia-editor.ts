@@ -58,7 +58,7 @@ export async function probeVideoInfo(videoPath: string): Promise<VideoProbeInfo>
 }
 
 export interface BuildFilterGraphOptions {
-  framingMode: "cover" | "blur-fit" | "horizontal-block" | "split";
+  framingMode: "cover" | "blur-fit" | "horizontal-block" | "split" | "split-1v2i";
   verticalPos: number; // -100 a +100
   editLevel: MiniIaEditLevel;
   videoFilter?: VideoFilterPreset;
@@ -72,6 +72,8 @@ export interface BuildFilterGraphOptions {
   customBrightness?: number;
   customSharpness?: number;
   videoBlockPosY?: number;
+  splitVideoSide?: "left" | "right";
+  splitHeaderH?: number;
   animatedLogo?: {
     inputIndex: number;
     x: number;
@@ -171,6 +173,22 @@ export function buildMiniIaFilterGraph(options: BuildFilterGraphOptions): {
       `[v_top]scale=${width}:${halfH}:force_original_aspect_ratio=increase,crop=${width}:${halfH},${postFxFilter}[top_crop];` +
       `[v_bottom]scale=${width}:${halfH}:force_original_aspect_ratio=decrease,pad=${width}:${halfH}:(ow-iw)/2:(oh-ih)/2:black,${postFxFilter}[bottom_fit];` +
       `[top_crop][bottom_fit]vstack[${baseLayerTag}];`;
+  } else if (framingMode === "split-1v2i") {
+    // 1 Vídeo com 2 Imagens Divididas Lateralmente (Estilo Copaíba Notícias)
+    const headerH = typeof options.splitHeaderH === "number" ? options.splitHeaderH : 340;
+    const vidW = Math.floor(width / 2);
+    const vidH = Math.max(100, height - headerH);
+    const vidSide = options.splitVideoSide || "right";
+    const vidX = vidSide === "right" ? vidW : 0;
+    const vidY = headerH;
+
+    baseLayerTag = "base";
+    filterComplex =
+      `[0:v]${cropFilter}${speedFilter},${mirrorFilter}` +
+      `scale=${vidW}:${vidH}:force_original_aspect_ratio=increase,` +
+      `crop=${vidW}:${vidH},` +
+      `${postFxFilter}${zoomExpr},` +
+      `pad=${width}:${height}:${vidX}:${vidY}:black[${baseLayerTag}];`;
   } else if (framingMode === "blur-fit") {
     // Estilo Jornalístico: Vídeo original centralizado sem cortes + fundo ampliado com desfoque
     filterComplex =

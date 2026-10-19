@@ -25,7 +25,9 @@ export async function POST(request: Request) {
     const videoFile = formData.get("video") as File | null;
     const overlayFile = formData.get("overlay") as File | null;
     const requestedName = (formData.get("filename") as string | null) || `viralizou-reel-${id}.mp4`;
-    const framingMode = ((formData.get("framingMode") as string | null) || "cover") as "cover" | "blur-fit" | "horizontal-block" | "split";
+    const framingMode = ((formData.get("framingMode") as string | null) || "cover") as "cover" | "blur-fit" | "horizontal-block" | "split" | "split-1v2i";
+    const splitVideoSide = (formData.get("splitVideoSide") as "left" | "right" | null) || "right";
+    const splitHeaderH = formData.get("splitHeaderH") ? Number(formData.get("splitHeaderH")) : undefined;
     const verticalPos = Number(formData.get("vertical") || 0);
     const videoBlockPosY = formData.get("videoBlockPosY") ? Number(formData.get("videoBlockPosY")) : undefined;
     const customSaturation = formData.get("customSaturation") ? Number(formData.get("customSaturation")) : undefined;
@@ -139,6 +141,8 @@ export async function POST(request: Request) {
       hasAudio,
       width,
       height,
+      splitVideoSide,
+      splitHeaderH,
       animatedLogo: animatedLogoConfig,
       videoFilter,
       crop,

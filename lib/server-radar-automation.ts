@@ -259,9 +259,17 @@ export async function runServerRadarAutomation(options:{force?:boolean;scopeMode
     } catch (e) {
       errors.push("Radar snapshot: "+(e instanceof Error?e.message:"falha ao salvar"));
     }
-    if(footballResult.ok){
-      football={updated:true,round:footballResult.data.currentRound,fixtures:footballResult.data.fixtures.length,updatedAt:footballResult.data.updated_at};
-    }else errors.push("Tabela/Jogos: "+(footballResult.error instanceof Error?footballResult.error.message:"falha na sincronização"));
+    if (footballResult.ok) {
+      football = {
+        updated: true,
+        round: footballResult.data.currentRound,
+        fixtures: footballResult.data.fixtures.length,
+        updatedAt: footballResult.data.updated_at,
+      };
+    } else {
+      const err = "error" in footballResult ? (footballResult as { error: unknown }).error : null;
+      errors.push("Tabela/Jogos: " + (err instanceof Error ? err.message : "falha na sincronização"));
+    }
 
     const categoryNames=new Set(categories.map(c=>c.name.toLowerCase()));const builtIn=new Set(["fofocas","fofoca","futebol"]);
     const generalCategories=new Set(["política","politica","esportes","economia","futebol","fofocas","fofoca"]);

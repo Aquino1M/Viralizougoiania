@@ -85,7 +85,7 @@ export interface VideoCropRect {
   height: number;
 }
 
-export type VideoFilterPreset = "none" | "cinema" | "dark_moody" | "cyberpunk" | "vintage" | "noir" | "hdr";
+export type VideoFilterPreset = "none" | "natural" | "cinema" | "dark_moody" | "cyberpunk" | "vintage" | "noir" | "hdr";
 
 export interface VideoFilterConfig {
   id: VideoFilterPreset;
@@ -100,6 +100,15 @@ export interface VideoFilterConfig {
 export const VIDEO_FILTERS: Record<VideoFilterPreset, VideoFilterConfig> = {
   none: {
     id: "none",
+    name: "Natural",
+    badge: "Padrão",
+    icon: "🌿",
+    canvasFilter: "none",
+    ffmpegFilter: "",
+    description: "Cores originais sem filtro extra.",
+  },
+  natural: {
+    id: "natural",
     name: "Natural",
     badge: "Padrão",
     icon: "🌿",

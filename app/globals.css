@@ -389,6 +389,7 @@ main{min-height:65vh}.heroSection{padding:30px 0 25px}.cityEyebrow{font-size:12p
    PAINEL ADMIN — CRIADOR DE FEED E DOWNLOADER DO INSTAGRAM
    ========================================================================== */
 .adminFeedGrid{display:grid;grid-template-columns:minmax(0,1fr) minmax(300px,480px);gap:26px;align-items:start}
+.adminFeedGrid.isCarouselMode{grid-template-columns:1fr}
 .adminFeedControls{display:flex;flex-direction:column;gap:15px}
 .adminFeedUrlRow{display:grid;grid-template-columns:minmax(0,1fr) auto;gap:8px}
 .adminFeedUrlRow input{min-width:0}
@@ -423,6 +424,21 @@ main{min-height:65vh}.heroSection{padding:30px 0 25px}.cityEyebrow{font-size:12p
 .adminFeedFormatBtn .formatName{font-size:13px;font-weight:800;color:inherit}
 .adminFeedFormatBtn .formatDims{font-size:11px;color:#64748b;font-weight:600}
 .adminFeedFormatBtn.active .formatDims{color:rgba(255,255,255,.9)}
+
+.adminFeedTabPanel {
+  animation: adminFeedTabFadeIn 0.2s cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+@keyframes adminFeedTabFadeIn {
+  from {
+    opacity: 0;
+    transform: translateY(4px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
 
 /* Painel de Sobreposição de Camadas (Layers) */
 .layerOverlayBox{background:#0b0d14;border:1px solid #1e2230;border-radius:14px;padding:16px;display:flex;flex-direction:column;gap:13px;color:#f1f5f9;box-shadow:0 10px 25px rgba(0,0,0,.35)}

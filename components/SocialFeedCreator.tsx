@@ -17,6 +17,7 @@ import {
   type RealOficialConfigStatus,
 } from "@/lib/real-oficial-client";
 import CropVideoModal from "./CropVideoModal";
+import CarouselFeedCreator from "./CarouselFeedCreator";
 
 type Props = {
   posts: Post[];
@@ -35,7 +36,7 @@ const DEFAULT_LOGO_POSITION = { x: 0.5, y: 0.615 };
 const DEFAULT_TITLE_POSITION = { x: 0.5, y: 0.7 };
 const DEFAULT_FEED_TITLE_POSITION = { x: 0.5, y: 0.79 };
 
-export type PublicationFormat = "feed" | "feed-square" | "reel-cover" | "story" | "reel";
+export type PublicationFormat = "feed" | "feed-square" | "reel-cover" | "story" | "reel" | "carousel";
 
 function getCanvasDimensions(fmt: PublicationFormat) {
   switch (fmt) {
@@ -47,6 +48,8 @@ function getCanvasDimensions(fmt: PublicationFormat) {
       return { width: 1080, height: 1920, label: "Stories 9:16 · 1080×1920 px" };
     case "reel":
       return { width: 1080, height: 1920, label: "Reels Vertical 9:16 · 1080×1920 px" };
+    case "carousel":
+      return { width: 1080, height: 1350, label: "Carrossel 4:5 · 1080×1350 px" };
     case "feed":
     default:
       return { width: 1080, height: 1350, label: "Feed Recomendado 4:5 · 1080×1350 px" };
@@ -126,7 +129,7 @@ export interface LayoutPresetData {
   showHandleLayer: boolean;
   showStorySticker: boolean;
   showStrongSceneWarning: boolean;
-  videoFramingMode: "cover" | "blur-fit" | "horizontal-block" | "split";
+  videoFramingMode: "cover" | "blur-fit" | "horizontal-block" | "split" | "split-1v2i";
   imagePosition: number;
   miniIaLevel: MiniIaEditLevel;
   miniIaMirror: boolean;
@@ -517,12 +520,40 @@ function applyCanvasVideoFilterOverlay(
   ctx.restore();
 }
 
+export interface Split1v2iConfig {
+  framingMode?: "cover" | "blur-fit" | "horizontal-block" | "split" | "split-1v2i";
+  img1?: HTMLImageElement | null;
+  img2?: HTMLImageElement | null;
+  dividerColor?: string;
+  dividerWidth?: number;
+  videoSide?: "left" | "right";
+  topCardEnabled?: boolean;
+  kickerText?: string;
+  headerH?: number;
+}
+
+function getSplitHeaderHeight(
+  ctx: CanvasRenderingContext2D,
+  headline: string,
+  fontFamily: ReelFontFamily,
+  textCase: ReelTextCase,
+  fontSize: number,
+  canvasW: number
+): number {
+  const titleFontSize = fontSize > 0 ? Math.min(fontSize, 50) : 46;
+  const layout = getCachedReelTitleLayout(ctx, headline, fontFamily || "montserrat", "900", textCase || "uppercase", titleFontSize, canvasW - 108);
+  const linesCount = Math.max(1, layout.lines.length);
+  const lineH = Math.round(titleFontSize * 1.24);
+  const baseH = 102 + (linesCount * lineH) + 38;
+  return Math.max(280, Math.min(460, baseH));
+}
+
 function drawVideoWithFraming(
   ctx: CanvasRenderingContext2D,
   video: HTMLVideoElement,
   w: number,
   h: number,
-  framingMode: "cover" | "blur-fit" | "horizontal-block" | "split",
+  framingMode: "cover" | "blur-fit" | "horizontal-block" | "split" | "split-1v2i",
   vertical = 0,
   mirror = false,
   miniIaConfig?: {
@@ -538,8 +569,13 @@ function drawVideoWithFraming(
     customBrightness?: number;
     customSharpness?: number;
     videoBlockPosY?: number;
+    topHeadline?: string;
+    authorName?: string;
+    authorHandle?: string;
+    authorVerified?: boolean;
   },
-  crop?: VideoCropRect | null
+  crop?: VideoCropRect | null,
+  splitConfig?: Split1v2iConfig
 ) {
   ctx.save();
   if (mirror) {
@@ -651,6 +687,91 @@ function drawVideoWithFraming(
 
     // Inferior
     drawContain(ctx, video, 0, halfH, w, halfH, 0, crop);
+  } else if (framingMode === "split-1v2i") {
+    // 1 Vídeo com 2 Imagens Divididas Lateralmente (Estilo Copaíba Notícias)
+    const topCardEnabled = splitConfig?.topCardEnabled !== false;
+    const headerH = topCardEnabled ? (splitConfig?.headerH ?? 330) : 0;
+    const mediaY = headerH;
+    const mediaH = h - headerH;
+    const halfW = Math.floor(w / 2);
+    const vidSide = splitConfig?.videoSide || "right";
+    const vidX = vidSide === "right" ? halfW : 0;
+    const vidW = w - halfW;
+    const imgColX = vidSide === "right" ? 0 : halfW;
+    const imgColW = halfW;
+    const halfMediaH = Math.floor(mediaH / 2);
+    const divColor = splitConfig?.dividerColor || "#ffffff";
+    const divW = Math.max(1, Math.min(24, splitConfig?.dividerWidth || 4));
+
+    // 1. Desenha o vídeo no lado escolhido (com recorte cover)
+    ctx.save();
+    ctx.beginPath();
+    ctx.rect(vidX, mediaY, vidW, mediaH);
+    ctx.clip();
+    drawCover(ctx, video, vidX, mediaY, vidW, mediaH, vertical, crop);
+    ctx.restore();
+
+    // 2. Foto 1 (Superior) na coluna de fotos
+    const img1 = splitConfig?.img1;
+    const img1H = halfMediaH;
+    ctx.save();
+    ctx.beginPath();
+    ctx.rect(imgColX, mediaY, imgColW, img1H);
+    ctx.clip();
+    if (img1 && isImageDrawable(img1)) {
+      drawCover(ctx, img1, imgColX, mediaY, imgColW, img1H, 0);
+    } else {
+      const grad1 = ctx.createLinearGradient(imgColX, mediaY, imgColX, mediaY + img1H);
+      grad1.addColorStop(0, "#1e293b");
+      grad1.addColorStop(1, "#0f172a");
+      ctx.fillStyle = grad1;
+      ctx.fillRect(imgColX, mediaY, imgColW, img1H);
+      ctx.fillStyle = "#94a3b8";
+      ctx.font = '700 24px "Montserrat", sans-serif';
+      ctx.textAlign = "center";
+      ctx.textBaseline = "middle";
+      ctx.fillText("📸 Foto 1 (Superior)", imgColX + imgColW / 2, mediaY + img1H / 2);
+    }
+    ctx.restore();
+
+    // 3. Foto 2 (Inferior) na coluna de fotos
+    const img2 = splitConfig?.img2;
+    const img2Y = mediaY + halfMediaH;
+    const img2H = mediaH - halfMediaH;
+    ctx.save();
+    ctx.beginPath();
+    ctx.rect(imgColX, img2Y, imgColW, img2H);
+    ctx.clip();
+    if (img2 && isImageDrawable(img2)) {
+      drawCover(ctx, img2, imgColX, img2Y, imgColW, img2H, 0);
+    } else {
+      const grad2 = ctx.createLinearGradient(imgColX, img2Y, imgColX, img2Y + img2H);
+      grad2.addColorStop(0, "#0f172a");
+      grad2.addColorStop(1, "#1e293b");
+      ctx.fillStyle = grad2;
+      ctx.fillRect(imgColX, img2Y, imgColW, img2H);
+      ctx.fillStyle = "#94a3b8";
+      ctx.font = '700 24px "Montserrat", sans-serif';
+      ctx.textAlign = "center";
+      ctx.textBaseline = "middle";
+      ctx.fillText("📸 Foto 2 (Inferior)", imgColX + imgColW / 2, img2Y + img2H / 2);
+    }
+    ctx.restore();
+
+    // 4. Linha divisória horizontal entre Foto 1 e Foto 2
+    ctx.fillStyle = divColor;
+    const hDivY = mediaY + halfMediaH - Math.floor(divW / 2);
+    ctx.fillRect(imgColX, hDivY, imgColW, divW);
+
+    // 5. Linha divisória vertical entre as duas colunas
+    const vDivX = halfW - Math.floor(divW / 2);
+    ctx.fillRect(vDivX, mediaY, divW, mediaH);
+
+    // 6. Linha delimitadora de cabeçalho
+    if (topCardEnabled && headerH > 0) {
+      ctx.fillStyle = divColor;
+      ctx.fillRect(0, mediaY - Math.floor(divW / 2), w, Math.max(2, Math.min(divW, 4)));
+    }
   } else if (framingMode === "blur-fit") {
     // Desfoque em canvas reduzido (135x240): executa em < 0.5ms em vez de travar a CPU por 300ms a 1080x1920
     if (typeof document !== "undefined") {
@@ -2515,7 +2636,7 @@ function drawReelFrame(
   showHandleLayer: boolean = true,
   showStorySticker: boolean = false,
   format: PublicationFormat = "reel",
-  framingMode: "cover" | "blur-fit" | "horizontal-block" | "split" = "cover",
+  framingMode: "cover" | "blur-fit" | "horizontal-block" | "split" | "split-1v2i" = "cover",
   imageVertical: number = 0,
   mirror: boolean = false,
   miniIaConfig?: {
@@ -2539,7 +2660,8 @@ function drawReelFrame(
     authorHandle?: string;
     authorVerified?: boolean;
   },
-  crop?: VideoCropRect | null
+  crop?: VideoCropRect | null,
+  splitConfig?: Split1v2iConfig
 ) {
   ctx.save();
   ctx.imageSmoothingEnabled = true;
@@ -2549,11 +2671,13 @@ function drawReelFrame(
   ctx.fillStyle = "#050505";
   ctx.fillRect(0, 0, W, REEL_H);
   if (video && video.readyState >= 2) {
-    drawVideoWithFraming(ctx, video, W, REEL_H, framingMode, imageVertical, mirror, miniIaConfig, crop);
+    drawVideoWithFraming(ctx, video, W, REEL_H, framingMode, imageVertical, mirror, miniIaConfig, crop, splitConfig);
   }
 
+  const isSplit1v2iWithCard = framingMode === "split-1v2i" && splitConfig?.topCardEnabled !== false;
+
   const maxAlpha = shadeOpacity / 100;
-  if (shadeOpacity > 0 && textStyle !== "red-bottom" && textStyle !== "bacci-red") {
+  if (!isSplit1v2iWithCard && shadeOpacity > 0 && textStyle !== "red-bottom" && textStyle !== "bacci-red") {
     const shade = ctx.createLinearGradient(0, 650, 0, REEL_H);
     shade.addColorStop(0, `rgba(0,0,0,${(0.05 * maxAlpha).toFixed(2)})`);
     shade.addColorStop(0.42, `rgba(0,0,0,${(0.68 * maxAlpha).toFixed(2)})`);
@@ -2572,15 +2696,77 @@ function drawReelFrame(
     ctx.fillText("AVISO: CENAS FORTES", W / 2, 95);
   }
 
+  if (isSplit1v2iWithCard) {
+    const headerH = getSplitHeaderHeight(ctx, headline || "TÍTULO DA SUA NOTÍCIA", fontFamily, textCase, fontSize, W);
+    ctx.fillStyle = "#ffffff";
+    ctx.fillRect(0, 0, W, headerH);
+
+    const kicker = (splitConfig?.kickerText || category || "URGENTE").trim().toUpperCase();
+    ctx.font = '900 24px "Montserrat", sans-serif';
+    const kickerMetrics = ctx.measureText(kicker);
+    const badgeW = Math.max(120, kickerMetrics.width + 30);
+    const badgeH = 38;
+    const badgeX = 54;
+    const badgeY = 44;
+
+    ctx.fillStyle = tagColor === "yellow" ? "#eab308" : tagColor === "orange" ? "#ea580c" : "#dc2626";
+    if (typeof ctx.roundRect === "function") {
+      ctx.beginPath();
+      ctx.roundRect(badgeX, badgeY, badgeW, badgeH, 6);
+      ctx.fill();
+    } else {
+      ctx.fillRect(badgeX, badgeY, badgeW, badgeH);
+    }
+    ctx.fillStyle = "#ffffff";
+    ctx.textAlign = "center";
+    ctx.textBaseline = "middle";
+    ctx.fillText(kicker, badgeX + badgeW / 2, badgeY + badgeH / 2);
+
+    if (showHandleLayer && handle) {
+      ctx.fillStyle = "#64748b";
+      ctx.font = '700 22px "Montserrat", sans-serif';
+      ctx.textAlign = "right";
+      ctx.textBaseline = "middle";
+      const hText = handle.startsWith("@") ? handle : `@${handle}`;
+      ctx.fillText(hText, W - 54, badgeY + badgeH / 2);
+    }
+
+    const titleY = badgeY + badgeH + 20;
+    ctx.fillStyle = "#0f172a";
+    ctx.textAlign = "left";
+    ctx.textBaseline = "top";
+    const titleFontSize = fontSize > 0 ? Math.min(fontSize, 50) : 46;
+    ctx.font = getReelFont(fontFamily || "montserrat", titleFontSize, "900");
+    const layout = getCachedReelTitleLayout(ctx, headline || "TÍTULO DA SUA NOTÍCIA", fontFamily, "900", textCase, titleFontSize, W - 108);
+    const lineH = Math.round(titleFontSize * 1.24);
+    for (let i = 0; i < layout.lines.length; i++) {
+      ctx.fillText(layout.lines[i], 54, titleY + i * lineH);
+    }
+
+    ctx.fillStyle = "rgba(0, 0, 0, 0.12)";
+    ctx.fillRect(0, headerH - 3, W, 3);
+  }
+
   if (showLogoLayer && textStyle !== "bacci-red") {
     const renderLogo = getRenderableLogo(logo, logoColorStyle, "white");
     if (renderLogo && isImageDrawable(renderLogo)) {
-      const { width, height } = getLogoSize(renderLogo, format, logoScale / 100);
-      safeDrawImage(ctx, renderLogo, logoPosition.x * W - width / 2, logoPosition.y * REEL_H - height / 2, width, height);
+      if (isSplit1v2iWithCard) {
+        const vidSide = splitConfig?.videoSide || "right";
+        const vidW = Math.floor(W / 2);
+        const headerH = getSplitHeaderHeight(ctx, headline || "TÍTULO DA SUA NOTÍCIA", fontFamily, textCase, fontSize, W);
+        const lW = Math.round(180 * (logoScale / 100));
+        const lH = Math.round(50 * (logoScale / 100));
+        const lx = vidSide === "right" ? (W - lW - 32) : (vidW - lW - 32);
+        const ly = headerH + 32;
+        safeDrawImage(ctx, renderLogo, lx, ly, lW, lH);
+      } else {
+        const { width, height } = getLogoSize(renderLogo, format, logoScale / 100);
+        safeDrawImage(ctx, renderLogo, logoPosition.x * W - width / 2, logoPosition.y * REEL_H - height / 2, width, height);
+      }
     }
   }
 
-  if (showTitleLayer) {
+  if (showTitleLayer && !isSplit1v2iWithCard) {
     const currentTime = video ? video.currentTime : 10;
     const duration = video && Number.isFinite(video.duration) ? video.duration : 10;
     const effectiveHeadline = (headline || "TÍTULO DA SUA NOTÍCIA").trim();
@@ -2703,7 +2889,8 @@ function buildReelOverlayCanvas(
     authorName?: string;
     authorHandle?: string;
     authorVerified?: boolean;
-  }
+  },
+  splitConfig?: Split1v2iConfig
 ): HTMLCanvasElement {
   const canvas = document.createElement("canvas");
   canvas.width = W;
@@ -2714,6 +2901,170 @@ function buildReelOverlayCanvas(
   ctx.imageSmoothingEnabled = true;
   ctx.imageSmoothingQuality = "high";
   (ctx as any).textRendering = "geometricPrecision";
+
+  // Se for split-1v2i (1 Vídeo + 2 Imagens Divididas Lateralmente - Estilo Copaíba Notícias)
+  if (splitConfig?.framingMode === "split-1v2i") {
+    const topCardEnabled = splitConfig.topCardEnabled !== false;
+    const headerH = topCardEnabled
+      ? getSplitHeaderHeight(ctx, headline || "TÍTULO DA SUA NOTÍCIA", fontFamily, textCase, fontSize, W)
+      : 0;
+    const mediaY = headerH;
+    const mediaH = REEL_H - headerH;
+    const halfW = Math.floor(W / 2);
+    const vidSide = splitConfig.videoSide || "right";
+    const vidX = vidSide === "right" ? halfW : 0;
+    const vidW = W - halfW;
+    const imgColX = vidSide === "right" ? 0 : halfW;
+    const imgColW = halfW;
+    const halfMediaH = Math.floor(mediaH / 2);
+    const divColor = splitConfig.dividerColor || "#ffffff";
+    const divW = Math.max(1, Math.min(24, splitConfig.dividerWidth || 4));
+
+    // 1. Cartão Superior de Notícia (Fundo Branco com Manchete, Tag e Handle)
+    if (topCardEnabled && headerH > 0) {
+      ctx.fillStyle = "#ffffff";
+      ctx.fillRect(0, 0, W, headerH);
+
+      // Selo / Kicker
+      const kicker = (splitConfig.kickerText || category || "URGENTE").trim().toUpperCase();
+      ctx.font = '900 24px "Montserrat", sans-serif';
+      const kickerMetrics = ctx.measureText(kicker);
+      const badgeW = Math.max(120, kickerMetrics.width + 30);
+      const badgeH = 38;
+      const badgeX = 54;
+      const badgeY = 44;
+
+      ctx.fillStyle = tagColor === "yellow" ? "#eab308" : tagColor === "orange" ? "#ea580c" : "#dc2626";
+      if (typeof ctx.roundRect === "function") {
+        ctx.beginPath();
+        ctx.roundRect(badgeX, badgeY, badgeW, badgeH, 6);
+        ctx.fill();
+      } else {
+        ctx.fillRect(badgeX, badgeY, badgeW, badgeH);
+      }
+      ctx.fillStyle = "#ffffff";
+      ctx.textAlign = "center";
+      ctx.textBaseline = "middle";
+      ctx.fillText(kicker, badgeX + badgeW / 2, badgeY + badgeH / 2);
+
+      // Handle do portal à direita no cabeçalho
+      if (showHandleLayer && handle) {
+        ctx.fillStyle = "#64748b";
+        ctx.font = '700 22px "Montserrat", sans-serif';
+        ctx.textAlign = "right";
+        ctx.textBaseline = "middle";
+        const hText = handle.startsWith("@") ? handle : `@${handle}`;
+        ctx.fillText(hText, W - 54, badgeY + badgeH / 2);
+      }
+
+      // Título da notícia em destaque escuro
+      const titleY = badgeY + badgeH + 20;
+      ctx.fillStyle = "#0f172a";
+      ctx.textAlign = "left";
+      ctx.textBaseline = "top";
+      const titleFontSize = fontSize > 0 ? Math.min(fontSize, 50) : 46;
+      ctx.font = getReelFont(fontFamily || "montserrat", titleFontSize, "900");
+      const layout = getCachedReelTitleLayout(ctx, headline || "TÍTULO DA SUA NOTÍCIA", fontFamily, "900", textCase, titleFontSize, W - 108);
+      const lineH = Math.round(titleFontSize * 1.24);
+      for (let i = 0; i < layout.lines.length; i++) {
+        ctx.fillText(layout.lines[i], 54, titleY + i * lineH);
+      }
+
+      // Linha sutil de sombra/borda na base do cartão
+      ctx.fillStyle = "rgba(0, 0, 0, 0.12)";
+      ctx.fillRect(0, headerH - 3, W, 3);
+    }
+
+    // 2. Foto 1 (Superior) na coluna de fotos
+    const img1 = splitConfig.img1;
+    const img1H = halfMediaH;
+    ctx.save();
+    ctx.beginPath();
+    ctx.rect(imgColX, mediaY, imgColW, img1H);
+    ctx.clip();
+    if (img1 && isImageDrawable(img1)) {
+      drawCover(ctx, img1, imgColX, mediaY, imgColW, img1H, 0);
+    } else {
+      const grad1 = ctx.createLinearGradient(imgColX, mediaY, imgColX, mediaY + img1H);
+      grad1.addColorStop(0, "#1e293b");
+      grad1.addColorStop(1, "#0f172a");
+      ctx.fillStyle = grad1;
+      ctx.fillRect(imgColX, mediaY, imgColW, img1H);
+      ctx.fillStyle = "#94a3b8";
+      ctx.font = '700 24px "Montserrat", sans-serif';
+      ctx.textAlign = "center";
+      ctx.textBaseline = "middle";
+      ctx.fillText("📸 Foto 1 (Superior)", imgColX + imgColW / 2, mediaY + img1H / 2);
+    }
+    ctx.restore();
+
+    // 3. Foto 2 (Inferior) na coluna de fotos
+    const img2 = splitConfig.img2;
+    const img2Y = mediaY + halfMediaH;
+    const img2H = mediaH - halfMediaH;
+    ctx.save();
+    ctx.beginPath();
+    ctx.rect(imgColX, img2Y, imgColW, img2H);
+    ctx.clip();
+    if (img2 && isImageDrawable(img2)) {
+      drawCover(ctx, img2, imgColX, img2Y, imgColW, img2H, 0);
+    } else {
+      const grad2 = ctx.createLinearGradient(imgColX, img2Y, imgColX, img2Y + img2H);
+      grad2.addColorStop(0, "#0f172a");
+      grad2.addColorStop(1, "#1e293b");
+      ctx.fillStyle = grad2;
+      ctx.fillRect(imgColX, img2Y, imgColW, img2H);
+      ctx.fillStyle = "#94a3b8";
+      ctx.font = '700 24px "Montserrat", sans-serif';
+      ctx.textAlign = "center";
+      ctx.textBaseline = "middle";
+      ctx.fillText("📸 Foto 2 (Inferior)", imgColX + imgColW / 2, img2Y + img2H / 2);
+    }
+    ctx.restore();
+
+    // 4. Linhas divisórias personalizadas
+    ctx.fillStyle = divColor;
+    // Horizontal entre fotos
+    const hDivY = mediaY + halfMediaH - Math.floor(divW / 2);
+    ctx.fillRect(imgColX, hDivY, imgColW, divW);
+
+    // Vertical entre colunas
+    const vDivX = halfW - Math.floor(divW / 2);
+    ctx.fillRect(vDivX, mediaY, divW, mediaH);
+
+    // Linha entre topo e mídia
+    if (topCardEnabled && headerH > 0) {
+      ctx.fillRect(0, mediaY - Math.floor(divW / 2), W, Math.max(2, Math.min(divW, 4)));
+    }
+
+    // 5. Deixa a área do vídeo 100% transparente para o vídeo aparecer por baixo no preview e no FFmpeg!
+    ctx.clearRect(vidX, mediaY, vidW, mediaH);
+
+    // 6. Logo / Marca d'água no topo do vídeo (como no wireframe do usuário)
+    if (showLogoLayer && logoColorStyle !== "gif") {
+      const renderLogo = getRenderableLogo(logo, logoColorStyle, "white");
+      if (renderLogo && isImageDrawable(renderLogo)) {
+        const lW = Math.round(180 * (logoScale / 100));
+        const lH = Math.round(50 * (logoScale / 100));
+        const lx = vidSide === "right" ? (W - lW - 32) : (vidW - lW - 32);
+        const ly = mediaY + 32;
+        safeDrawImage(ctx, renderLogo, lx, ly, lW, lH);
+      }
+    }
+
+    // 7. Alerta de cenas fortes se ativo
+    if (showStrongSceneWarning) {
+      ctx.fillStyle = "#b91c1c";
+      ctx.fillRect(48, mediaY + 20, W - 96, 68);
+      ctx.fillStyle = "#ffffff";
+      ctx.textAlign = "center";
+      ctx.textBaseline = "middle";
+      ctx.font = '800 30px Arial, sans-serif';
+      ctx.fillText("AVISO: CENAS FORTES", W / 2, mediaY + 54);
+    }
+
+    return canvas;
+  }
 
   // 1. Gradiente inferior de contraste (shade)
   const maxAlpha = (showOverlayLayer ? shadeOpacity : 0) / 100;
@@ -2892,7 +3243,7 @@ export default function SocialFeedCreator({ posts, onBack, initialPost, onOpenCo
   const [showTitleLayer, setShowTitleLayer] = useState<boolean>(true);
   const [showHandleLayer, setShowHandleLayer] = useState<boolean>(true);
   const [showStorySticker, setShowStorySticker] = useState<boolean>(false);
-  const [videoFramingMode, setVideoFramingMode] = useState<"cover" | "blur-fit" | "horizontal-block" | "split">("cover");
+  const [videoFramingMode, setVideoFramingMode] = useState<"cover" | "blur-fit" | "horizontal-block" | "split" | "split-1v2i">("cover");
   const [videoBlockPosY, setVideoBlockPosY] = useState<number>(() => {
     try {
       const saved = localStorage.getItem("viralizou_video_block_pos_y");
@@ -2902,6 +3253,65 @@ export default function SocialFeedCreator({ posts, onBack, initialPost, onOpenCo
   });
   const videoBlockPosYRef = useRef<number>(0.44);
   const videoDragRef = useRef<{ pointerId: number; offsetY: number } | null>(null);
+
+  // Estados para o Estilo Copaíba Notícias (1 Vídeo + 2 Imagens Divididas Lateralmente)
+  const [splitImg1Url, setSplitImg1Url] = useState<string>(() => {
+    try { return localStorage.getItem("viralizou_split_img1") || ""; } catch { return ""; }
+  });
+  const [splitImg2Url, setSplitImg2Url] = useState<string>(() => {
+    try { return localStorage.getItem("viralizou_split_img2") || ""; } catch { return ""; }
+  });
+  const [splitDividerColor, setSplitDividerColor] = useState<string>(() => {
+    try { return localStorage.getItem("viralizou_split_divider_color") || "#ffffff"; } catch { return "#ffffff"; }
+  });
+  const [splitDividerWidth, setSplitDividerWidth] = useState<number>(() => {
+    try { return Number(localStorage.getItem("viralizou_split_divider_width")) || 4; } catch { return 4; }
+  });
+  const [splitVideoSide, setSplitVideoSide] = useState<"right" | "left">(() => {
+    try { return (localStorage.getItem("viralizou_split_video_side") as "right" | "left") || "right"; } catch { return "right"; }
+  });
+  const [splitTopCardEnabled, setSplitTopCardEnabled] = useState<boolean>(() => {
+    try {
+      const saved = localStorage.getItem("viralizou_split_top_card");
+      return saved !== null ? saved === "true" : true;
+    } catch { return true; }
+  });
+  const [splitKickerText, setSplitKickerText] = useState<string>(() => {
+    try { return localStorage.getItem("viralizou_split_kicker") || "URGENTE"; } catch { return "URGENTE"; }
+  });
+
+  const splitImg1Ref = useRef<HTMLImageElement | null>(null);
+  const splitImg2Ref = useRef<HTMLImageElement | null>(null);
+
+  useEffect(() => {
+    let active = true;
+    if (splitImg1Url) {
+      loadImage(splitImg1Url).then(img => {
+        if (!active) return;
+        splitImg1Ref.current = img;
+        cachedOverlayCanvasRef.current = null;
+      }).catch(e => console.warn("Erro ao carregar Foto 1 do Split:", e));
+    } else {
+      splitImg1Ref.current = null;
+      cachedOverlayCanvasRef.current = null;
+    }
+    return () => { active = false; };
+  }, [splitImg1Url]);
+
+  useEffect(() => {
+    let active = true;
+    if (splitImg2Url) {
+      loadImage(splitImg2Url).then(img => {
+        if (!active) return;
+        splitImg2Ref.current = img;
+        cachedOverlayCanvasRef.current = null;
+      }).catch(e => console.warn("Erro ao carregar Foto 2 do Split:", e));
+    } else {
+      splitImg2Ref.current = null;
+      cachedOverlayCanvasRef.current = null;
+    }
+    return () => { active = false; };
+  }, [splitImg2Url]);
 
   useEffect(() => {
     videoBlockPosYRef.current = videoBlockPosY;
@@ -3053,7 +3463,7 @@ export default function SocialFeedCreator({ posts, onBack, initialPost, onOpenCo
   const [imageCrop, setImageCrop] = useState<VideoCropRect | null>(null);
   const [cropMediaType, setCropMediaType] = useState<"video" | "image">("video");
   const [showCropModal, setShowCropModal] = useState<boolean>(false);
-  type ControlTab = "media" | "mini-ia" | "title-layout" | "branding-layers";
+  type ControlTab = "media" | "mini-ia" | "title-layout" | "branding-layers" | "carousel";
   const [activeTab, setActiveTab] = useState<ControlTab>("media");
 
   const effectiveHookText = autoHookText.trim() || (title || selectedPost?.title || "LIVRO CAIU SOZINHO NO CHÃO");
@@ -3759,6 +4169,18 @@ export default function SocialFeedCreator({ posts, onBack, initialPost, onOpenCo
         } else {
           logoImageRef.current = null;
         }
+        const effectiveImg1 = splitImg1Ref.current || customImageRef.current || articleImageRef.current?.image || null;
+        const effectiveImg2 = splitImg2Ref.current;
+        const currentSplitConfig: Split1v2iConfig = {
+          framingMode: videoFramingMode,
+          img1: effectiveImg1,
+          img2: effectiveImg2,
+          dividerColor: splitDividerColor,
+          dividerWidth: splitDividerWidth,
+          videoSide: splitVideoSide,
+          topCardEnabled: splitTopCardEnabled,
+          kickerText: splitKickerText,
+        };
         drawReelFrame(
           ctx,
           videoPreviewRef.current,
@@ -3803,7 +4225,8 @@ export default function SocialFeedCreator({ posts, onBack, initialPost, onOpenCo
             autoHookText: effectiveHookText,
             hookPositionY: hookPositionYRef.current || hookPositionY,
           },
-          videoCrop
+          videoCrop,
+          currentSplitConfig
         );
         setMessage("");
         return;
@@ -3825,6 +4248,133 @@ export default function SocialFeedCreator({ posts, onBack, initialPost, onOpenCo
       const coverH = format === "feed-square" ? 760 : 930;
 
       let mediaDrawn = false;
+
+      // 0. Modo Dividido (1 Vídeo + 2 Imagens - Estilo Copaíba Notícias)
+      if (videoFramingMode === "split-1v2i") {
+        const topCardEnabled = splitTopCardEnabled;
+        const headerH = topCardEnabled
+          ? Math.min(360, Math.max(220, getSplitHeaderHeight(ctx, title || selectedPost?.title || "TÍTULO DA SUA NOTÍCIA", feedFontFamily || "montserrat", "uppercase", feedTitleFontSize > 0 ? feedTitleFontSize : 42, currentW)))
+          : 0;
+        const mediaY = headerH;
+        const mediaH = currentH - headerH;
+        const halfW = Math.floor(currentW / 2);
+        const vidSide = splitVideoSide || "right";
+        const vidX = vidSide === "right" ? halfW : 0;
+        const vidW = currentW - halfW;
+        const imgColX = vidSide === "right" ? 0 : halfW;
+        const imgColW = halfW;
+        const halfMediaH = Math.floor(mediaH / 2);
+        const divColor = splitDividerColor || "#ffffff";
+        const divW = Math.max(1, Math.min(24, splitDividerWidth || 4));
+
+        // Topo branco de notícia no Feed
+        if (topCardEnabled && headerH > 0) {
+          ctx.fillStyle = "#ffffff";
+          ctx.fillRect(0, 0, currentW, headerH);
+
+          const kicker = (splitKickerText || selectedPost?.category || "URGENTE").trim().toUpperCase();
+          ctx.font = '900 22px "Montserrat", sans-serif';
+          const kickerMetrics = ctx.measureText(kicker);
+          const badgeW = Math.max(110, kickerMetrics.width + 26);
+          const badgeH = 34;
+          const badgeX = 40;
+          const badgeY = 30;
+
+          ctx.fillStyle = tagColor === "yellow" ? "#eab308" : tagColor === "orange" ? "#ea580c" : "#dc2626";
+          if (typeof ctx.roundRect === "function") {
+            ctx.beginPath();
+            ctx.roundRect(badgeX, badgeY, badgeW, badgeH, 5);
+            ctx.fill();
+          } else {
+            ctx.fillRect(badgeX, badgeY, badgeW, badgeH);
+          }
+          ctx.fillStyle = "#ffffff";
+          ctx.textAlign = "center";
+          ctx.textBaseline = "middle";
+          ctx.fillText(kicker, badgeX + badgeW / 2, badgeY + badgeH / 2);
+
+          if (showHandleLayer && handle) {
+            ctx.fillStyle = "#64748b";
+            ctx.font = '700 20px "Montserrat", sans-serif';
+            ctx.textAlign = "right";
+            ctx.textBaseline = "middle";
+            const hText = handle.startsWith("@") ? handle : `@${handle}`;
+            ctx.fillText(hText, currentW - 40, badgeY + badgeH / 2);
+          }
+
+          const titleY = badgeY + badgeH + 16;
+          ctx.fillStyle = "#0f172a";
+          ctx.textAlign = "left";
+          ctx.textBaseline = "top";
+          const titleFontSize = feedTitleFontSize > 0 ? Math.min(feedTitleFontSize, 42) : 38;
+          ctx.font = getReelFont(feedFontFamily || "montserrat", titleFontSize, "900");
+          const layout = getCachedReelTitleLayout(ctx, title || selectedPost?.title || "TÍTULO DA SUA NOTÍCIA", feedFontFamily || "montserrat", "900", "uppercase", titleFontSize, currentW - 80);
+          const lineH = Math.round(titleFontSize * 1.22);
+          for (let i = 0; i < layout.lines.length; i++) {
+            ctx.fillText(layout.lines[i], 40, titleY + i * lineH);
+          }
+
+          ctx.fillStyle = "rgba(0, 0, 0, 0.12)";
+          ctx.fillRect(0, headerH - 3, currentW, 3);
+        }
+
+        // Coluna de Vídeo / Foto Principal
+        ctx.save();
+        ctx.beginPath();
+        ctx.rect(vidX, mediaY, vidW, mediaH);
+        ctx.clip();
+        if (videoPreviewRef.current && videoReady) {
+          drawCover(ctx, videoPreviewRef.current, vidX, mediaY, vidW, mediaH, imagePosition, videoCrop);
+        } else if (customImageRef.current) {
+          drawCover(ctx, customImageRef.current, vidX, mediaY, vidW, mediaH, imagePosition, imageCrop);
+        } else if (articleImageRef.current?.image) {
+          drawCover(ctx, articleImageRef.current.image, vidX, mediaY, vidW, mediaH, imagePosition, imageCrop);
+        } else {
+          ctx.fillStyle = "#0f172a";
+          ctx.fillRect(vidX, mediaY, vidW, mediaH);
+        }
+        ctx.restore();
+
+        // Coluna de Fotos (Foto 1 e Foto 2)
+        const img1 = splitImg1Ref.current || customImageRef.current || articleImageRef.current?.image;
+        const img1H = halfMediaH;
+        ctx.save();
+        ctx.beginPath();
+        ctx.rect(imgColX, mediaY, imgColW, img1H);
+        ctx.clip();
+        if (img1 && isImageDrawable(img1)) {
+          drawCover(ctx, img1, imgColX, mediaY, imgColW, img1H, 0);
+        } else {
+          ctx.fillStyle = "#1e293b";
+          ctx.fillRect(imgColX, mediaY, imgColW, img1H);
+        }
+        ctx.restore();
+
+        const img2 = splitImg2Ref.current;
+        const img2Y = mediaY + halfMediaH;
+        const img2H = mediaH - halfMediaH;
+        ctx.save();
+        ctx.beginPath();
+        ctx.rect(imgColX, img2Y, imgColW, img2H);
+        ctx.clip();
+        if (img2 && isImageDrawable(img2)) {
+          drawCover(ctx, img2, imgColX, img2Y, imgColW, img2H, 0);
+        } else {
+          ctx.fillStyle = "#0f172a";
+          ctx.fillRect(imgColX, img2Y, imgColW, img2H);
+        }
+        ctx.restore();
+
+        // Divisórias
+        ctx.fillStyle = divColor;
+        ctx.fillRect(imgColX, mediaY + halfMediaH - Math.floor(divW / 2), imgColW, divW);
+        ctx.fillRect(halfW - Math.floor(divW / 2), mediaY, divW, mediaH);
+        if (topCardEnabled && headerH > 0) {
+          ctx.fillRect(0, mediaY - Math.floor(divW / 2), currentW, Math.max(2, Math.min(divW, 4)));
+        }
+
+        mediaDrawn = true;
+      }
 
       // 1. Imagem personalizada enviada pelo usuário
       if (customImageUrl) {
@@ -3896,7 +4446,7 @@ export default function SocialFeedCreator({ posts, onBack, initialPost, onOpenCo
       }
 
       const maxAlpha = shadeOpacity / 100;
-      if (showOverlayLayer && shadeOpacity > 0) {
+      if (showOverlayLayer && shadeOpacity > 0 && videoFramingMode !== "split-1v2i") {
         const overlayTop = Math.max(format === "feed-square" ? 320 : 380, feedTitlePosition.y * currentH - 280 + feedTitleOffsetY);
         const overlay = ctx.createLinearGradient(0, overlayTop, 0, currentH - 140);
         overlay.addColorStop(0, "rgba(0,0,0,0)");
@@ -3935,7 +4485,7 @@ export default function SocialFeedCreator({ posts, onBack, initialPost, onOpenCo
         }
       }
 
-      if (showTitleLayer) {
+      if (showTitleLayer && (videoFramingMode !== "split-1v2i" || !splitTopCardEnabled)) {
         const headline = (title || selectedPost?.title || "Título da notícia").trim();
         const effectiveSize = feedTitleFontSize > 0 ? feedTitleFontSize : (format === "feed-square" ? Math.min(reelFontSize, 62) : reelFontSize);
         const targetPos = {
@@ -3963,7 +4513,7 @@ export default function SocialFeedCreator({ posts, onBack, initialPost, onOpenCo
         );
       }
 
-      if (showHandleLayer && handle && handle.trim() && reelTextStyle !== "red-bottom" && reelTextStyle !== "bacci-red") {
+      if (showHandleLayer && handle && handle.trim() && reelTextStyle !== "red-bottom" && reelTextStyle !== "bacci-red" && (videoFramingMode !== "split-1v2i" || !splitTopCardEnabled)) {
         ctx.save();
         ctx.textAlign = "center";
         ctx.textBaseline = "middle";
@@ -4004,13 +4554,25 @@ export default function SocialFeedCreator({ posts, onBack, initialPost, onOpenCo
   useEffect(() => {
     renderCard();
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [selectedPost?.slug, selectedPost?.updated_at, customImageUrl, title, logoData, handle, imagePosition, feedTitleFontSize, feedFontFamily, feedTitlePosition.x, feedTitlePosition.y, feedTitleOffsetY, format, logoPosition.x, logoPosition.y, titlePosition.x, titlePosition.y, reelTextStyle, reelFontFamily, reelFontWeight, reelTextAlign, reelTextCase, reelFontSize, tagColor, tagPositionY, showSafeZone, reelTextAnimation, showStrongSceneWarning, logoScale, handleFontSize, shadeOpacity, showOverlayLayer, showLogoLayer, showTitleLayer, showHandleLayer, showStorySticker, logoColorStyle, miniIaMirror, imageCrop]);
+  }, [selectedPost?.slug, selectedPost?.updated_at, customImageUrl, title, logoData, handle, imagePosition, feedTitleFontSize, feedFontFamily, feedTitlePosition.x, feedTitlePosition.y, feedTitleOffsetY, format, logoPosition.x, logoPosition.y, titlePosition.x, titlePosition.y, reelTextStyle, reelFontFamily, reelFontWeight, reelTextAlign, reelTextCase, reelFontSize, tagColor, tagPositionY, showSafeZone, reelTextAnimation, showStrongSceneWarning, logoScale, handleFontSize, shadeOpacity, showOverlayLayer, showLogoLayer, showTitleLayer, showHandleLayer, showStorySticker, logoColorStyle, miniIaMirror, imageCrop, videoFramingMode, splitImg1Url, splitImg2Url, splitDividerColor, splitDividerWidth, splitVideoSide, splitTopCardEnabled, splitKickerText]);
 
   // MAX CACHE: Pré-renderiza todo o layout visual da legenda e sobreposições em 1080x1920
   // Isso zera 100% dos cálculos na CPU durante a reprodução do vídeo e evita travamentos
   useEffect(() => {
     if (typeof document === "undefined") return;
     try {
+      const effectiveImg1 = splitImg1Ref.current || customImageRef.current || articleImageRef.current?.image || null;
+      const effectiveImg2 = splitImg2Ref.current;
+      const currentSplitConfig: Split1v2iConfig = {
+        framingMode: videoFramingMode,
+        img1: effectiveImg1,
+        img2: effectiveImg2,
+        dividerColor: splitDividerColor,
+        dividerWidth: splitDividerWidth,
+        videoSide: splitVideoSide,
+        topCardEnabled: splitTopCardEnabled,
+        kickerText: splitKickerText,
+      };
       const overlayCanvas = buildReelOverlayCanvas(
         logoImageRef.current,
         title || selectedPost?.title || "TÍTULO DA SUA NOTÍCIA",
@@ -4042,7 +4604,8 @@ export default function SocialFeedCreator({ posts, onBack, initialPost, onOpenCo
           authorName,
           authorHandle,
           authorVerified,
-        }
+        },
+        currentSplitConfig
       );
       cachedOverlayCanvasRef.current = overlayCanvas;
     } catch (err) {
@@ -4055,6 +4618,7 @@ export default function SocialFeedCreator({ posts, onBack, initialPost, onOpenCo
     showStrongSceneWarning, handleFontSize, tagColor, tagPositionY,
     shadeOpacity, showOverlayLayer, showLogoLayer, showTitleLayer, showHandleLayer, showStorySticker,
     topHeadline, authorName, authorHandle, authorVerified,
+    videoFramingMode, splitImg1Url, splitImg2Url, splitDividerColor, splitDividerWidth, splitVideoSide, splitTopCardEnabled, splitKickerText,
   ]);
 
   // Carrega a logo personalizada no ref sempre que logoData mudar
@@ -4067,6 +4631,18 @@ export default function SocialFeedCreator({ posts, onBack, initialPost, onOpenCo
           logoImageRef.current = img;
           if (typeof document !== "undefined") {
             try {
+              const effectiveImg1 = splitImg1Ref.current || customImageRef.current || articleImageRef.current?.image || null;
+              const effectiveImg2 = splitImg2Ref.current;
+              const currentSplitConfig: Split1v2iConfig = {
+                framingMode: videoFramingMode,
+                img1: effectiveImg1,
+                img2: effectiveImg2,
+                dividerColor: splitDividerColor,
+                dividerWidth: splitDividerWidth,
+                videoSide: splitVideoSide,
+                topCardEnabled: splitTopCardEnabled,
+                kickerText: splitKickerText,
+              };
               cachedOverlayCanvasRef.current = buildReelOverlayCanvas(
                 img,
                 title || selectedPost?.title || "TÍTULO DA SUA NOTÍCIA",
@@ -4098,7 +4674,8 @@ export default function SocialFeedCreator({ posts, onBack, initialPost, onOpenCo
                   authorName,
                   authorHandle,
                   authorVerified,
-                }
+                },
+                currentSplitConfig
               );
             } catch {}
           }
@@ -4132,6 +4709,18 @@ export default function SocialFeedCreator({ posts, onBack, initialPost, onOpenCo
             ctx.fillStyle = "#050505";
             ctx.fillRect(0, 0, W, REEL_H);
             const miniIaCfg = MINI_IA_LEVELS[miniIaLevel] || MINI_IA_LEVELS.media;
+            const effectiveImg1 = splitImg1Ref.current || customImageRef.current || articleImageRef.current?.image || null;
+            const effectiveImg2 = splitImg2Ref.current;
+            const currentSplitConfig: Split1v2iConfig = {
+              framingMode: videoFramingMode,
+              img1: effectiveImg1,
+              img2: effectiveImg2,
+              dividerColor: splitDividerColor,
+              dividerWidth: splitDividerWidth,
+              videoSide: splitVideoSide,
+              topCardEnabled: splitTopCardEnabled,
+              kickerText: splitKickerText,
+            };
             drawVideoWithFraming(
               ctx,
               video,
@@ -4158,7 +4747,8 @@ export default function SocialFeedCreator({ posts, onBack, initialPost, onOpenCo
                 authorHandle,
                 authorVerified,
               },
-              videoCrop
+              videoCrop,
+              currentSplitConfig
             );
             // Ultra-rápido: usa o overlay cacheado apenas quando não estiver arrastando elementos interativos
             const isDraggingAny = Boolean(tagDragRef.current || titleDragRef.current || logoDragRef.current || hookDragRef.current || videoDragRef.current);
@@ -4235,7 +4825,8 @@ export default function SocialFeedCreator({ posts, onBack, initialPost, onOpenCo
                   authorHandle,
                   authorVerified,
                 },
-                videoCrop
+                videoCrop,
+                currentSplitConfig
               );
             }
             if (showSafeZone) {
@@ -4280,7 +4871,7 @@ export default function SocialFeedCreator({ posts, onBack, initialPost, onOpenCo
       video.removeEventListener("timeupdate", handleTimeCheck);
       cancelAnimationFrame(frameId);
     };
-  }, [format, videoUrl, title, handle, logoData, selectedPost?.title, reelTextStyle, reelFontFamily, reelFontWeight, reelTextAlign, reelTextCase, reelFontSize, tagColor, tagPositionY, showSafeZone, reelTextAnimation, showStrongSceneWarning, logoScale, handleFontSize, shadeOpacity, showOverlayLayer, showLogoLayer, showTitleLayer, showHandleLayer, showStorySticker, logoColorStyle, recording, videoFramingMode, imagePosition, miniIaTrimSeconds, miniIaLevel, miniIaMirror, videoFilter, autoHookEnabled, effectiveHookText, videoCrop, hookPositionY]);
+  }, [format, videoUrl, title, handle, logoData, selectedPost?.title, reelTextStyle, reelFontFamily, reelFontWeight, reelTextAlign, reelTextCase, reelFontSize, tagColor, tagPositionY, showSafeZone, reelTextAnimation, showStrongSceneWarning, logoScale, handleFontSize, shadeOpacity, showOverlayLayer, showLogoLayer, showTitleLayer, showHandleLayer, showStorySticker, logoColorStyle, recording, videoFramingMode, imagePosition, miniIaTrimSeconds, miniIaLevel, miniIaMirror, videoFilter, autoHookEnabled, effectiveHookText, videoCrop, hookPositionY, splitImg1Url, splitImg2Url, splitDividerColor, splitDividerWidth, splitVideoSide, splitTopCardEnabled, splitKickerText]);
 
   async function loadArticle() {
     const slug = slugFromInput(articleUrl);
@@ -5208,6 +5799,19 @@ async function fixWebmDuration(blob: Blob, durationSec: number): Promise<Blob> {
       .replace(/[^a-zA-Z0-9_-]/g, "-") || `viralizou-${formatLabel}`;
     const outFilename = `${basename}-${formatLabel}.mp4`;
 
+    const effectiveImg1 = splitImg1Ref.current || customImageRef.current || articleImageRef.current?.image || null;
+    const effectiveImg2 = splitImg2Ref.current;
+    const currentSplitConfig: Split1v2iConfig = {
+      framingMode: videoFramingMode,
+      img1: effectiveImg1,
+      img2: effectiveImg2,
+      dividerColor: splitDividerColor,
+      dividerWidth: splitDividerWidth,
+      videoSide: splitVideoSide,
+      topCardEnabled: splitTopCardEnabled,
+      kickerText: splitKickerText,
+    };
+
     // 1. Gera o canvas do overlay em alta resolução (1080x1920) com as legendas e marcas
     const overlayCanvas = buildReelOverlayCanvas(
       logoImageRef.current,
@@ -5235,6 +5839,13 @@ async function fixWebmDuration(blob: Blob, durationSec: number): Promise<Blob> {
       showHandleLayer,
       false, // NUNCA desenha figurinha no overlay de vídeo
       format,
+      {
+        topHeadline,
+        authorName,
+        authorHandle,
+        authorVerified,
+      },
+      currentSplitConfig
     );
 
     const overlayBlob = await new Promise<Blob | null>((resolve) => overlayCanvas.toBlob(resolve, "image/png", 1.0));
@@ -5275,6 +5886,13 @@ async function fixWebmDuration(blob: Blob, durationSec: number): Promise<Blob> {
         formData.append("overlay", overlayBlob, "overlay.png");
         formData.append("filename", outFilename);
         formData.append("framingMode", videoFramingMode);
+        if (videoFramingMode === "split-1v2i") {
+          const headerH = splitTopCardEnabled
+            ? getSplitHeaderHeight(overlayCanvas.getContext("2d")!, title || selectedPost?.title || "TÍTULO DA SUA NOTÍCIA", reelFontFamily, reelTextCase, reelFontSize, 1080)
+            : 0;
+          formData.append("splitVideoSide", splitVideoSide);
+          formData.append("splitHeaderH", String(headerH));
+        }
         formData.append("vertical", String(imagePosition));
         formData.append("editLevel", miniIaLevel);
         formData.append("mirror", String(miniIaMirror));
@@ -5562,7 +6180,8 @@ async function fixWebmDuration(blob: Blob, durationSec: number): Promise<Blob> {
               zoomPeriod: miniIaCfg.zoomPeriod,
               filterPreset: videoFilter,
             },
-            videoCrop
+            videoCrop,
+            currentSplitConfig
           );
           ctx.drawImage(overlayCanvas, 0, 0, W, REEL_H);
           if (showLogoLayer && logoColorStyle === "gif") {
@@ -5794,7 +6413,7 @@ async function fixWebmDuration(blob: Blob, durationSec: number): Promise<Blob> {
 
       {message && <div className={message.startsWith("✅") ? "notice" : "notice error"}>{message}</div>}
 
-      <div className="adminFeedGrid">
+      <div className={`adminFeedGrid ${activeTab === "carousel" ? "isCarouselMode" : ""}`}>
         <div className="adminFeedControls">
           <div className="field">
             <label>📐 Formato da publicação no Instagram</label>
@@ -5844,6 +6463,18 @@ async function fixWebmDuration(blob: Blob, durationSec: number): Promise<Blob> {
                 <span className="formatName">Reels</span>
                 <span className="formatDims">1080 × 1920 px · Vídeo MP4</span>
               </button>
+              <button
+                type="button"
+                className={`adminFeedFormatBtn ${format === "carousel" ? "active" : ""}`}
+                onClick={() => {
+                  setFormat("carousel");
+                  setActiveTab("carousel");
+                }}
+              >
+                <span className="formatRatio">4:5</span>
+                <span className="formatName">Carrossel (Slides)</span>
+                <span className="formatDims">1080 × 1350 px · Sequência</span>
+              </button>
             </div>
           </div>
 
@@ -5852,7 +6483,7 @@ async function fixWebmDuration(blob: Blob, durationSec: number): Promise<Blob> {
             role="tablist"
             style={{
               display: "grid",
-              gridTemplateColumns: "repeat(4, 1fr)",
+              gridTemplateColumns: "repeat(5, 1fr)",
               gap: 6,
               marginBottom: 16,
               background: "#0f172a",
@@ -5992,6 +6623,38 @@ async function fixWebmDuration(blob: Blob, durationSec: number): Promise<Blob> {
                 )}
               </div>
               <span style={{ fontSize: 10, opacity: 0.75, fontWeight: 500 }}>Logo, Tag & Camadas</span>
+            </button>
+
+            <button
+              type="button"
+              role="tab"
+              aria-selected={activeTab === "carousel"}
+              onClick={() => {
+                setActiveTab("carousel");
+                setFormat("carousel");
+              }}
+              style={{
+                padding: "8px 6px",
+                borderRadius: 8,
+                border: activeTab === "carousel" ? "1px solid #ef4444" : "1px solid transparent",
+                background: activeTab === "carousel" ? "rgba(239, 68, 68, 0.18)" : "transparent",
+                color: activeTab === "carousel" ? "#f87171" : "#94a3b8",
+                fontSize: 12,
+                fontWeight: 700,
+                cursor: "pointer",
+                display: "flex",
+                flexDirection: "column",
+                alignItems: "center",
+                justifyContent: "center",
+                gap: 4,
+                transition: "all 0.15s ease",
+              }}
+            >
+              <div style={{ display: "flex", alignItems: "center", gap: 5 }}>
+                <span style={{ fontSize: 14 }}>🎠</span>
+                <span>Carrossel</span>
+              </div>
+              <span style={{ fontSize: 10, opacity: 0.75, fontWeight: 500 }}>Multislide 4:5</span>
             </button>
           </div>
 
@@ -6309,7 +6972,331 @@ async function fixWebmDuration(blob: Blob, durationSec: number): Promise<Blob> {
                       >
                         👥 Split 50/50
                       </button>
+                      <button
+                        type="button"
+                        className={`btn secondary ${videoFramingMode === "split-1v2i" ? "active" : ""}`}
+                        onClick={() => setVideoFramingMode("split-1v2i")}
+                        style={{
+                          fontSize: 11,
+                          padding: "6px 8px",
+                          background: videoFramingMode === "split-1v2i" ? "#0284c7" : "#ffffff",
+                          color: videoFramingMode === "split-1v2i" ? "#ffffff" : "#1e293b",
+                          borderColor: videoFramingMode === "split-1v2i" ? "#0284c7" : "#cbd5e1",
+                          fontWeight: videoFramingMode === "split-1v2i" ? 700 : 500,
+                        }}
+                        title="1 Vídeo de um lado + 2 Fotos empilhadas do outro com linha divisória personalizada e cartão de notícia no topo (Estilo Copaíba Notícias)"
+                      >
+                        ⚖️ 1 Vídeo + 2 Imagens
+                      </button>
                     </div>
+
+                    {videoFramingMode === "split-1v2i" && (
+                      <div style={{ marginTop: 8, padding: "10px 12px", background: "#f8fafc", borderRadius: 8, border: "1.5px solid #cbd5e1" }}>
+                        <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 8 }}>
+                          <span style={{ fontSize: 11.5, fontWeight: 800, color: "#0f172a" }}>
+                            ⚖️ Estilo Copaíba (1 Vídeo + 2 Imagens Divididas)
+                          </span>
+                          <span style={{ fontSize: 10, background: "#dbeafe", color: "#1d4ed8", padding: "1px 6px", borderRadius: 10, fontWeight: 700 }}>
+                            Divisão Lateral
+                          </span>
+                        </div>
+
+                        {/* 1. Lado do Vídeo */}
+                        <div style={{ marginBottom: 8 }}>
+                          <label style={{ fontSize: 10.5, fontWeight: 700, color: "#475569", display: "block", marginBottom: 3 }}>
+                            ↔️ Lado do Vídeo:
+                          </label>
+                          <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 5 }}>
+                            <button
+                              type="button"
+                              onClick={() => {
+                                setSplitVideoSide("right");
+                                try { localStorage.setItem("viralizou_split_video_side", "right"); } catch {}
+                                cachedOverlayCanvasRef.current = null;
+                              }}
+                              style={{
+                                padding: "5px 6px",
+                                fontSize: 10.5,
+                                borderRadius: 5,
+                                border: `1.5px solid ${splitVideoSide === "right" ? "#0284c7" : "#cbd5e1"}`,
+                                background: splitVideoSide === "right" ? "#e0f2fe" : "#ffffff",
+                                color: splitVideoSide === "right" ? "#0369a1" : "#475569",
+                                fontWeight: splitVideoSide === "right" ? 800 : 500,
+                                cursor: "pointer",
+                              }}
+                            >
+                              Fotos na Esquerda | Vídeo na Direita ▶️
+                            </button>
+                            <button
+                              type="button"
+                              onClick={() => {
+                                setSplitVideoSide("left");
+                                try { localStorage.setItem("viralizou_split_video_side", "left"); } catch {}
+                                cachedOverlayCanvasRef.current = null;
+                              }}
+                              style={{
+                                padding: "5px 6px",
+                                fontSize: 10.5,
+                                borderRadius: 5,
+                                border: `1.5px solid ${splitVideoSide === "left" ? "#0284c7" : "#cbd5e1"}`,
+                                background: splitVideoSide === "left" ? "#e0f2fe" : "#ffffff",
+                                color: splitVideoSide === "left" ? "#0369a1" : "#475569",
+                                fontWeight: splitVideoSide === "left" ? 800 : 500,
+                                cursor: "pointer",
+                              }}
+                            >
+                              ◀️ Vídeo na Esquerda | Fotos na Direita
+                            </button>
+                          </div>
+                        </div>
+
+                        {/* 2. Cor e Espessura da Linha Divisória */}
+                        <div style={{ marginBottom: 8, padding: "8px 10px", background: "#ffffff", borderRadius: 6, border: "1px solid #e2e8f0" }}>
+                          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 6 }}>
+                            <label style={{ fontSize: 11, fontWeight: 700, color: "#1e293b" }}>
+                              🎨 Cor da Linha Divisória:
+                            </label>
+                            <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
+                              <input
+                                type="color"
+                                value={splitDividerColor}
+                                onChange={(e) => {
+                                  setSplitDividerColor(e.target.value);
+                                  try { localStorage.setItem("viralizou_split_divider_color", e.target.value); } catch {}
+                                  cachedOverlayCanvasRef.current = null;
+                                }}
+                                style={{ width: 28, height: 24, border: "1px solid #cbd5e1", borderRadius: 4, cursor: "pointer", padding: 0 }}
+                                title="Personalizar cor da linha divisória"
+                              />
+                              <span style={{ fontSize: 10.5, fontFamily: "monospace", color: "#64748b", fontWeight: 700 }}>
+                                {splitDividerColor}
+                              </span>
+                            </div>
+                          </div>
+
+                          {/* Presets Rápidos de Cores */}
+                          <div style={{ display: "flex", gap: 4, flexWrap: "wrap", marginBottom: 6 }}>
+                            {[
+                              { label: "⚪ Branco", color: "#ffffff", border: "#cbd5e1" },
+                              { label: "🔴 Vermelho", color: "#ef4444", border: "#ef4444" },
+                              { label: "⚫ Preto", color: "#000000", border: "#000000" },
+                              { label: "🟡 Amarelo", color: "#eab308", border: "#eab308" },
+                              { label: "🔵 Azul", color: "#3b82f6", border: "#3b82f6" },
+                              { label: "🟢 Verde", color: "#10b981", border: "#10b981" },
+                            ].map((preset) => (
+                              <button
+                                key={preset.color}
+                                type="button"
+                                onClick={() => {
+                                  setSplitDividerColor(preset.color);
+                                  try { localStorage.setItem("viralizou_split_divider_color", preset.color); } catch {}
+                                  cachedOverlayCanvasRef.current = null;
+                                }}
+                                style={{
+                                  fontSize: 10,
+                                  padding: "2px 7px",
+                                  borderRadius: 4,
+                                  border: `1.5px solid ${splitDividerColor.toLowerCase() === preset.color.toLowerCase() ? "#0284c7" : preset.border}`,
+                                  background: splitDividerColor.toLowerCase() === preset.color.toLowerCase() ? "#e0f2fe" : "#ffffff",
+                                  color: "#1e293b",
+                                  fontWeight: splitDividerColor.toLowerCase() === preset.color.toLowerCase() ? 800 : 500,
+                                  cursor: "pointer",
+                                }}
+                              >
+                                {preset.label}
+                              </button>
+                            ))}
+                          </div>
+
+                          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+                            <span style={{ fontSize: 10.5, fontWeight: 600, color: "#475569" }}>
+                              Espessura: <b>{splitDividerWidth}px</b>
+                            </span>
+                            <input
+                              type="range"
+                              min={1}
+                              max={14}
+                              value={splitDividerWidth}
+                              onChange={(e) => {
+                                const val = Number(e.target.value);
+                                setSplitDividerWidth(val);
+                                try { localStorage.setItem("viralizou_split_divider_width", String(val)); } catch {}
+                                cachedOverlayCanvasRef.current = null;
+                              }}
+                              style={{ width: 130, accentColor: "#0284c7" }}
+                            />
+                          </div>
+                        </div>
+
+                        {/* 3. Fotos Empilhadas (Foto 1 Superior e Foto 2 Inferior) */}
+                        <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 6, marginBottom: 8 }}>
+                          {/* Foto 1 */}
+                          <div style={{ background: "#ffffff", padding: "6px 8px", borderRadius: 6, border: "1px solid #e2e8f0" }}>
+                            <div style={{ fontSize: 10.5, fontWeight: 700, color: "#1e293b", marginBottom: 3, display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+                              <span>📸 Foto 1 (Cima)</span>
+                              {splitImg1Url && (
+                                <button
+                                  type="button"
+                                  onClick={() => {
+                                    setSplitImg1Url("");
+                                    splitImg1Ref.current = null;
+                                    try { localStorage.removeItem("viralizou_split_img1"); } catch {}
+                                    cachedOverlayCanvasRef.current = null;
+                                  }}
+                                  style={{ background: "transparent", border: "none", color: "#dc2626", fontSize: 9.5, cursor: "pointer", fontWeight: 700 }}
+                                >
+                                  Remover
+                                </button>
+                              )}
+                            </div>
+                            {splitImg1Url ? (
+                              <div style={{ width: "100%", height: 46, borderRadius: 4, overflow: "hidden", marginBottom: 4, background: "#000" }}>
+                                <img src={splitImg1Url} alt="Foto 1" style={{ width: "100%", height: "100%", objectFit: "cover" }} />
+                              </div>
+                            ) : (
+                              <div style={{ fontSize: 9.5, color: "#94a3b8", marginBottom: 4, fontStyle: "italic" }}>
+                                {customImageUrl || selectedPost?.image_url ? "Usando foto do post" : "Nenhuma foto"}
+                              </div>
+                            )}
+                            <input
+                              type="file"
+                              accept="image/*"
+                              id="split-upload-img1"
+                              style={{ display: "none" }}
+                              onChange={(e) => {
+                                const file = e.target.files?.[0];
+                                if (file) {
+                                  const url = URL.createObjectURL(file);
+                                  setSplitImg1Url(url);
+                                  loadImage(url).then(img => {
+                                    splitImg1Ref.current = img;
+                                    cachedOverlayCanvasRef.current = null;
+                                  });
+                                }
+                              }}
+                            />
+                            <label
+                              htmlFor="split-upload-img1"
+                              style={{
+                                display: "block",
+                                textAlign: "center",
+                                padding: "3px 6px",
+                                fontSize: 10,
+                                fontWeight: 700,
+                                background: "#f1f5f9",
+                                color: "#334155",
+                                borderRadius: 4,
+                                cursor: "pointer",
+                                border: "1px solid #cbd5e1",
+                              }}
+                            >
+                              📁 Escolher Foto 1
+                            </label>
+                          </div>
+
+                          {/* Foto 2 */}
+                          <div style={{ background: "#ffffff", padding: "6px 8px", borderRadius: 6, border: "1px solid #e2e8f0" }}>
+                            <div style={{ fontSize: 10.5, fontWeight: 700, color: "#1e293b", marginBottom: 3, display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+                              <span>📸 Foto 2 (Baixo)</span>
+                              {splitImg2Url && (
+                                <button
+                                  type="button"
+                                  onClick={() => {
+                                    setSplitImg2Url("");
+                                    splitImg2Ref.current = null;
+                                    try { localStorage.removeItem("viralizou_split_img2"); } catch {}
+                                    cachedOverlayCanvasRef.current = null;
+                                  }}
+                                  style={{ background: "transparent", border: "none", color: "#dc2626", fontSize: 9.5, cursor: "pointer", fontWeight: 700 }}
+                                >
+                                  Remover
+                                </button>
+                              )}
+                            </div>
+                            {splitImg2Url ? (
+                              <div style={{ width: "100%", height: 46, borderRadius: 4, overflow: "hidden", marginBottom: 4, background: "#000" }}>
+                                <img src={splitImg2Url} alt="Foto 2" style={{ width: "100%", height: "100%", objectFit: "cover" }} />
+                              </div>
+                            ) : (
+                              <div style={{ fontSize: 9.5, color: "#94a3b8", marginBottom: 4, fontStyle: "italic" }}>
+                                Nenhuma foto
+                              </div>
+                            )}
+                            <input
+                              type="file"
+                              accept="image/*"
+                              id="split-upload-img2"
+                              style={{ display: "none" }}
+                              onChange={(e) => {
+                                const file = e.target.files?.[0];
+                                if (file) {
+                                  const url = URL.createObjectURL(file);
+                                  setSplitImg2Url(url);
+                                  loadImage(url).then(img => {
+                                    splitImg2Ref.current = img;
+                                    cachedOverlayCanvasRef.current = null;
+                                  });
+                                }
+                              }}
+                            />
+                            <label
+                              htmlFor="split-upload-img2"
+                              style={{
+                                display: "block",
+                                textAlign: "center",
+                                padding: "3px 6px",
+                                fontSize: 10,
+                                fontWeight: 700,
+                                background: "#f1f5f9",
+                                color: "#334155",
+                                borderRadius: 4,
+                                cursor: "pointer",
+                                border: "1px solid #cbd5e1",
+                              }}
+                            >
+                              📁 Escolher Foto 2
+                            </label>
+                          </div>
+                        </div>
+
+                        {/* 4. Cartão Superior de Notícia (Fundo Branco) */}
+                        <div style={{ background: "#ffffff", padding: "6px 8px", borderRadius: 6, border: "1px solid #e2e8f0" }}>
+                          <label style={{ fontSize: 10.5, fontWeight: 700, color: "#334155", display: "flex", alignItems: "center", gap: 5, cursor: "pointer" }}>
+                            <input
+                              type="checkbox"
+                              checked={splitTopCardEnabled}
+                              onChange={(e) => {
+                                setSplitTopCardEnabled(e.target.checked);
+                                try { localStorage.setItem("viralizou_split_top_card", String(e.target.checked)); } catch {}
+                                cachedOverlayCanvasRef.current = null;
+                              }}
+                            />
+                            <span>📰 Exibir Cartão Superior no Topo (Fundo Branco com Manchete)</span>
+                          </label>
+                          {splitTopCardEnabled && (
+                            <div style={{ marginTop: 6, display: "flex", gap: 6, alignItems: "center" }}>
+                              <span style={{ fontSize: 10, fontWeight: 600, color: "#64748b", whiteSpace: "nowrap" }}>
+                                Selo:
+                              </span>
+                              <input
+                                type="text"
+                                value={splitKickerText}
+                                onChange={(e) => {
+                                  setSplitKickerText(e.target.value);
+                                  try { localStorage.setItem("viralizou_split_kicker", e.target.value); } catch {}
+                                  cachedOverlayCanvasRef.current = null;
+                                }}
+                                placeholder="URGENTE"
+                                style={{ width: 110, fontSize: 10.5, padding: "3px 6px" }}
+                              />
+                              <small style={{ color: "#64748b", fontSize: 9.5 }}>
+                                Exibe o título no topo com o selo vermelho.
+                              </small>
+                            </div>
+                          )}
+                        </div>
+                      </div>
+                    )}
 
                     {videoFramingMode === "horizontal-block" && (
                       <div style={{ marginTop: 8, padding: "8px 10px", background: "#f8fafc", borderRadius: 6, border: "1px solid #e2e8f0" }}>
@@ -8972,43 +9959,55 @@ async function fixWebmDuration(blob: Blob, durationSec: number): Promise<Blob> {
             </div>
           )}
 
+          {/* PAINEL 5: CARROSSEL MULTISLIDE (4:5) */}
+          {activeTab === "carousel" && (
+            <div className="adminFeedTabPanel" style={{ display: "flex", flexDirection: "column", gap: 14 }}>
+              <CarouselFeedCreator
+                posts={posts}
+                initialPost={selectedPost}
+                onSelectPost={(p) => setSelectedPost(p)}
+              />
+            </div>
+          )}
 
-          {selectedPost && (
+          {activeTab !== "carousel" && selectedPost && (
             <div className="adminFeedSelected">
               <b>{selectedPost.title}</b>
               <span>{selectedPost.category} • {selectedPost.city}</span>
             </div>
           )}
 
-          <div className="adminFeedActions">
-            {(format === "feed" || format === "feed-square" || format === "reel-cover" || format === "story") && (
-              <button type="button" className="btn secondary" disabled={rendering} onClick={renderCard}>
-                {rendering ? "Gerando..." : "🔄 Atualizar prévia"}
-              </button>
-            )}
-            {(format === "feed" || format === "feed-square" || format === "reel-cover") && (
-              <button type="button" className="btn" disabled={(!selectedPost && !title && !customImageUrl) || rendering} onClick={downloadPng}>
-                {format === "feed-square" ? "⬇️ Baixar PNG 1080×1080" : format === "reel-cover" ? "⬇️ Baixar capa 1080×1350" : "⬇️ Baixar PNG 1080×1350"}
-              </button>
-            )}
-            {format === "story" && (
-              <>
-                <button type="button" className="btn" disabled={(!selectedPost && !title) || rendering} onClick={downloadPng}>
-                  ⬇️ Baixar Story PNG 1080×1920
+          {activeTab !== "carousel" && (
+            <div className="adminFeedActions">
+              {(format === "feed" || format === "feed-square" || format === "reel-cover" || format === "story") && (
+                <button type="button" className="btn secondary" disabled={rendering} onClick={renderCard}>
+                  {rendering ? "Gerando..." : "🔄 Atualizar prévia"}
                 </button>
-                {videoReady && (
-                  <button type="button" className="btn btnMiniIaAction" disabled={recording || rendering} onClick={createReel}>
-                    {recording ? `Gravando ${recordingProgress}%...` : `🎥 Gerar Story Vídeo (${MINI_IA_LEVELS[miniIaLevel].name.toUpperCase()})`}
+              )}
+              {(format === "feed" || format === "feed-square" || format === "reel-cover") && (
+                <button type="button" className="btn" disabled={(!selectedPost && !title && !customImageUrl) || rendering} onClick={downloadPng}>
+                  {format === "feed-square" ? "⬇️ Baixar PNG 1080×1080" : format === "reel-cover" ? "⬇️ Baixar capa 1080×1350" : "⬇️ Baixar PNG 1080×1350"}
+                </button>
+              )}
+              {format === "story" && (
+                <>
+                  <button type="button" className="btn" disabled={(!selectedPost && !title) || rendering} onClick={downloadPng}>
+                    ⬇️ Baixar Story PNG 1080×1920
                   </button>
-                )}
-              </>
-            )}
-            {format === "reel" && (
-              <button type="button" className="btn btnMiniIaAction" disabled={!videoReady || recording || rendering} onClick={createReel}>
-                {recording ? `Gravando ${recordingProgress}%...` : `🎥 Gerar Reel (${MINI_IA_LEVELS[miniIaLevel].name.toUpperCase()})`}
-              </button>
-            )}
-          </div>
+                  {videoReady && (
+                    <button type="button" className="btn btnMiniIaAction" disabled={recording || rendering} onClick={createReel}>
+                      {recording ? `Gravando ${recordingProgress}%...` : `🎥 Gerar Story Vídeo (${MINI_IA_LEVELS[miniIaLevel].name.toUpperCase()})`}
+                    </button>
+                  )}
+                </>
+              )}
+              {format === "reel" && (
+                <button type="button" className="btn btnMiniIaAction" disabled={!videoReady || recording || rendering} onClick={createReel}>
+                  {recording ? `Gravando ${recordingProgress}%...` : `🎥 Gerar Reel (${MINI_IA_LEVELS[miniIaLevel].name.toUpperCase()})`}
+                </button>
+              )}
+            </div>
+          )}
           {recording && <progress className="adminFeedRecordingProgress" max={100} value={recordingProgress} />}
           {renderLogs.length > 0 && (
             <div
@@ -9050,89 +10049,91 @@ async function fixWebmDuration(blob: Blob, durationSec: number): Promise<Blob> {
           )}
         </div>
 
-        <div className="adminFeedPreview">
-          <div className="adminFeedCanvasFrame" data-format={format} style={{ position: "relative" }}>
-            {/* Botão de Corte (Crop) Rápido Direto no Preview */}
-            {(videoUrl || customImageUrl || selectedPost?.image_url) && (
-              <div
-                style={{
-                  position: "absolute",
-                  top: 10,
-                  right: 10,
-                  zIndex: 40,
-                  display: "flex",
-                  gap: 6,
-                  alignItems: "center",
-                }}
-              >
-                <button
-                  type="button"
-                  onClick={(e) => {
-                    e.stopPropagation();
-                    if (videoUrl && (format === "reel" || format === "story")) {
-                      setCropMediaType("video");
-                    } else {
-                      setCropMediaType("image");
-                    }
-                    setShowCropModal(true);
-                  }}
+        {activeTab !== "carousel" && (
+          <div className="adminFeedPreview">
+            <div className="adminFeedCanvasFrame" data-format={format} style={{ position: "relative" }}>
+              {/* Botão de Corte (Crop) Rápido Direto no Preview */}
+              {(videoUrl || customImageUrl || selectedPost?.image_url) && (
+                <div
                   style={{
-                    background: "rgba(15, 23, 42, 0.88)",
-                    color: "#ffffff",
-                    border: "1px solid rgba(255, 255, 255, 0.25)",
-                    borderRadius: 8,
-                    padding: "6px 12px",
-                    fontSize: 11.5,
-                    fontWeight: 700,
-                    cursor: "pointer",
-                    display: "inline-flex",
-                    alignItems: "center",
+                    position: "absolute",
+                    top: 10,
+                    right: 10,
+                    zIndex: 40,
+                    display: "flex",
                     gap: 6,
-                    boxShadow: "0 4px 14px rgba(0,0,0,0.45)",
-                    backdropFilter: "blur(6px)",
-                    WebkitBackdropFilter: "blur(6px)",
-                    transition: "all 0.15s ease",
+                    alignItems: "center",
                   }}
-                  title="Ajustar corte (crop) da mídia visível no preview"
                 >
-                  <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="#38bdf8" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
-                    <path d="M6 2v14a2 2 0 0 0 2 2h14" />
-                    <path d="M18 22V8a2 2 0 0 0-2-2H2" />
-                  </svg>
-                  <span>✂️ Ajustar Corte</span>
-                  {((format === "reel" || format === "story") ? videoCrop : imageCrop) && (
-                    <span style={{ width: 7, height: 7, borderRadius: "50%", background: "#4ade80", display: "inline-block" }} />
-                  )}
-                </button>
+                  <button
+                    type="button"
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      if (videoUrl && (format === "reel" || format === "story")) {
+                        setCropMediaType("video");
+                      } else {
+                        setCropMediaType("image");
+                      }
+                      setShowCropModal(true);
+                    }}
+                    style={{
+                      background: "rgba(15, 23, 42, 0.88)",
+                      color: "#ffffff",
+                      border: "1px solid rgba(255, 255, 255, 0.25)",
+                      borderRadius: 8,
+                      padding: "6px 12px",
+                      fontSize: 11.5,
+                      fontWeight: 700,
+                      cursor: "pointer",
+                      display: "inline-flex",
+                      alignItems: "center",
+                      gap: 6,
+                      boxShadow: "0 4px 14px rgba(0,0,0,0.45)",
+                      backdropFilter: "blur(6px)",
+                      WebkitBackdropFilter: "blur(6px)",
+                      transition: "all 0.15s ease",
+                    }}
+                    title="Ajustar corte (crop) da mídia visível no preview"
+                  >
+                    <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="#38bdf8" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                      <path d="M6 2v14a2 2 0 0 0 2 2h14" />
+                      <path d="M18 22V8a2 2 0 0 0-2-2H2" />
+                    </svg>
+                    <span>✂️ Ajustar Corte</span>
+                    {((format === "reel" || format === "story") ? videoCrop : imageCrop) && (
+                      <span style={{ width: 7, height: 7, borderRadius: "50%", background: "#4ade80", display: "inline-block" }} />
+                    )}
+                  </button>
+                </div>
+              )}
+              <canvas
+                ref={canvasRef}
+                width={W}
+                height={getCanvasDimensions(format).height}
+                onPointerDown={onPreviewPointerDown}
+                onPointerMove={onPreviewPointerMove}
+                onPointerUp={onPreviewPointerUp}
+                onPointerCancel={onPreviewPointerUp}
+                style={{ cursor: logoData || format === "reel" || format === "story" || Boolean(title || selectedPost || customImageUrl) ? (draggingLogo ? "grabbing" : "grab") : "default", touchAction: "none" }}
+              />
+            </div>
+            <small>{format === "feed" ? "Formato Feed 4:5 · 1080×1350" : format === "feed-square" ? "Formato Feed quadrado 1:1 · 1080×1080" : format === "reel-cover" ? "Capa do Reels 4:5 · 1080×1350 (recorte da grade do perfil)" : format === "story" ? "Formato Story 9:16 · 1080×1920 (Área de Link)" : "Formato Reel 9:16 · 1080×1920"}</small>
+            {videoExport && (
+              <div className="adminFeedVideoResult">
+                <video src={videoExport.url} controls playsInline />
+                <div style={{ display: "flex", alignItems: "center", gap: 6, margin: "8px 0" }}>
+                  <span style={{ background: "#16a34a", color: "#fff", fontSize: 10, fontWeight: 800, padding: "3px 8px", borderRadius: 4 }}>
+                    ✅ 100% WhatsApp & Instagram
+                  </span>
+                  <small style={{ color: "#475569" }}>MP4 H.264 Main + AAC + Faststart</small>
+                </div>
+                <a className="btn" href={videoExport.url} download={videoExport.filename} style={{ background: "#16a34a", textDecoration: "none" }}>
+                  ⬇️ Baixar Vídeo MP4 (WhatsApp Pronto)
+                </a>
               </div>
             )}
-            <canvas
-              ref={canvasRef}
-              width={W}
-              height={getCanvasDimensions(format).height}
-              onPointerDown={onPreviewPointerDown}
-              onPointerMove={onPreviewPointerMove}
-              onPointerUp={onPreviewPointerUp}
-              onPointerCancel={onPreviewPointerUp}
-              style={{ cursor: logoData || format === "reel" || format === "story" || Boolean(title || selectedPost || customImageUrl) ? (draggingLogo ? "grabbing" : "grab") : "default", touchAction: "none" }}
-            />
           </div>
-          <small>{format === "feed" ? "Formato Feed 4:5 · 1080×1350" : format === "feed-square" ? "Formato Feed quadrado 1:1 · 1080×1080" : format === "reel-cover" ? "Capa do Reels 4:5 · 1080×1350 (recorte da grade do perfil)" : format === "story" ? "Formato Story 9:16 · 1080×1920 (Área de Link)" : "Formato Reel 9:16 · 1080×1920"}</small>
-          {videoExport && (
-            <div className="adminFeedVideoResult">
-              <video src={videoExport.url} controls playsInline />
-              <div style={{ display: "flex", alignItems: "center", gap: 6, margin: "8px 0" }}>
-                <span style={{ background: "#16a34a", color: "#fff", fontSize: 10, fontWeight: 800, padding: "3px 8px", borderRadius: 4 }}>
-                  ✅ 100% WhatsApp & Instagram
-                </span>
-                <small style={{ color: "#475569" }}>MP4 H.264 Main + AAC + Faststart</small>
-              </div>
-              <a className="btn" href={videoExport.url} download={videoExport.filename} style={{ background: "#16a34a", textDecoration: "none" }}>
-                ⬇️ Baixar Vídeo MP4 (WhatsApp Pronto)
-              </a>
-            </div>
-          )}
-        </div>
+        )}
       </div>
       <video
         ref={videoPreviewRef}

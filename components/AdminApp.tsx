@@ -10,9 +10,10 @@ import SocialFeedCreator from "@/components/SocialFeedCreator";
 import InstagramVideoDownloader from "@/components/InstagramVideoDownloader";
 import AudienceAnalytics from "@/components/AudienceAnalytics";
 import VideoCompressor from "@/components/VideoCompressor";
+import CarouselFeedCreator from "@/components/CarouselFeedCreator";
 import { executeBatchQueue } from "@/lib/batch-queue-client";
 
-type View = "list" | "form" | "import" | "categories" | "socials" | "queue" | "admins" | "feedCreator" | "instagramDownloader" | "analytics" | "videoCompressor";
+type View = "list" | "form" | "import" | "categories" | "socials" | "queue" | "admins" | "feedCreator" | "carouselCreator" | "instagramDownloader" | "analytics" | "videoCompressor";
 type FormState = {
   id?: string;
   title: string;
@@ -1767,7 +1768,8 @@ export default function AdminApp() {
             </a>
             <a href="#" onClick={(e) => { e.preventDefault(); setView("categories"); setCategoryMessage(""); }}>🗂️ Abas / editorias</a>
             <a href="#" onClick={(e) => { e.preventDefault(); setView("socials"); setSocialMessage(""); }}>📱 Redes Sociais</a>
-            <a href="#" onClick={(e) => { e.preventDefault(); setView("feedCreator"); setMessage(""); }}>🎨 Criador de Post Feed</a>
+            <a href="#" onClick={(e) => { e.preventDefault(); setView("feedCreator"); setMessage(""); }} style={{ background: view === "feedCreator" ? "rgba(255,255,255,0.12)" : undefined }}>🎨 Criador de Post Feed</a>
+            <a href="#" onClick={(e) => { e.preventDefault(); setView("carouselCreator"); setMessage(""); }} style={{ background: view === "carouselCreator" ? "rgba(255,255,255,0.12)" : undefined }}>🎠 Criador de Carrossel</a>
             <a href="#" onClick={(e) => { e.preventDefault(); setView("instagramDownloader"); setMessage(""); }}>⬇️ Baixar Vídeos (Insta / TikTok / X)</a>
             <a href="#" onClick={(e) => { e.preventDefault(); setView("videoCompressor"); setMessage(""); }} style={{ background: view === "videoCompressor" ? "rgba(255,255,255,0.12)" : undefined }}>🗜️ Compressor Vídeo WhatsApp</a>
             <a href="#" onClick={(e) => { e.preventDefault(); setView("analytics"); setMessage(""); }}>📊 Audiência & Patrocínio</a>
@@ -2089,6 +2091,17 @@ export default function AdminApp() {
                                 title="Criar card do feed ou reels para as redes sociais a partir desta notícia"
                               >
                                 🎨 Social
+                              </button>
+                              <button
+                                className="btn secondary"
+                                style={{ padding: "4px 8px", fontSize: 11, background: "#fee2e2", color: "#991b1b", border: "1px solid #fca5a5" }}
+                                onClick={() => {
+                                  setSelectedSocialPost(p);
+                                  setView("carouselCreator");
+                                }}
+                                title="Criar carrossel multislide para o Instagram a partir desta notícia"
+                              >
+                                🎠 Carrossel
                               </button>
                               {p.status === "archived" ? (
                                 <button
@@ -2869,6 +2882,21 @@ export default function AdminApp() {
                 }}
                 onOpenCompressor={() => setView("videoCompressor")}
               />
+            )}
+
+            {/* Criador de Carrossel Multislide para o Instagram */}
+            {view === "carouselCreator" && (
+              <section className="panel" style={{ padding: "18px 20px", background: "#06070a", border: "1px solid #1e2230" }}>
+                <CarouselFeedCreator
+                  posts={posts}
+                  initialPost={selectedSocialPost}
+                  onBack={() => {
+                    setSelectedSocialPost(null);
+                    setView("list");
+                  }}
+                  onSelectPost={(p) => setSelectedSocialPost(p)}
+                />
+              </section>
             )}
 
             {/* Downloader de vídeos públicos do Instagram — somente no painel administrativo */}
