@@ -51,6 +51,7 @@ try {
 }
 
 const nextConfig: NextConfig = {
+  turbopack: {},
   poweredByHeader: false,
   typescript: {
     ignoreBuildErrors: true,

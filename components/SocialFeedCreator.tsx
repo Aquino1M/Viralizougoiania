@@ -206,10 +206,6 @@ const DEFAULT_PRESET_SLOTS: LayoutPresetSlot[] = [
       hookPositionY: 307,
       bgmVolume: 15,
       videoBlockPosY: 0.44,
-      topHeadline: "QUE LAPADA!",
-      authorName: "GUSTAVO GAYER",
-      authorHandle: "@GUSTAVOGAYER",
-      authorVerified: true,
       customSaturation: 1.0,
       customContrast: 1.0,
       customBrightness: 1.0,
@@ -218,12 +214,12 @@ const DEFAULT_PRESET_SLOTS: LayoutPresetSlot[] = [
   },
   {
     id: 2,
-    name: "🏛️ Debate Político (Horizontal)",
-    summary: "Reels 9:16 · Vídeo Bloco 16:9 · Bicolor & Selo",
+    name: "🎬 Bloco Noticioso (Horizontal 16:9)",
+    summary: "Reels 9:16 · Vídeo Bloco 16:9 · Bicolor Amarelo/Branco",
     savedAt: "Padrão",
     data: {
       format: "reel",
-      reelTextStyle: "viral-debate",
+      reelTextStyle: "bicolor-yellow",
       reelFontFamily: "montserrat",
       reelFontWeight: "900",
       reelTextAlign: "center",
@@ -259,10 +255,6 @@ const DEFAULT_PRESET_SLOTS: LayoutPresetSlot[] = [
       autoHookEnabled: false,
       autoHookText: "",
       videoBlockPosY: 0.44,
-      topHeadline: "QUE LAPADA!",
-      authorName: "GUSTAVO GAYER",
-      authorHandle: "@GUSTAVOGAYER",
-      authorVerified: true,
       customSaturation: 1.0,
       customContrast: 1.0,
       customBrightness: 1.0,
@@ -312,10 +304,6 @@ const DEFAULT_PRESET_SLOTS: LayoutPresetSlot[] = [
       autoHookEnabled: false,
       autoHookText: "",
       videoBlockPosY: 0.44,
-      topHeadline: "QUE LAPADA!",
-      authorName: "GUSTAVO GAYER",
-      authorHandle: "@GUSTAVOGAYER",
-      authorVerified: true,
       customSaturation: 1.0,
       customContrast: 1.0,
       customBrightness: 1.0,
@@ -593,15 +581,23 @@ function drawVideoWithFraming(
 
   // Aplica Grade de Cores e Contraste Personalizável (Saturação, Contraste, Brilho e Filtro)
   if (miniIaConfig) {
-    const satMult = (miniIaConfig.customSaturation ?? 100) / 100;
-    const conMult = (miniIaConfig.customContrast ?? 100) / 100;
-    const briAdd = (miniIaConfig.customBrightness ?? 0) / 100;
+    const rawSat = typeof miniIaConfig.customSaturation === "number" ? miniIaConfig.customSaturation : 1.0;
+    const satMult = rawSat > 3 ? rawSat / 100 : rawSat;
+
+    const rawCon = typeof miniIaConfig.customContrast === "number" ? miniIaConfig.customContrast : 1.0;
+    const conMult = rawCon > 3 ? rawCon / 100 : rawCon;
+
+    const rawBri = typeof miniIaConfig.customBrightness === "number" ? miniIaConfig.customBrightness : 1.0;
+    const briMult = rawBri > 3 ? rawBri / 100 : rawBri;
+
     const effC = Math.max(0.2, (miniIaConfig.contrast || 1.0) * conMult);
-    const effB = Math.max(0.2, (1 + (miniIaConfig.brightness || 0)) + briAdd);
+    const effB = Math.max(0.2, (miniIaConfig.brightness ? 1 + miniIaConfig.brightness : 1.0) * briMult);
     const effS = Math.max(0, (miniIaConfig.saturation || 1.0) * satMult);
 
     let filterString = `contrast(${effC.toFixed(2)}) brightness(${effB.toFixed(2)}) saturate(${effS.toFixed(2)})`;
-    if (miniIaConfig.filterPreset && miniIaConfig.filterPreset !== "none") {
+    if (Math.abs(effC - 1.0) < 0.02 && Math.abs(effB - 1.0) < 0.02 && Math.abs(effS - 1.0) < 0.02 && (!miniIaConfig.filterPreset || miniIaConfig.filterPreset === "none")) {
+      filterString = "none";
+    } else if (miniIaConfig.filterPreset && miniIaConfig.filterPreset !== "none") {
       const extra = VIDEO_FILTERS[miniIaConfig.filterPreset]?.canvasFilter;
       if (extra && extra !== "none") {
         filterString = `${filterString} ${extra}`;
@@ -1781,8 +1777,8 @@ function renderCaptionStyleToContext(
     return;
   }
 
-  // 4.5. ESTILO BICOLOR IMPACTO (Amarelo & Branco - Foto 1/Debate & Foto 2)
-  if (textStyle === "bicolor-yellow" || textStyle === "viral-debate") {
+  // 4.5. ESTILO BICOLOR IMPACTO (Amarelo & Branco - Manchete Vibrante)
+  if (textStyle === "bicolor-yellow") {
     let curY = centerY - layout.height / 2 + layout.lineHeight * 0.5;
     for (let i = 0; i < linesToDraw.length; i++) {
       const line = linesToDraw[i];
@@ -2023,78 +2019,6 @@ function drawReelHeadline(
     authorVerified?: boolean;
   }
 ) {
-  // Estilo Debate Político (Vídeo Horizontal - Imagem 1 de referência)
-  if (textStyle === "viral-debate") {
-    ctx.save();
-    ctx.imageSmoothingEnabled = true;
-    ctx.imageSmoothingQuality = "high";
-    (ctx as any).textRendering = "geometricPrecision";
-
-    // 1. Manchete Punch do Topo ("QUE LAPADA!")
-    const topText = (debateMeta?.topHeadline || category || "QUE LAPADA!").trim().toUpperCase();
-    const topY = Math.round(canvasHeight * 0.10);
-    const topFontSize = Math.min(84, Math.max(54, fontSize > 0 ? fontSize : 68));
-    ctx.font = getReelFont(fontFamily || "montserrat", topFontSize, "900");
-    ctx.textAlign = "center";
-    ctx.textBaseline = "middle";
-
-    ctx.save();
-    ctx.shadowColor = "rgba(0, 0, 0, 0.98)";
-    ctx.shadowBlur = 24;
-    ctx.shadowOffsetY = 6;
-    ctx.lineWidth = Math.max(7, Math.round(topFontSize * 0.13));
-    ctx.strokeStyle = "#000000";
-    ctx.lineJoin = "round";
-    ctx.strokeText(topText, W / 2, topY);
-    ctx.fillStyle = "#ffffff";
-    ctx.fillText(topText, W / 2, topY);
-    ctx.restore();
-
-    // 2. Manchete Inferior Bicolor Noticiosa
-    const bottomY = typeof position?.y === "number" && position.y > 0 && position.y < 1
-      ? Math.round(position.y * canvasHeight)
-      : Math.round(canvasHeight * 0.70);
-
-    const effFontSize = fontSize > 0 ? Math.min(fontSize, 54) : 48;
-    ctx.font = getReelFont(fontFamily || "montserrat", effFontSize, "900");
-    const layout = getCachedReelTitleLayout(ctx, headline, fontFamily || "montserrat", "900", textCase || "uppercase", effFontSize, maxWidth);
-
-    const lineH = Math.round(effFontSize * 1.18);
-    const totalH = layout.lines.length * lineH;
-    let curY = bottomY - totalH / 2;
-
-    for (let i = 0; i < layout.lines.length; i++) {
-      const line = layout.lines[i];
-      if (line) {
-        ctx.save();
-        ctx.shadowColor = "rgba(0, 0, 0, 0.98)";
-        ctx.shadowBlur = 18;
-        ctx.shadowOffsetY = 5;
-        ctx.textAlign = textAlign || "center";
-        ctx.textBaseline = "middle";
-        const strokeW = Math.max(6, Math.round(effFontSize * 0.12));
-        ctx.lineWidth = strokeW;
-        ctx.strokeStyle = "#000000";
-        ctx.lineJoin = "round";
-        ctx.strokeText(line, W / 2, curY);
-        ctx.fillStyle = i % 2 === 0 ? "#ffffff" : "#ffd700";
-        ctx.fillText(line, W / 2, curY);
-        ctx.restore();
-      }
-      curY += lineH;
-    }
-
-    // 3. Cartão do Autor / Orador com Avatar e Selo Verificado (Estilo Foto 1)
-    const authorY = curY + 44;
-    const authorName = debateMeta?.authorName || "GUSTAVO GAYER";
-    const authorHandle = debateMeta?.authorHandle || "@GUSTAVOGAYER";
-    const authorVerified = debateMeta?.authorVerified !== false;
-    drawAuthorBadgeCard(ctx, authorName, authorHandle, authorVerified, 72, authorY);
-
-    ctx.restore();
-    return;
-  }
-
   // Estilo Bloco Vermelho Notícia (TVT / Notícias): Fundo vermelho sólido cobrindo o terço inferior + manchete branca à esquerda + rodapé clean
   if (textStyle === "red-bottom") {
     const defaultBannerY = Math.round(canvasHeight * 0.615); // ~1180px em 1920
@@ -3413,16 +3337,26 @@ export default function SocialFeedCreator({ posts, onBack, initialPost, onOpenCo
   const [playingSfxId, setPlayingSfxId] = useState<string | null>(null);
   const [sfxVolume, setSfxVolume] = useState<number>(35);
   const [showVercelTokenModal, setShowVercelTokenModal] = useState<boolean>(false);
+  const [manualRealOficialToken, setManualRealOficialToken] = useState<string>("");
   const sfxAudioRef = useRef<HTMLAudioElement | null>(null);
 
   useEffect(() => {
-    fetch("/api/admin/real-oficial")
+    let localToken = "";
+    try {
+      localToken = localStorage.getItem("viralizou_real_oficial_token") || "";
+      if (localToken) setManualRealOficialToken(localToken);
+    } catch {}
+
+    const query = localToken ? `?token=${encodeURIComponent(localToken)}` : "";
+    fetch(`/api/admin/real-oficial${query}`)
       .then((res) => res.json())
       .then((data) => {
         if (data.ok) {
-          if (data.status) setRealOficialStatus(data.status);
-          if (Array.isArray(data.sfx) && data.sfx.length > 0) {
-            setRealOficialSfxList(data.sfx);
+          const statusObj = data.status || data.tokenStatus;
+          if (statusObj) setRealOficialStatus(statusObj);
+          const sfxList = data.sfx || data.sfxCatalog;
+          if (Array.isArray(sfxList) && sfxList.length > 0) {
+            setRealOficialSfxList(sfxList);
           }
         }
       })
@@ -3889,7 +3823,13 @@ export default function SocialFeedCreator({ posts, onBack, initialPost, onOpenCo
 
       if (savedLogo) setLogoData(savedLogo);
       if (savedHandle) setHandle(savedHandle);
-      if (savedTextStyle) setReelTextStyle(savedTextStyle);
+      if (savedTextStyle) {
+        if ((savedTextStyle as string) === "viral-debate") {
+          setReelTextStyle("bicolor-yellow");
+        } else {
+          setReelTextStyle(savedTextStyle);
+        }
+      }
       if (savedFontFamily) setReelFontFamily(savedFontFamily);
       if (savedFontWeight) setReelFontWeight(savedFontWeight);
       if (savedTextAlign) setReelTextAlign(savedTextAlign);
@@ -3897,7 +3837,8 @@ export default function SocialFeedCreator({ posts, onBack, initialPost, onOpenCo
       if (Number.isFinite(savedFontSize) && savedFontSize >= 24 && savedFontSize <= 120) setReelFontSize(savedFontSize);
       if (savedTagColor) setTagColor(savedTagColor);
       if (Number.isFinite(savedTagPosY) && savedTagPosY >= 1400 && savedTagPosY <= 1860) setTagPositionY(savedTagPosY);
-      if (savedSafeZone !== null) setShowSafeZone(savedSafeZone === "true");
+      // Safe Zone inicia oculta por padrão no preview
+      setShowSafeZone(false);
       if (savedTextAnim) setReelTextAnimation(savedTextAnim);
       if (savedWarning === "true") setShowStrongSceneWarning(true);
       if (Number.isFinite(savedLogoScale) && savedLogoScale >= 50 && savedLogoScale <= 150) setLogoScale(savedLogoScale);
@@ -5350,31 +5291,31 @@ export default function SocialFeedCreator({ posts, onBack, initialPost, onOpenCo
       }
     }
 
-    // 0.1. BLOCO DE VÍDEO HORIZONTAL (Arraste livre delimitado no preview sem sair da tela)
-    if (videoFramingMode === "horizontal-block" && !lockedLayers["video"] && videoPreviewRef.current) {
-      const v = videoPreviewRef.current;
-      const fullWidth = v.videoWidth || 1920;
-      const fullHeight = v.videoHeight || 1080;
-      const vAspect = fullHeight / fullWidth;
-      const blockH = Math.round(currentW * (vAspect > 0 ? vAspect : 9 / 16));
-      const normY = videoBlockPosYRef.current ?? videoBlockPosY;
-      const blockY = Math.max(0, Math.min(currentH - blockH, Math.round(normY * currentH - blockH / 2)));
-      const rect = event.currentTarget.getBoundingClientRect();
-      const y = ((event.clientY - rect.top) / rect.height) * currentH;
-
-      if (y >= blockY && y <= blockY + blockH) {
-        event.preventDefault();
-        event.currentTarget.setPointerCapture(event.pointerId);
-        videoDragRef.current = {
-          pointerId: event.pointerId,
-          offsetY: y - normY * currentH,
-        };
-        setDraggingLogo(true);
-        return;
+    // 1. LOGO MARCA D'ÁGUA (Arraste de alta prioridade na frente)
+    if (!lockedLayers["logo"] && showLogoLayer) {
+      const logo = logoImageRef.current || getRenderableLogo(null, logoColorStyle);
+      if (logo && isImageDrawable(logo)) {
+        const rect = event.currentTarget.getBoundingClientRect();
+        const x = ((event.clientX - rect.left) / rect.width) * currentW;
+        const y = ((event.clientY - rect.top) / rect.height) * currentH;
+        const { width, height } = getLogoSize(logo, format, format === "reel" || format === "story" ? logoScale / 100 : 1);
+        const centerX = logoPositionRef.current.x * currentW;
+        const centerY = logoPositionRef.current.y * currentH;
+        const boxW = Math.max(120, width + 60);
+        const boxH = Math.max(120, height + 60);
+        if (x >= centerX - boxW / 2 && x <= centerX + boxW / 2 && y >= centerY - boxH / 2 && y <= centerY + boxH / 2) {
+          event.preventDefault();
+          event.currentTarget.setPointerCapture(event.pointerId);
+          cachedOverlayCanvasRef.current = null;
+          logoDragRef.current = { pointerId: event.pointerId, offsetX: x / currentW - logoPositionRef.current.x, offsetY: y / currentH - logoPositionRef.current.y };
+          setDraggingLogo(true);
+          return;
+        }
       }
     }
 
-    if (!lockedLayers["title"] && (format === "reel" || format === "story")) {
+    // 2. TÍTULO / MANCHETE (Arraste livre no Reel e Story)
+    if (!lockedLayers["title"] && showTitleLayer && (format === "reel" || format === "story")) {
       const ctx = event.currentTarget.getContext("2d");
       if (ctx) {
         const rect = event.currentTarget.getBoundingClientRect();
@@ -5386,7 +5327,7 @@ export default function SocialFeedCreator({ posts, onBack, initialPost, onOpenCo
           const redBarH = currentH <= 1100 ? 120 : currentH <= 1400 ? 136 : 156;
           const currentTopY = Math.round((titlePositionRef.current.y || 0.58) * currentH);
           const totalBacciH = darkBoxH + redBarH;
-          if (y >= currentTopY - 20 && y <= currentTopY + totalBacciH + 20) {
+          if (y >= currentTopY - 25 && y <= currentTopY + totalBacciH + 25) {
             event.preventDefault();
             event.currentTarget.setPointerCapture(event.pointerId);
             titleDragRef.current = {
@@ -5399,7 +5340,7 @@ export default function SocialFeedCreator({ posts, onBack, initialPost, onOpenCo
           }
         } else if (reelTextStyle === "red-bottom") {
           const currentBannerY = Math.round((titlePositionRef.current.y || 0.615) * currentH);
-          if (y >= currentBannerY - 20 && y <= currentH) {
+          if (y >= currentBannerY - 25 && y <= currentH) {
             event.preventDefault();
             event.currentTarget.setPointerCapture(event.pointerId);
             titleDragRef.current = {
@@ -5414,7 +5355,9 @@ export default function SocialFeedCreator({ posts, onBack, initialPost, onOpenCo
           const layout = getCachedReelTitleLayout(ctx, title || selectedPost?.title || "", reelFontFamily, reelFontWeight, reelTextCase, reelFontSize, 820);
           const centerX = titlePositionRef.current.x * currentW;
           const centerY = titlePositionRef.current.y * currentH;
-          if (x >= centerX - layout.width / 2 - 20 && x <= centerX + layout.width / 2 + 20 && y >= centerY - layout.height / 2 - 20 && y <= centerY + layout.height / 2 + 20) {
+          const boxW = Math.max(200, layout.width + 70);
+          const boxH = Math.max(100, layout.height + 70);
+          if (x >= centerX - boxW / 2 && x <= centerX + boxW / 2 && y >= centerY - boxH / 2 && y <= centerY + boxH / 2) {
             event.preventDefault();
             event.currentTarget.setPointerCapture(event.pointerId);
             titleDragRef.current = { pointerId: event.pointerId, offsetX: x / currentW - titlePositionRef.current.x, offsetY: y / currentH - titlePositionRef.current.y };
@@ -5425,7 +5368,8 @@ export default function SocialFeedCreator({ posts, onBack, initialPost, onOpenCo
       }
     }
 
-    if (!lockedLayers["title"] && (format === "feed" || format === "feed-square")) {
+    // 2.1 TÍTULO DO FEED (Feed 4:5 e Feed 1:1)
+    if (!lockedLayers["title"] && showTitleLayer && (format === "feed" || format === "feed-square")) {
       const ctx = event.currentTarget.getContext("2d");
       if (ctx) {
         const fitted = fitHeadline(ctx, (title || selectedPost?.title || "Título da notícia").trim(), 920, feedTitleFontSize, feedFontFamily);
@@ -5437,7 +5381,9 @@ export default function SocialFeedCreator({ posts, onBack, initialPost, onOpenCo
         const y = ((event.clientY - rect.top) / rect.height) * currentH;
         const centerX = feedTitlePositionRef.current.x * currentW;
         const centerY = feedTitlePositionRef.current.y * currentH;
-        if (x >= centerX - width / 2 - 24 && x <= centerX + width / 2 + 24 && y >= centerY - height / 2 - 24 && y <= centerY + height / 2 + 24) {
+        const boxW = Math.max(200, width + 70);
+        const boxH = Math.max(100, height + 70);
+        if (x >= centerX - boxW / 2 && x <= centerX + boxW / 2 && y >= centerY - boxH / 2 && y <= centerY + boxH / 2) {
           event.preventDefault();
           event.currentTarget.setPointerCapture(event.pointerId);
           titleDragRef.current = { pointerId: event.pointerId, offsetX: x / currentW - feedTitlePositionRef.current.x, offsetY: y / currentH - feedTitlePositionRef.current.y };
@@ -5464,12 +5410,14 @@ export default function SocialFeedCreator({ posts, onBack, initialPost, onOpenCo
       const tagH = handleFontSize + 32;
       const centerX = currentW / 2;
       const centerY = currentTagY;
+      const boxW = Math.max(200, estWidth + 60);
+      const boxH = Math.max(70, tagH + 50);
 
       if (
-        x >= centerX - estWidth / 2 - 50 &&
-        x <= centerX + estWidth / 2 + 50 &&
-        y >= centerY - tagH / 2 - 35 &&
-        y <= centerY + tagH / 2 + 35
+        x >= centerX - boxW / 2 &&
+        x <= centerX + boxW / 2 &&
+        y >= centerY - boxH / 2 &&
+        y <= centerY + boxH / 2
       ) {
         event.preventDefault();
         event.currentTarget.setPointerCapture(event.pointerId);
@@ -5483,22 +5431,27 @@ export default function SocialFeedCreator({ posts, onBack, initialPost, onOpenCo
       }
     }
 
-    if (!lockedLayers["logo"]) {
-      const logo = logoImageRef.current || getRenderableLogo(null, logoColorStyle);
-      if (logo && isImageDrawable(logo)) {
-        const rect = event.currentTarget.getBoundingClientRect();
-        const x = ((event.clientX - rect.left) / rect.width) * currentW;
-        const y = ((event.clientY - rect.top) / rect.height) * currentH;
-        const { width, height } = getLogoSize(logo, format, format === "reel" || format === "story" ? logoScale / 100 : 1);
-        const centerX = logoPositionRef.current.x * currentW;
-        const centerY = logoPositionRef.current.y * currentH;
-        if (x >= centerX - width / 2 && x <= centerX + width / 2 && y >= centerY - height / 2 && y <= centerY + height / 2) {
-          event.preventDefault();
-          event.currentTarget.setPointerCapture(event.pointerId);
-          cachedOverlayCanvasRef.current = null;
-          logoDragRef.current = { pointerId: event.pointerId, offsetX: x / currentW - logoPositionRef.current.x, offsetY: y / currentH - logoPositionRef.current.y };
-          setDraggingLogo(true);
-        }
+    // 4. BLOCO DE VÍDEO HORIZONTAL (Verificado após camadas de frente)
+    if (videoFramingMode === "horizontal-block" && !lockedLayers["video"] && videoPreviewRef.current) {
+      const v = videoPreviewRef.current;
+      const fullWidth = v.videoWidth || 1920;
+      const fullHeight = v.videoHeight || 1080;
+      const vAspect = fullHeight / fullWidth;
+      const blockH = Math.round(currentW * (vAspect > 0 ? vAspect : 9 / 16));
+      const normY = videoBlockPosYRef.current ?? videoBlockPosY;
+      const blockY = Math.max(0, Math.min(currentH - blockH, Math.round(normY * currentH - blockH / 2)));
+      const rect = event.currentTarget.getBoundingClientRect();
+      const y = ((event.clientY - rect.top) / rect.height) * currentH;
+
+      if (y >= blockY && y <= blockY + blockH) {
+        event.preventDefault();
+        event.currentTarget.setPointerCapture(event.pointerId);
+        videoDragRef.current = {
+          pointerId: event.pointerId,
+          offsetY: y - normY * currentH,
+        };
+        setDraggingLogo(true);
+        return;
       }
     }
   }
@@ -8174,7 +8127,7 @@ async function fixWebmDuration(blob: Blob, durationSec: number): Promise<Blob> {
                     🎨 Filtros de Cor & Estilo Visual
                   </span>
                   <span style={{ fontSize: 10.5, color: "#94a3b8" }}>
-                    {VIDEO_FILTERS[videoFilter]?.name || "Natural"}
+                    {VIDEO_FILTERS[videoFilter]?.name || "Original"}
                   </span>
                 </div>
                 <div className="miniIaFilterGrid">
@@ -8337,7 +8290,7 @@ async function fixWebmDuration(blob: Blob, durationSec: number): Promise<Blob> {
                   <span>Modo Ativo: <b style={{ textTransform: "uppercase" }}>{MINI_IA_LEVELS[miniIaLevel].name}</b></span>
                   <span>Velocidade: <b>{MINI_IA_LEVELS[miniIaLevel].speed}x</b> · Áudio: <b>{MINI_IA_LEVELS[miniIaLevel].loudnessTarget} LUFS</b></span>
                   <span>Corte Inicial: <b>{miniIaTrimSeconds}s {miniIaTrimSeconds === 3 ? "(Padrão ⭐)" : ""}</b></span>
-                  <span>Filtro: <b>{VIDEO_FILTERS[videoFilter]?.name || "Natural"}</b></span>
+                  <span>Filtro: <b>{VIDEO_FILTERS[videoFilter]?.name || "Original"}</b></span>
                 </div>
                 <p className="miniIaDetailText">
                   {MINI_IA_LEVELS[miniIaLevel].description}
@@ -8452,7 +8405,7 @@ async function fixWebmDuration(blob: Blob, durationSec: number): Promise<Blob> {
             />
             <small>Arraste o título na prévia para escolher onde ele aparece{format === "feed" ? "; a posição é salva neste navegador." : "."}</small>
 
-            {reelTextStyle === "viral-debate" && (
+            {videoFramingMode === "horizontal-block" && (
               <div
                 style={{
                   marginTop: 12,
@@ -8462,110 +8415,42 @@ async function fixWebmDuration(blob: Blob, durationSec: number): Promise<Blob> {
                   borderRadius: 10,
                 }}
               >
-                <div style={{ fontSize: 13, fontWeight: 800, color: "#93c5fd", marginBottom: 10, display: "flex", alignItems: "center", gap: 6 }}>
-                  <span>🏛️</span> Configurações do Debate Político / Vídeo Horizontal
-                </div>
-
-                <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "8px 12px", marginBottom: 10 }}>
-                  <div>
-                    <label style={{ fontSize: 11, fontWeight: 700, color: "#cbd5e1", marginBottom: 4, display: "block" }}>
-                      💥 Manchete de Topo (Grito/Impacto):
-                    </label>
-                    <input
-                      type="text"
-                      value={topHeadline}
-                      onChange={(e) => {
-                        setTopHeadline(e.target.value);
-                        cachedOverlayCanvasRef.current = null;
-                      }}
-                      placeholder="Ex: QUE LAPADA!"
-                      style={{ width: "100%", fontSize: 12, fontWeight: 800, padding: "5px 8px" }}
-                    />
-                  </div>
-                  <div>
-                    <label style={{ fontSize: 11, fontWeight: 700, color: "#cbd5e1", marginBottom: 4, display: "block" }}>
-                      👤 Nome do Orador / Político:
-                    </label>
-                    <input
-                      type="text"
-                      value={authorName}
-                      onChange={(e) => {
-                        setAuthorName(e.target.value);
-                        cachedOverlayCanvasRef.current = null;
-                      }}
-                      placeholder="Ex: GUSTAVO GAYER"
-                      style={{ width: "100%", fontSize: 12, fontWeight: 700, padding: "5px 8px" }}
-                    />
-                  </div>
-                  <div>
-                    <label style={{ fontSize: 11, fontWeight: 700, color: "#cbd5e1", marginBottom: 4, display: "block" }}>
-                      @ Rede Social / Handle:
-                    </label>
-                    <input
-                      type="text"
-                      value={authorHandle}
-                      onChange={(e) => {
-                        setAuthorHandle(e.target.value);
-                        cachedOverlayCanvasRef.current = null;
-                      }}
-                      placeholder="Ex: @GUSTAVOGAYER"
-                      style={{ width: "100%", fontSize: 12, padding: "5px 8px" }}
-                    />
-                  </div>
-                  <div style={{ display: "flex", alignItems: "center", paddingTop: 18 }}>
-                    <label style={{ display: "flex", alignItems: "center", gap: 6, fontSize: 11.5, fontWeight: 700, color: "#60a5fa", cursor: "pointer" }}>
-                      <input
-                        type="checkbox"
-                        checked={authorVerified}
-                        onChange={(e) => {
-                          setAuthorVerified(e.target.checked);
-                          cachedOverlayCanvasRef.current = null;
-                        }}
-                        style={{ accentColor: "#3b82f6" }}
-                      />
-                      <span>✓ Selo de Verificado Oficial</span>
-                    </label>
-                  </div>
-                </div>
-
-                <div style={{ borderTop: "1px dashed rgba(147, 197, 253, 0.25)", paddingTop: 8 }}>
-                  <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 4 }}>
-                    <span style={{ fontSize: 11, fontWeight: 700, color: "#bfdbfe" }}>
-                      ↕️ Posição Vertical do Bloco de Vídeo: <b style={{ color: "#60a5fa" }}>{Math.round(videoBlockPosY * 100)}%</b>
-                    </span>
-                    <button
-                      type="button"
-                      className="captionTagBadge"
-                      onClick={() => {
-                        setVideoBlockPosY(0.44);
-                        videoBlockPosYRef.current = 0.44;
-                        try { localStorage.setItem("viralizou_video_block_pos_y", "0.44"); } catch {}
-                        cachedOverlayCanvasRef.current = null;
-                      }}
-                      style={{ fontSize: 10, padding: "2px 6px" }}
-                    >
-                      Reset (44%)
-                    </button>
-                  </div>
-                  <input
-                    type="range"
-                    min={20}
-                    max={75}
-                    step={1}
-                    value={Math.round(videoBlockPosY * 100)}
-                    onChange={(e) => {
-                      const val = Number(e.target.value) / 100;
-                      setVideoBlockPosY(val);
-                      videoBlockPosYRef.current = val;
-                      try { localStorage.setItem("viralizou_video_block_pos_y", String(val)); } catch {}
+                <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 4 }}>
+                  <span style={{ fontSize: 11, fontWeight: 700, color: "#bfdbfe" }}>
+                    ↕️ Posição Vertical do Bloco de Vídeo (16:9): <b style={{ color: "#60a5fa" }}>{Math.round(videoBlockPosY * 100)}%</b>
+                  </span>
+                  <button
+                    type="button"
+                    className="captionTagBadge"
+                    onClick={() => {
+                      setVideoBlockPosY(0.44);
+                      videoBlockPosYRef.current = 0.44;
+                      try { localStorage.setItem("viralizou_video_block_pos_y", "0.44"); } catch {}
                       cachedOverlayCanvasRef.current = null;
                     }}
-                    style={{ width: "100%", accentColor: "#3b82f6" }}
-                  />
-                  <small style={{ color: "#93c5fd", fontSize: 10.5, display: "block", marginTop: 4 }}>
-                    💡 Dica: Arraste o bloco de vídeo diretamente na tela de prévia! As linhas guias azuis/roxas ajudarão a centralizar com precisão magnética.
-                  </small>
+                    style={{ fontSize: 10, padding: "2px 6px" }}
+                  >
+                    Reset (44%)
+                  </button>
                 </div>
+                <input
+                  type="range"
+                  min={20}
+                  max={75}
+                  step={1}
+                  value={Math.round(videoBlockPosY * 100)}
+                  onChange={(e) => {
+                    const val = Number(e.target.value) / 100;
+                    setVideoBlockPosY(val);
+                    videoBlockPosYRef.current = val;
+                    try { localStorage.setItem("viralizou_video_block_pos_y", String(val)); } catch {}
+                    cachedOverlayCanvasRef.current = null;
+                  }}
+                  style={{ width: "100%", accentColor: "#3b82f6" }}
+                />
+                <small style={{ color: "#93c5fd", fontSize: 10.5, display: "block", marginTop: 4 }}>
+                  💡 Dica: Você também pode arrastar o bloco de vídeo diretamente na tela de prévia!
+                </small>
               </div>
             )}
 
@@ -8955,29 +8840,6 @@ async function fixWebmDuration(blob: Blob, durationSec: number): Promise<Blob> {
                   title="Estilo Bacci Notícias: Bloco escuro com logo circular 3D sem bordas brancas + manchete + tarja vermelha de TV com redes sociais"
                 >
                   📺 Estilo Bacci (Tarja Vermelha & Logo Circular)
-                </button>
-                <button
-                  type="button"
-                  className={`captionStyleBtn ${reelTextStyle === "viral-debate" ? "active" : ""}`}
-                  onClick={() => {
-                    chooseReelTextStyle("viral-debate");
-                    setVideoFramingMode("horizontal-block");
-                    chooseReelFontFamily("montserrat");
-                    chooseReelFontWeight("900");
-                    chooseReelFontSize(64);
-                    chooseReelTextAlign("center");
-                    setVideoBlockPosY(0.44);
-                    videoBlockPosYRef.current = 0.44;
-                  }}
-                  style={{
-                    background: reelTextStyle === "viral-debate" ? "linear-gradient(135deg, #1e3a8a, #0284c7)" : undefined,
-                    color: reelTextStyle === "viral-debate" ? "#ffffff" : undefined,
-                    borderColor: reelTextStyle === "viral-debate" ? "#38bdf8" : undefined,
-                    fontWeight: reelTextStyle === "viral-debate" ? 800 : 600,
-                  }}
-                  title="Debate Político / Vídeo Horizontal: Manchete topo de impacto (QUE LAPADA!), vídeo 16:9 em bloco, manchete bicolor e crachá do orador com selo verificado"
-                >
-                  🏛️ Debate Político (Vídeo Horizontal)
                 </button>
                 <button
                   type="button"
@@ -10011,19 +9873,58 @@ async function fixWebmDuration(blob: Blob, durationSec: number): Promise<Blob> {
 
         <div className="adminFeedPreview">
             <div className="adminFeedCanvasFrame" data-format={format} style={{ position: "relative" }}>
-              {/* Botão de Corte (Crop) Rápido Direto no Preview */}
-              {(videoUrl || customImageUrl || selectedPost?.image_url) && (
-                <div
-                  style={{
-                    position: "absolute",
-                    top: 10,
-                    right: 10,
-                    zIndex: 40,
-                    display: "flex",
-                    gap: 6,
-                    alignItems: "center",
+              {/* Botões de Ação Rápida no Preview (Safe Zone & Corte) */}
+              <div
+                style={{
+                  position: "absolute",
+                  top: 10,
+                  right: 10,
+                  zIndex: 40,
+                  display: "flex",
+                  gap: 8,
+                  alignItems: "center",
+                }}
+              >
+                {/* Botão de Alternar Safe Zone */}
+                <button
+                  type="button"
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    toggleSafeZone(!showSafeZone);
                   }}
+                  style={{
+                    background: showSafeZone ? "rgba(2, 132, 199, 0.95)" : "rgba(15, 23, 42, 0.88)",
+                    color: "#ffffff",
+                    border: showSafeZone ? "1px solid #38bdf8" : "1px solid rgba(255, 255, 255, 0.25)",
+                    borderRadius: 8,
+                    padding: "6px 12px",
+                    fontSize: 11.5,
+                    fontWeight: 700,
+                    cursor: "pointer",
+                    display: "inline-flex",
+                    alignItems: "center",
+                    gap: 6,
+                    boxShadow: "0 4px 14px rgba(0,0,0,0.45)",
+                    backdropFilter: "blur(6px)",
+                    WebkitBackdropFilter: "blur(6px)",
+                    transition: "all 0.15s ease",
+                  }}
+                  title="Ativar ou ocultar guias da Área Segura (Safe Zone) do Instagram"
                 >
+                  <span>{showSafeZone ? "🛡️ Ocultar Safe Zone" : "📐 Mostrar Safe Zone"}</span>
+                  <span
+                    style={{
+                      width: 8,
+                      height: 8,
+                      borderRadius: "50%",
+                      background: showSafeZone ? "#4ade80" : "#64748b",
+                      display: "inline-block",
+                    }}
+                  />
+                </button>
+
+                {/* Botão de Corte (Crop) Rápido Direto no Preview */}
+                {(videoUrl || customImageUrl || selectedPost?.image_url) && (
                   <button
                     type="button"
                     onClick={(e) => {
@@ -10063,8 +9964,8 @@ async function fixWebmDuration(blob: Blob, durationSec: number): Promise<Blob> {
                       <span style={{ width: 7, height: 7, borderRadius: "50%", background: "#4ade80", display: "inline-block" }} />
                     )}
                   </button>
-                </div>
-              )}
+                )}
+              </div>
               <canvas
                 ref={canvasRef}
                 width={W}
@@ -10264,10 +10165,87 @@ async function fixWebmDuration(blob: Blob, durationSec: number): Promise<Blob> {
               </div>
             </div>
 
+            {/* Ativação Direta Instantânea (Salva no navegador e na API sem precisar esperar Redeploy da Vercel) */}
+            <div
+              style={{
+                background: "rgba(15, 23, 42, 0.9)",
+                border: "1px solid rgba(56, 189, 248, 0.35)",
+                borderRadius: 12,
+                padding: "14px 16px",
+                marginBottom: 20,
+              }}
+            >
+              <label style={{ display: "block", fontSize: 12, fontWeight: 700, color: "#38bdf8", marginBottom: 6 }}>
+                ⚡ Ativação Imediata do Token (Sem esperar Redeploy):
+              </label>
+              <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
+                <input
+                  type="password"
+                  value={manualRealOficialToken}
+                  onChange={(e) => setManualRealOficialToken(e.target.value)}
+                  placeholder="Cole seu token do Real Oficial aqui..."
+                  style={{
+                    flex: 1,
+                    background: "#020617",
+                    border: "1px solid rgba(255,255,255,0.2)",
+                    borderRadius: 8,
+                    padding: "8px 12px",
+                    color: "#f8fafc",
+                    fontSize: 13,
+                    fontFamily: "monospace",
+                  }}
+                />
+                <button
+                  type="button"
+                  onClick={async () => {
+                    const token = manualRealOficialToken.trim();
+                    if (!token) {
+                      alert("Por favor, cole um token válido.");
+                      return;
+                    }
+                    try {
+                      localStorage.setItem("viralizou_real_oficial_token", token);
+                      const res = await fetch("/api/admin/real-oficial", {
+                        method: "POST",
+                        headers: { "Content-Type": "application/json" },
+                        body: JSON.stringify({ action: "save", token }),
+                      });
+                      const data = await res.json();
+                      const statusObj = data.status || data.tokenStatus;
+                      if (statusObj) setRealOficialStatus(statusObj);
+                      const sfxList = data.sfx || data.sfxCatalog;
+                      if (Array.isArray(sfxList) && sfxList.length > 0) {
+                        setRealOficialSfxList(sfxList);
+                      }
+                      alert("✅ Token ativado com sucesso! SFX e biblioteca liberados.");
+                    } catch (e) {
+                      alert("Erro ao salvar token.");
+                    }
+                  }}
+                  style={{
+                    background: "linear-gradient(135deg, #0284c7, #2563eb)",
+                    border: "none",
+                    color: "#ffffff",
+                    borderRadius: 8,
+                    padding: "8px 16px",
+                    fontSize: 12,
+                    fontWeight: 700,
+                    cursor: "pointer",
+                    whiteSpace: "nowrap",
+                  }}
+                >
+                  💾 Ativar Agora
+                </button>
+              </div>
+              <p style={{ margin: "6px 0 0", fontSize: 11, color: "#94a3b8" }}>
+                💡 Se já adicionou na Vercel mas ainda não redeployou, ativando aqui você já usa imediatamente!
+              </p>
+            </div>
+
             {/* Nome da variável */}
             <div style={{ marginBottom: 20 }}>
               <label style={{ display: "block", fontSize: 12, fontWeight: 700, color: "#cbd5e1", marginBottom: 6 }}>
-                Nome da Variável de Ambiente:
+                Configuração na Vercel (Opcional - para persistir em todos os navegadores):
               </label>
               <div
                 style={{
@@ -10341,14 +10319,21 @@ async function fixWebmDuration(blob: Blob, durationSec: number): Promise<Blob> {
                 type="button"
                 onClick={async () => {
                   try {
-                    const res = await fetch("/api/admin/real-oficial");
+                    let localToken = "";
+                    try {
+                      localToken = localStorage.getItem("viralizou_real_oficial_token") || manualRealOficialToken || "";
+                    } catch {}
+                    const query = localToken ? `?token=${encodeURIComponent(localToken)}` : "";
+                    const res = await fetch(`/api/admin/real-oficial${query}`);
                     const data = await res.json();
-                    if (data?.tokenStatus) {
-                      setRealOficialStatus(data.tokenStatus);
-                      if (Array.isArray(data.sfxCatalog) && data.sfxCatalog.length > 0) {
-                        setRealOficialSfxList(data.sfxCatalog);
+                    const statusObj = data.status || data.tokenStatus;
+                    if (statusObj) {
+                      setRealOficialStatus(statusObj);
+                      const sfxList = data.sfx || data.sfxCatalog;
+                      if (Array.isArray(sfxList) && sfxList.length > 0) {
+                        setRealOficialSfxList(sfxList);
                       }
-                      alert(data.tokenStatus.configured ? `Token ativo: ${data.tokenStatus.maskedToken}` : "Ainda não detectado na Vercel. Lembre de fazer Redeploy!");
+                      alert(statusObj.configured ? `✅ Token ativo: ${statusObj.maskedToken}` : "Ainda não detectado na Vercel. Dica: Use o campo 'Ativar Agora' acima ou faça Redeploy na Vercel.");
                     }
                   } catch (e) {
                     alert("Erro ao testar status da API.");

@@ -142,11 +142,21 @@ export const DEFAULT_REAL_OFICIAL_TRACKS: RealOficialTrackItem[] = [
   },
 ];
 
+let inMemoryRealOficialToken = "";
+
+export function setRealOficialInMemoryToken(token: string): void {
+  inMemoryRealOficialToken = (token || "").trim();
+}
+
 export function getRealOficialToken(): string {
+  if (inMemoryRealOficialToken) return inMemoryRealOficialToken;
   const token = (
     process.env.REAL_OFICIAL_TOKEN ||
     process.env.REAL_OFICIAL_API_KEY ||
     process.env.NEXT_PUBLIC_REAL_OFICIAL_TOKEN ||
+    process.env.REALOFICIAL_TOKEN ||
+    process.env.REAL_TOKEN ||
+    process.env.REAL_OFICIAL ||
     ""
   ).trim();
   return token;
@@ -168,11 +178,11 @@ export function getRealOficialCdnUrl(): string {
   ).replace(/\/+$/, "");
 }
 
-export function getRealOficialStatus(): RealOficialConfigStatus {
-  const token = getRealOficialToken();
-  const configured = token.length > 5;
+export function getRealOficialStatus(overrideToken?: string): RealOficialConfigStatus {
+  const token = (overrideToken || getRealOficialToken()).trim();
+  const configured = token.length >= 3;
   const maskedToken = configured
-    ? `${token.slice(0, 4)}...${token.slice(-4)}`
+    ? (token.length > 8 ? `${token.slice(0, 4)}...${token.slice(-4)}` : `${token.slice(0, 2)}***`)
     : "";
 
   return {
