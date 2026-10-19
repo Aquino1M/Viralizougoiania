@@ -51,7 +51,6 @@ try {
 }
 
 const nextConfig: NextConfig = {
-  turbopack: {},
   poweredByHeader: false,
   typescript: {
     ignoreBuildErrors: true,
@@ -61,29 +60,34 @@ const nextConfig: NextConfig = {
       bodySizeLimit: "250mb",
     },
   },
-  webpack: (config) => {
-    config.resolve = config.resolve || {};
-    config.resolve.symlinks = false;
-    config.plugins = config.plugins || [];
-    config.plugins.push({
-      apply(compiler: any) {
-        compiler.hooks.beforeRun.tap("FixWindowsReadlink", () => {
-          if (compiler.inputFileSystem && compiler.inputFileSystem.readlink) {
-            const orig = compiler.inputFileSystem.readlink.bind(compiler.inputFileSystem);
-            compiler.inputFileSystem.readlink = (p: any, cb: any) => {
-              orig(p, (err: any, res: any) => {
-                if (err && err.code === "EISDIR") {
-                  err.code = "EINVAL";
+  ...(process.platform === "win32" && !process.env.VERCEL
+    ? {
+        turbopack: {},
+        webpack: (config: any) => {
+          config.resolve = config.resolve || {};
+          config.resolve.symlinks = false;
+          config.plugins = config.plugins || [];
+          config.plugins.push({
+            apply(compiler: any) {
+              compiler.hooks.beforeRun.tap("FixWindowsReadlink", () => {
+                if (compiler.inputFileSystem && compiler.inputFileSystem.readlink) {
+                  const orig = compiler.inputFileSystem.readlink.bind(compiler.inputFileSystem);
+                  compiler.inputFileSystem.readlink = (p: any, cb: any) => {
+                    orig(p, (err: any, res: any) => {
+                      if (err && err.code === "EISDIR") {
+                        err.code = "EINVAL";
+                      }
+                      cb(err, res);
+                    });
+                  };
                 }
-                cb(err, res);
               });
-            };
-          }
-        });
-      },
-    });
-    return config;
-  },
+            },
+          });
+          return config;
+        },
+      }
+    : {}),
 };
 
 export default nextConfig;

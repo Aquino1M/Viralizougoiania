@@ -100,8 +100,8 @@ export interface VideoFilterConfig {
 export const VIDEO_FILTERS: Record<VideoFilterPreset, VideoFilterConfig> = {
   none: {
     id: "none",
-    name: "Original",
-    badge: "Padrão",
+    name: "Sem Filtro",
+    badge: "Original",
     icon: "✨",
     canvasFilter: "none",
     ffmpegFilter: "",
@@ -109,8 +109,8 @@ export const VIDEO_FILTERS: Record<VideoFilterPreset, VideoFilterConfig> = {
   },
   natural: {
     id: "natural",
-    name: "Natural Realçado",
-    badge: "Cores Vivas",
+    name: "Natural",
+    badge: "Realce",
     icon: "🌿",
     canvasFilter: "contrast(1.08) brightness(1.02) saturate(1.12)",
     ffmpegFilter: "eq=contrast=1.08:brightness=0.02:saturation=1.12",

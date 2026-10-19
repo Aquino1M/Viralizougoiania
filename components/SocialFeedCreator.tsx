@@ -7986,7 +7986,7 @@ async function fixWebmDuration(blob: Blob, durationSec: number): Promise<Blob> {
                               fontWeight: 800,
                             }}
                           >
-                            ● Token Vercel Ativo ({realOficialStatus.maskedToken})
+                            ● Token Ativo ({realOficialStatus.maskedToken})
                           </span>
                         ) : (
                           <button
@@ -8006,11 +8006,85 @@ async function fixWebmDuration(blob: Blob, durationSec: number): Promise<Blob> {
                               gap: 4,
                             }}
                           >
-                            <span>⚙️</span> Adicionar Token na Vercel
+                            <span>⚙️</span> Instruções Vercel
                           </button>
                         )}
                       </div>
                     </div>
+
+                    {!realOficialStatus?.configured && (
+                      <div
+                        style={{
+                          margin: "6px 0 10px 0",
+                          padding: "8px 10px",
+                          background: "rgba(15, 23, 42, 0.9)",
+                          border: "1px dashed rgba(234, 179, 8, 0.45)",
+                          borderRadius: 8,
+                          display: "flex",
+                          gap: 6,
+                          alignItems: "center",
+                        }}
+                      >
+                        <span style={{ fontSize: 13 }}>🔑</span>
+                        <input
+                          type="password"
+                          value={manualRealOficialToken}
+                          onChange={(e) => setManualRealOficialToken(e.target.value)}
+                          placeholder="Cole seu token do Real Oficial aqui..."
+                          style={{
+                            flex: 1,
+                            background: "#020617",
+                            border: "1px solid rgba(255,255,255,0.18)",
+                            borderRadius: 6,
+                            padding: "4px 8px",
+                            fontSize: 11,
+                            color: "#f8fafc",
+                            fontFamily: "monospace",
+                          }}
+                        />
+                        <button
+                          type="button"
+                          onClick={async () => {
+                            const token = manualRealOficialToken.trim();
+                            if (!token) {
+                              alert("Cole o token do Real Oficial para ativar.");
+                              return;
+                            }
+                            try {
+                              localStorage.setItem("viralizou_real_oficial_token", token);
+                              const res = await fetch("/api/admin/real-oficial", {
+                                method: "POST",
+                                headers: { "Content-Type": "application/json" },
+                                body: JSON.stringify({ action: "save", token }),
+                              });
+                              const data = await res.json();
+                              const statusObj = data.status || data.tokenStatus;
+                              if (statusObj) setRealOficialStatus(statusObj);
+                              const sfxList = data.sfx || data.sfxCatalog;
+                              if (Array.isArray(sfxList) && sfxList.length > 0) {
+                                setRealOficialSfxList(sfxList);
+                              }
+                              alert("✅ Token ativado com sucesso! SFX oficial liberado.");
+                            } catch (e) {
+                              alert("Erro ao salvar token.");
+                            }
+                          }}
+                          style={{
+                            background: "linear-gradient(135deg, #0284c7, #2563eb)",
+                            border: "none",
+                            color: "#ffffff",
+                            padding: "4px 10px",
+                            borderRadius: 6,
+                            fontSize: 11,
+                            fontWeight: 700,
+                            cursor: "pointer",
+                            whiteSpace: "nowrap",
+                          }}
+                        >
+                          💾 Ativar
+                        </button>
+                      </div>
+                    )}
 
                     <p style={{ margin: "0 0 8px", fontSize: 10.5, color: "#94a3b8", lineHeight: 1.4 }}>
                       Adiciona cortes sonoros de transição, batidas de gancho e alertas para engajamento instantâneo estilo TikTok & Reels.
