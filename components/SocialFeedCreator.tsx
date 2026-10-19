@@ -3128,6 +3128,7 @@ export default function SocialFeedCreator({ posts, onBack, initialPost, onOpenCo
   const [recording, setRecording] = useState(false);
   const [recordingProgress, setRecordingProgress] = useState(0);
   const [videoExport, setVideoExport] = useState<{ url: string; filename: string; type: string } | null>(null);
+  const [previewViewMode, setPreviewViewMode] = useState<"edit" | "generated">("edit");
   const [customImageUrl, setCustomImageUrl] = useState<string>("");
   const [customImageFileName, setCustomImageFileName] = useState<string>("");
   const [articleUrl, setArticleUrl] = useState("");
@@ -5940,6 +5941,7 @@ async function fixWebmDuration(blob: Blob, durationSec: number): Promise<Blob> {
           filename: outFilename,
           type: "video/mp4",
         });
+        setPreviewViewMode("generated");
         setRecordingProgress(100);
         setMessage(`✅ Vídeo (${formatLabel.toUpperCase()}) 100% pronto em MP4! Áudio e legendas sincronizados com perfeição e sem travamentos.`);
         serverRenderSuccess = true;
@@ -6317,6 +6319,7 @@ async function fixWebmDuration(blob: Blob, durationSec: number): Promise<Blob> {
         filename: `${basename}-${formatLabel}.${exportExt}`,
         type: exportType,
       });
+      setPreviewViewMode("generated");
       setRecordingProgress(100);
       setMessage(`✅ Vídeo (${formatLabel.toUpperCase()}) 100% pronto em MP4! Áudio e vídeo sincronizados.`);
     } catch (error) {
@@ -9872,30 +9875,160 @@ async function fixWebmDuration(blob: Blob, durationSec: number): Promise<Blob> {
         </div>
 
         <div className="adminFeedPreview">
-            <div className="adminFeedCanvasFrame" data-format={format} style={{ position: "relative" }}>
-              {/* Botões de Ação Rápida no Preview (Safe Zone & Corte) */}
-              <div
-                style={{
-                  position: "absolute",
-                  top: 10,
-                  right: 10,
-                  zIndex: 40,
-                  display: "flex",
-                  gap: 8,
-                  alignItems: "center",
+          {/* Alternador de Visualização: [✏️ Modo Edição] | [🎬 Vídeo Gerado] */}
+          <div
+            style={{
+              display: "grid",
+              gridTemplateColumns: "1fr 1fr",
+              gap: 8,
+              width: "100%",
+              maxWidth: 340,
+              margin: "0 auto 8px auto",
+            }}
+          >
+            <button
+              type="button"
+              onClick={() => setPreviewViewMode("edit")}
+              style={{
+                padding: "9px 12px",
+                borderRadius: 10,
+                border: previewViewMode === "edit" ? "2px solid #38bdf8" : "1px solid rgba(255,255,255,0.14)",
+                background: previewViewMode === "edit" ? "linear-gradient(135deg, #0284c7, #2563eb)" : "rgba(15,23,42,0.85)",
+                color: "#ffffff",
+                fontSize: 12.5,
+                fontWeight: 800,
+                cursor: "pointer",
+                display: "flex",
+                alignItems: "center",
+                justifyContent: "center",
+                gap: 6,
+                boxShadow: previewViewMode === "edit" ? "0 4px 14px rgba(2,132,199,0.35)" : "none",
+                transition: "all 0.15s ease",
+              }}
+            >
+              <span>✏️ Modo Edição</span>
+            </button>
+
+            <button
+              type="button"
+              onClick={() => {
+                if (videoExport) {
+                  setPreviewViewMode("generated");
+                } else {
+                  alert("Nenhum vídeo foi gerado ainda. Use o botão de gravação/exportação abaixo para gerar o vídeo.");
+                }
+              }}
+              style={{
+                padding: "9px 12px",
+                borderRadius: 10,
+                border: previewViewMode === "generated" ? "2px solid #22c55e" : "1px solid rgba(255,255,255,0.14)",
+                background: previewViewMode === "generated" ? "linear-gradient(135deg, #16a34a, #15803d)" : "rgba(15,23,42,0.85)",
+                color: videoExport ? "#ffffff" : "#94a3b8",
+                fontSize: 12.5,
+                fontWeight: 800,
+                cursor: videoExport ? "pointer" : "not-allowed",
+                opacity: videoExport ? 1 : 0.6,
+                display: "flex",
+                alignItems: "center",
+                justifyContent: "center",
+                gap: 6,
+                boxShadow: previewViewMode === "generated" ? "0 4px 14px rgba(22,163,74,0.35)" : "none",
+                transition: "all 0.15s ease",
+              }}
+              title={videoExport ? "Alternar para assistir ou baixar o vídeo gerado" : "Gere um vídeo primeiro para visualizar nesta aba"}
+            >
+              <span>🎬 Vídeo Gerado</span>
+              {videoExport && (
+                <span
+                  style={{
+                    width: 8,
+                    height: 8,
+                    borderRadius: "50%",
+                    background: "#4ade80",
+                    display: "inline-block",
+                    boxShadow: "0 0 8px #4ade80",
+                  }}
+                />
+              )}
+            </button>
+          </div>
+
+          {/* 1. MODO EDIÇÃO: Canvas interativo com todos os controles de arrasto livre */}
+          <div
+            className="adminFeedCanvasFrame"
+            data-format={format}
+            style={{
+              position: "relative",
+              display: previewViewMode === "edit" ? "flex" : "none",
+            }}
+          >
+            {/* Botões de Ação Rápida no Preview (Safe Zone & Corte) */}
+            <div
+              style={{
+                position: "absolute",
+                top: 10,
+                right: 10,
+                zIndex: 40,
+                display: "flex",
+                gap: 8,
+                alignItems: "center",
+              }}
+            >
+              {/* Botão de Alternar Safe Zone */}
+              <button
+                type="button"
+                onClick={(e) => {
+                  e.stopPropagation();
+                  toggleSafeZone(!showSafeZone);
                 }}
+                style={{
+                  background: showSafeZone ? "rgba(2, 132, 199, 0.95)" : "rgba(15, 23, 42, 0.88)",
+                  color: "#ffffff",
+                  border: showSafeZone ? "1px solid #38bdf8" : "1px solid rgba(255, 255, 255, 0.25)",
+                  borderRadius: 8,
+                  padding: "6px 12px",
+                  fontSize: 11.5,
+                  fontWeight: 700,
+                  cursor: "pointer",
+                  display: "inline-flex",
+                  alignItems: "center",
+                  gap: 6,
+                  boxShadow: "0 4px 14px rgba(0,0,0,0.45)",
+                  backdropFilter: "blur(6px)",
+                  WebkitBackdropFilter: "blur(6px)",
+                  transition: "all 0.15s ease",
+                }}
+                title="Ativar ou ocultar guias da Área Segura (Safe Zone) do Instagram"
               >
-                {/* Botão de Alternar Safe Zone */}
+                <span>{showSafeZone ? "🛡️ Ocultar Safe Zone" : "📐 Mostrar Safe Zone"}</span>
+                <span
+                  style={{
+                    width: 8,
+                    height: 8,
+                    borderRadius: "50%",
+                    background: showSafeZone ? "#4ade80" : "#64748b",
+                    display: "inline-block",
+                  }}
+                />
+              </button>
+
+              {/* Botão de Corte (Crop) Rápido Direto no Preview */}
+              {(videoUrl || customImageUrl || selectedPost?.image_url) && (
                 <button
                   type="button"
                   onClick={(e) => {
                     e.stopPropagation();
-                    toggleSafeZone(!showSafeZone);
+                    if (videoUrl && (format === "reel" || format === "story")) {
+                      setCropMediaType("video");
+                    } else {
+                      setCropMediaType("image");
+                    }
+                    setShowCropModal(true);
                   }}
                   style={{
-                    background: showSafeZone ? "rgba(2, 132, 199, 0.95)" : "rgba(15, 23, 42, 0.88)",
+                    background: "rgba(15, 23, 42, 0.88)",
                     color: "#ffffff",
-                    border: showSafeZone ? "1px solid #38bdf8" : "1px solid rgba(255, 255, 255, 0.25)",
+                    border: "1px solid rgba(255, 255, 255, 0.25)",
                     borderRadius: 8,
                     padding: "6px 12px",
                     fontSize: 11.5,
@@ -9909,90 +10042,178 @@ async function fixWebmDuration(blob: Blob, durationSec: number): Promise<Blob> {
                     WebkitBackdropFilter: "blur(6px)",
                     transition: "all 0.15s ease",
                   }}
-                  title="Ativar ou ocultar guias da Área Segura (Safe Zone) do Instagram"
+                  title="Ajustar corte (crop) da mídia visível no preview"
                 >
-                  <span>{showSafeZone ? "🛡️ Ocultar Safe Zone" : "📐 Mostrar Safe Zone"}</span>
-                  <span
-                    style={{
-                      width: 8,
-                      height: 8,
-                      borderRadius: "50%",
-                      background: showSafeZone ? "#4ade80" : "#64748b",
-                      display: "inline-block",
-                    }}
-                  />
+                  <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="#38bdf8" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                    <path d="M6 2v14a2 2 0 0 0 2 2h14" />
+                    <path d="M18 22V8a2 2 0 0 0-2-2H2" />
+                  </svg>
+                  <span>✂️ Ajustar Corte</span>
+                  {((format === "reel" || format === "story") ? videoCrop : imageCrop) && (
+                    <span style={{ width: 7, height: 7, borderRadius: "50%", background: "#4ade80", display: "inline-block" }} />
+                  )}
                 </button>
+              )}
+            </div>
+            <canvas
+              ref={canvasRef}
+              width={W}
+              height={getCanvasDimensions(format).height}
+              onPointerDown={onPreviewPointerDown}
+              onPointerMove={onPreviewPointerMove}
+              onPointerUp={onPreviewPointerUp}
+              onPointerCancel={onPreviewPointerUp}
+              style={{ cursor: logoData || format === "reel" || format === "story" || Boolean(title || selectedPost || customImageUrl) ? (draggingLogo ? "grabbing" : "grab") : "default", touchAction: "none" }}
+            />
+          </div>
 
-                {/* Botão de Corte (Crop) Rápido Direto no Preview */}
-                {(videoUrl || customImageUrl || selectedPost?.image_url) && (
+          {previewViewMode === "edit" && (
+            <>
+              <small>{format === "feed" ? "Formato Feed 4:5 · 1080×1350" : format === "feed-square" ? "Formato Feed quadrado 1:1 · 1080×1080" : format === "reel-cover" ? "Capa do Reels 4:5 · 1080×1350 (recorte da grade do perfil)" : format === "story" ? "Formato Story 9:16 · 1080×1920 (Área de Link)" : "Formato Reel 9:16 · 1080×1920"}</small>
+              {videoExport && (
+                <div
+                  style={{
+                    marginTop: 6,
+                    padding: "8px 12px",
+                    background: "rgba(34, 197, 94, 0.12)",
+                    border: "1px solid rgba(34, 197, 94, 0.3)",
+                    borderRadius: 8,
+                    display: "flex",
+                    alignItems: "center",
+                    justifyContent: "space-between",
+                    gap: 8,
+                    width: "100%",
+                    maxWidth: 340,
+                  }}
+                >
+                  <span style={{ fontSize: 11, color: "#86efac", fontWeight: 700 }}>
+                    🎬 Vídeo pronto para download
+                  </span>
                   <button
                     type="button"
-                    onClick={(e) => {
-                      e.stopPropagation();
-                      if (videoUrl && (format === "reel" || format === "story")) {
-                        setCropMediaType("video");
-                      } else {
-                        setCropMediaType("image");
-                      }
-                      setShowCropModal(true);
-                    }}
+                    onClick={() => setPreviewViewMode("generated")}
                     style={{
-                      background: "rgba(15, 23, 42, 0.88)",
+                      background: "#16a34a",
                       color: "#ffffff",
-                      border: "1px solid rgba(255, 255, 255, 0.25)",
-                      borderRadius: 8,
-                      padding: "6px 12px",
-                      fontSize: 11.5,
-                      fontWeight: 700,
+                      border: "none",
+                      borderRadius: 6,
+                      padding: "4px 10px",
+                      fontSize: 11,
+                      fontWeight: 800,
                       cursor: "pointer",
-                      display: "inline-flex",
-                      alignItems: "center",
-                      gap: 6,
-                      boxShadow: "0 4px 14px rgba(0,0,0,0.45)",
-                      backdropFilter: "blur(6px)",
-                      WebkitBackdropFilter: "blur(6px)",
-                      transition: "all 0.15s ease",
                     }}
-                    title="Ajustar corte (crop) da mídia visível no preview"
                   >
-                    <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="#38bdf8" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
-                      <path d="M6 2v14a2 2 0 0 0 2 2h14" />
-                      <path d="M18 22V8a2 2 0 0 0-2-2H2" />
-                    </svg>
-                    <span>✂️ Ajustar Corte</span>
-                    {((format === "reel" || format === "story") ? videoCrop : imageCrop) && (
-                      <span style={{ width: 7, height: 7, borderRadius: "50%", background: "#4ade80", display: "inline-block" }} />
-                    )}
+                    Ver Vídeo ➔
                   </button>
-                )}
-              </div>
-              <canvas
-                ref={canvasRef}
-                width={W}
-                height={getCanvasDimensions(format).height}
-                onPointerDown={onPreviewPointerDown}
-                onPointerMove={onPreviewPointerMove}
-                onPointerUp={onPreviewPointerUp}
-                onPointerCancel={onPreviewPointerUp}
-                style={{ cursor: logoData || format === "reel" || format === "story" || Boolean(title || selectedPost || customImageUrl) ? (draggingLogo ? "grabbing" : "grab") : "default", touchAction: "none" }}
-              />
-            </div>
-            <small>{format === "feed" ? "Formato Feed 4:5 · 1080×1350" : format === "feed-square" ? "Formato Feed quadrado 1:1 · 1080×1080" : format === "reel-cover" ? "Capa do Reels 4:5 · 1080×1350 (recorte da grade do perfil)" : format === "story" ? "Formato Story 9:16 · 1080×1920 (Área de Link)" : "Formato Reel 9:16 · 1080×1920"}</small>
-            {videoExport && (
-              <div className="adminFeedVideoResult">
-                <video src={videoExport.url} controls playsInline />
-                <div style={{ display: "flex", alignItems: "center", gap: 6, margin: "8px 0" }}>
-                  <span style={{ background: "#16a34a", color: "#fff", fontSize: 10, fontWeight: 800, padding: "3px 8px", borderRadius: 4 }}>
+                </div>
+              )}
+            </>
+          )}
+
+          {/* 2. MODO VÍDEO GERADO: Player MP4 + Botão de Download + Botão para Voltar a Editar */}
+          <div
+            className="adminFeedVideoResult"
+            style={{
+              width: "100%",
+              maxWidth: format === "reel" || format === "story" ? 340 : 420,
+              background: "#0f172a",
+              border: "1px solid rgba(255, 255, 255, 0.15)",
+              borderRadius: 14,
+              padding: "14px",
+              display: previewViewMode === "generated" ? "flex" : "none",
+              flexDirection: "column",
+              gap: 10,
+              boxShadow: "0 12px 36px rgba(0,0,0,0.5)",
+            }}
+          >
+            {videoExport ? (
+              <>
+                <video
+                  src={videoExport.url}
+                  controls
+                  playsInline
+                  autoPlay
+                  style={{
+                    width: "100%",
+                    maxHeight: "calc(100vh - 270px)",
+                    borderRadius: 10,
+                    background: "#000",
+                    aspectRatio: format === "reel" || format === "story" ? "9/16" : format === "feed" ? "4/5" : "1/1",
+                    objectFit: "contain",
+                  }}
+                />
+                <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", margin: "4px 0" }}>
+                  <span style={{ background: "#16a34a", color: "#fff", fontSize: 10.5, fontWeight: 800, padding: "3px 8px", borderRadius: 4 }}>
                     ✅ 100% WhatsApp & Instagram
                   </span>
-                  <small style={{ color: "#475569" }}>MP4 H.264 Main + AAC + Faststart</small>
+                  <small style={{ color: "#94a3b8" }}>MP4 H.264 Main + AAC + Faststart</small>
                 </div>
-                <a className="btn" href={videoExport.url} download={videoExport.filename} style={{ background: "#16a34a", textDecoration: "none" }}>
+                <a
+                  className="btn"
+                  href={videoExport.url}
+                  download={videoExport.filename}
+                  style={{
+                    background: "linear-gradient(135deg, #16a34a, #15803d)",
+                    color: "#ffffff",
+                    textDecoration: "none",
+                    textAlign: "center",
+                    fontWeight: 800,
+                    fontSize: 13,
+                    padding: "11px 16px",
+                    borderRadius: 10,
+                    boxShadow: "0 4px 14px rgba(22, 163, 74, 0.4)",
+                  }}
+                >
                   ⬇️ Baixar Vídeo MP4 (WhatsApp Pronto)
                 </a>
+                <button
+                  type="button"
+                  onClick={() => setPreviewViewMode("edit")}
+                  style={{
+                    background: "rgba(255,255,255,0.08)",
+                    border: "1px solid rgba(255,255,255,0.18)",
+                    color: "#f8fafc",
+                    borderRadius: 10,
+                    padding: "10px 14px",
+                    fontSize: 12,
+                    fontWeight: 700,
+                    cursor: "pointer",
+                    display: "flex",
+                    alignItems: "center",
+                    justifyContent: "center",
+                    gap: 6,
+                    transition: "all 0.15s ease",
+                  }}
+                >
+                  ✏️ Voltar para Editar e Fazer Ajustes
+                </button>
+              </>
+            ) : (
+              <div style={{ padding: "36px 16px", textAlign: "center", color: "#94a3b8" }}>
+                <span style={{ fontSize: 32, display: "block", marginBottom: 8 }}>🎬</span>
+                <p style={{ fontSize: 13, marginBottom: 14, color: "#cbd5e1", fontWeight: 600 }}>
+                  Nenhum vídeo foi gerado ainda.
+                </p>
+                <button
+                  type="button"
+                  onClick={() => setPreviewViewMode("edit")}
+                  style={{
+                    background: "linear-gradient(135deg, #0284c7, #2563eb)",
+                    color: "#fff",
+                    border: "none",
+                    borderRadius: 8,
+                    padding: "8px 18px",
+                    fontSize: 12,
+                    fontWeight: 700,
+                    cursor: "pointer",
+                  }}
+                >
+                  ✏️ Ir para o Modo Edição
+                </button>
               </div>
             )}
           </div>
+        </div>
       </div>
       <video
         ref={videoPreviewRef}
