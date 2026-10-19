@@ -2667,22 +2667,23 @@ function drawReelFrame(
   ctx.imageSmoothingQuality = "high";
   (ctx as any).textRendering = "geometricPrecision";
 
+  const currentCanvasH = (format === "feed" || format === "feed-square") ? getCanvasDimensions(format).height : REEL_H;
   ctx.fillStyle = "#050505";
-  ctx.fillRect(0, 0, W, REEL_H);
+  ctx.fillRect(0, 0, W, currentCanvasH);
   if (video && video.readyState >= 2) {
-    drawVideoWithFraming(ctx, video, W, REEL_H, framingMode, imageVertical, mirror, miniIaConfig, crop, splitConfig);
+    drawVideoWithFraming(ctx, video, W, currentCanvasH, framingMode, imageVertical, mirror, miniIaConfig, crop, splitConfig);
   }
 
   const isSplit1v2iWithCard = framingMode === "split-1v2i" && splitConfig?.topCardEnabled !== false;
 
   const maxAlpha = shadeOpacity / 100;
   if (!isSplit1v2iWithCard && shadeOpacity > 0 && textStyle !== "red-bottom" && textStyle !== "bacci-red") {
-    const shade = ctx.createLinearGradient(0, 650, 0, REEL_H);
+    const shade = ctx.createLinearGradient(0, Math.max(300, currentCanvasH - 1270), 0, currentCanvasH);
     shade.addColorStop(0, `rgba(0,0,0,${(0.05 * maxAlpha).toFixed(2)})`);
     shade.addColorStop(0.42, `rgba(0,0,0,${(0.68 * maxAlpha).toFixed(2)})`);
     shade.addColorStop(1, `rgba(0,0,0,${(0.96 * maxAlpha).toFixed(2)})`);
     ctx.fillStyle = shade;
-    ctx.fillRect(0, 600, W, REEL_H - 600);
+    ctx.fillRect(0, Math.max(300, currentCanvasH - 1320), W, currentCanvasH);
   }
 
   if (showStrongSceneWarning) {
@@ -2842,13 +2843,17 @@ function drawReelFrame(
 
   // Banner de Gancho Viral Auto-Edit (primeiros 3.5s)
   if (video && miniIaConfig?.autoHookEnabled && miniIaConfig.autoHookText) {
-    drawViralHookBanner(ctx, miniIaConfig.autoHookText, W, REEL_H, video.currentTime, format, miniIaConfig.hookPositionY);
+    drawViralHookBanner(ctx, miniIaConfig.autoHookText, W, currentCanvasH, video.currentTime, format, miniIaConfig.hookPositionY);
   }
 
   // Guia opcional de área segura do Instagram
   if (showSafeZone) {
     if (format === "story") {
       drawStorySafeZone(ctx);
+    } else if (format === "feed") {
+      drawFeedSafeZone(ctx);
+    } else if (format === "feed-square") {
+      drawFeedSquareSafeZone(ctx);
     } else {
       drawReelSafeZone(ctx);
     }
@@ -2893,7 +2898,8 @@ function buildReelOverlayCanvas(
 ): HTMLCanvasElement {
   const canvas = document.createElement("canvas");
   canvas.width = W;
-  canvas.height = REEL_H;
+  const overlayH = (format === "feed" || format === "feed-square") ? getCanvasDimensions(format).height : REEL_H;
+  canvas.height = overlayH;
   const ctx = canvas.getContext("2d");
   if (!ctx) return canvas;
 
@@ -2908,7 +2914,7 @@ function buildReelOverlayCanvas(
       ? getSplitHeaderHeight(ctx, headline || "TÍTULO DA SUA NOTÍCIA", fontFamily, textCase, fontSize, W)
       : 0;
     const mediaY = headerH;
-    const mediaH = REEL_H - headerH;
+    const mediaH = overlayH - headerH;
     const halfW = Math.floor(W / 2);
     const vidSide = splitConfig.videoSide || "right";
     const vidX = vidSide === "right" ? halfW : 0;
@@ -4159,7 +4165,7 @@ export default function SocialFeedCreator({ posts, onBack, initialPost, onOpenCo
         return;
       }
 
-      if (format === "reel" || (format === "story" && videoPreviewRef.current && videoReady)) {
+      if (format === "reel" || ((format === "story" || format === "feed" || format === "feed-square") && videoPreviewRef.current && videoReady)) {
         await document.fonts?.ready;
         if (logoData) {
           try {
@@ -4692,10 +4698,10 @@ export default function SocialFeedCreator({ posts, onBack, initialPost, onOpenCo
     return () => { active = false; };
   }, [logoData]);
 
-  // Loop de pré-visualização interativa do Reel e Story (máxima suavidade)
+  // Loop de pré-visualização interativa de Vídeo (Reels, Stories e Feed 4:5)
   useEffect(() => {
     const video = videoPreviewRef.current;
-    if ((format !== "reel" && format !== "story") || !videoUrl || !video || recording) return;
+    if (!videoUrl || !video || recording) return;
     let frameId = 0;
     let lastRenderedAt = 0;
     const previewInterval = 1000 / 24;
@@ -4705,8 +4711,9 @@ export default function SocialFeedCreator({ posts, onBack, initialPost, onOpenCo
           const canvas = canvasRef.current;
           const ctx = canvas?.getContext("2d");
           if (ctx && video.readyState >= 2) {
+            const currentLoopH = getCanvasDimensions(format).height;
             ctx.fillStyle = "#050505";
-            ctx.fillRect(0, 0, W, REEL_H);
+            ctx.fillRect(0, 0, W, currentLoopH);
             const miniIaCfg = MINI_IA_LEVELS[miniIaLevel] || MINI_IA_LEVELS.media;
             const effectiveImg1 = splitImg1Ref.current || customImageRef.current || articleImageRef.current?.image || null;
             const effectiveImg2 = splitImg2Ref.current;
@@ -4724,7 +4731,7 @@ export default function SocialFeedCreator({ posts, onBack, initialPost, onOpenCo
               ctx,
               video,
               W,
-              REEL_H,
+              currentLoopH,
               videoFramingMode,
               imagePosition,
               miniIaMirror,
@@ -4761,14 +4768,14 @@ export default function SocialFeedCreator({ posts, onBack, initialPost, onOpenCo
                     ctx,
                     animLogo,
                     logoPositionRef.current.x * W - lW / 2,
-                    logoPositionRef.current.y * REEL_H - lH / 2,
+                    logoPositionRef.current.y * currentLoopH - lH / 2,
                     lW,
                     lH
                   );
                 }
               }
               if (autoHookEnabledRef.current && autoHookEnabled && effectiveHookText && video.currentTime <= 3.6) {
-                drawViralHookBanner(ctx, effectiveHookText, W, REEL_H, video.currentTime, format, hookPositionYRef.current || hookPositionY);
+                drawViralHookBanner(ctx, effectiveHookText, W, currentLoopH, video.currentTime, format, hookPositionYRef.current || hookPositionY);
               }
             } else {
               drawReelFrame(
@@ -4834,12 +4841,16 @@ export default function SocialFeedCreator({ posts, onBack, initialPost, onOpenCo
                 if (showStorySticker) {
                   drawStoryStickerGuide(ctx, W);
                 }
+              } else if (format === "feed") {
+                drawFeedSafeZone(ctx);
+              } else if (format === "feed-square") {
+                drawFeedSquareSafeZone(ctx);
               } else {
                 drawReelSafeZone(ctx);
               }
             }
             if (snapGuideXRef.current || snapGuideYRef.current) {
-              drawAlignmentGuides(ctx, W, REEL_H, snapGuideXRef.current, snapGuideYRef.current);
+              drawAlignmentGuides(ctx, W, currentLoopH, snapGuideXRef.current, snapGuideYRef.current);
             }
             lastRenderedAt = timestamp;
           }
@@ -5786,14 +5797,12 @@ async function fixWebmDuration(blob: Blob, durationSec: number): Promise<Blob> {
     }
     if (isRecordingRef.current) return;
 
-    // GARANTE PROPORÇÃO EXATA 9:16 (1080x1920) INCONDICIONALMENTE
+    // GARANTE PROPORÇÃO ADEQUADA AO FORMATO ESCOLHIDO (1080x1920 para Reels/Stories ou 1080x1350 para Feed 4:5)
+    const exportH = getCanvasDimensions(format).height;
     canvas.width = 1080;
-    canvas.height = 1920;
-    if (format !== "reel" && format !== "story") {
-      setFormat("reel");
-    }
+    canvas.height = exportH;
 
-    const formatLabel = format === "story" ? "story" : "reel";
+    const formatLabel = format === "story" ? "story" : (format === "feed" || format === "feed-square") ? "feed-video" : "reel";
     const basename = (selectedPost?.slug || videoFileName.replace(/\.[^.]+$/, "") || `viralizou-${formatLabel}`)
       .replace(/[^a-zA-Z0-9_-]/g, "-") || `viralizou-${formatLabel}`;
     const outFilename = `${basename}-${formatLabel}.mp4`;
@@ -6159,14 +6168,15 @@ async function fixWebmDuration(blob: Blob, durationSec: number): Promise<Blob> {
         if (ctx && video.readyState >= 2 && video.videoWidth > 0 && video.videoHeight > 0) {
           // Desenha apenas quando existe um frame decodificado, evitando exportar
           // frames pretos durante o seek/carregamento inicial do vídeo.
+          const exportH = (format === "feed" || format === "feed-square") ? getCanvasDimensions(format).height : REEL_H;
           ctx.save();
           ctx.fillStyle = "#050505";
-          ctx.fillRect(0, 0, W, REEL_H);
+          ctx.fillRect(0, 0, W, exportH);
           drawVideoWithFraming(
             ctx,
             video,
             W,
-            REEL_H,
+            exportH,
             videoFramingMode,
             imagePosition,
             miniIaMirror,
@@ -6182,7 +6192,7 @@ async function fixWebmDuration(blob: Blob, durationSec: number): Promise<Blob> {
             videoCrop,
             currentSplitConfig
           );
-          ctx.drawImage(overlayCanvas, 0, 0, W, REEL_H);
+          ctx.drawImage(overlayCanvas, 0, 0, W, exportH);
           if (showLogoLayer && logoColorStyle === "gif") {
             const animLogo = animatedLogoRef.current || getOfficialLogo("gif");
             if (animLogo && isImageDrawable(animLogo)) {
@@ -6191,14 +6201,14 @@ async function fixWebmDuration(blob: Blob, durationSec: number): Promise<Blob> {
                 ctx,
                 animLogo,
                 logoPositionRef.current.x * W - lW / 2,
-                logoPositionRef.current.y * REEL_H - lH / 2,
+                logoPositionRef.current.y * exportH - lH / 2,
                 lW,
                 lH
               );
             }
           }
           if (autoHookEnabledRef.current && autoHookEnabled && effectiveHookText && video.currentTime <= 3.6) {
-            drawViralHookBanner(ctx, effectiveHookText, W, REEL_H, video.currentTime, format, hookPositionYRef.current || hookPositionY);
+            drawViralHookBanner(ctx, effectiveHookText, W, exportH, video.currentTime, format, hookPositionYRef.current || hookPositionY);
           }
           ctx.restore();
           renderedFramesCount++;
@@ -6737,8 +6747,8 @@ async function fixWebmDuration(blob: Blob, durationSec: number): Promise<Blob> {
               </div>
             </div>
 
-            {/* 2. UPLOAD DE VÍDEO E IMPORTADOR DE LINK (APENAS REELS E STORIES) */}
-            {(format === "reel" || format === "story") && (
+            {/* 2. UPLOAD DE VÍDEO E IMPORTADOR DE LINK */}
+            {(format === "reel" || format === "story" || format === "feed" || format === "feed-square") && (
               <>
                 <div style={{ marginBottom: 12 }}>
                   <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 4 }}>
@@ -6792,7 +6802,7 @@ async function fixWebmDuration(blob: Blob, durationSec: number): Promise<Blob> {
                   <input ref={videoInputRef} type="file" accept="video/*" onChange={onVideoChange} />
                   <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginTop: 3 }}>
                     <small style={{ color: "#64748b" }}>
-                      {videoFileName ? `${videoFileName}${videoReady ? " · pronto para prévia" : " · carregando..."}` : "Vídeo de até 250 MB para Reels ou Stories."}
+                      {videoFileName ? `${videoFileName}${videoReady ? " · pronto para prévia" : " · carregando..."}` : "Vídeo de até 250 MB para Reels (9:16), Stories ou Feed Noticioso (4:5)."}
                     </small>
                     <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
                       {videoCrop && (
@@ -6858,10 +6868,10 @@ async function fixWebmDuration(blob: Blob, durationSec: number): Promise<Blob> {
             {/* 4. ENQUADRAMENTO E AJUSTE VERTICAL DA MÍDIA (FOTO OU VÍDEO) */}
             {(customImageUrl || selectedPost?.image_url || videoUrl) && (
               <div style={{ background: "#ffffff", borderRadius: 8, padding: "10px 12px", border: "1px solid #e2e8f0" }}>
-                {videoUrl && (format === "reel" || format === "story") && (
+                {videoUrl && (
                   <div style={{ marginBottom: 10 }}>
                     <div style={{ fontSize: 11, fontWeight: 700, color: "#1e293b", marginBottom: 6 }}>
-                      📐 Enquadramento do Vídeo no Reel/Story (9:16)
+                      📐 Enquadramento do Vídeo {format === "feed" ? "no Feed (4:5)" : format === "story" ? "nos Stories (9:16)" : "no Reel (9:16)"}
                     </div>
                     <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(130px, 1fr))", gap: 6 }}>
                       <button
@@ -6877,7 +6887,7 @@ async function fixWebmDuration(blob: Blob, durationSec: number): Promise<Blob> {
                           fontWeight: videoFramingMode === "cover" ? 700 : 500,
                         }}
                       >
-                        🔍 Preencher (9:16)
+                        🔍 Preencher {format === "feed" ? "(4:5)" : "(9:16)"}
                       </button>
                       <button
                         type="button"
@@ -6928,19 +6938,45 @@ async function fixWebmDuration(blob: Blob, durationSec: number): Promise<Blob> {
                       </button>
                       <button
                         type="button"
-                        className={`btn secondary ${videoFramingMode === "split-1v2i" ? "active" : ""}`}
-                        onClick={() => setVideoFramingMode("split-1v2i")}
+                        className={`btn secondary ${videoFramingMode === "split-1v2i" && (format === "reel" || format === "story") ? "active" : ""}`}
+                        onClick={() => {
+                          setVideoFramingMode("split-1v2i");
+                          setFormat("reel");
+                          cachedOverlayCanvasRef.current = null;
+                          renderCard();
+                        }}
                         style={{
                           fontSize: 11,
                           padding: "6px 8px",
-                          background: videoFramingMode === "split-1v2i" ? "#0284c7" : "#ffffff",
-                          color: videoFramingMode === "split-1v2i" ? "#ffffff" : "#1e293b",
-                          borderColor: videoFramingMode === "split-1v2i" ? "#0284c7" : "#cbd5e1",
-                          fontWeight: videoFramingMode === "split-1v2i" ? 700 : 500,
+                          background: videoFramingMode === "split-1v2i" && (format === "reel" || format === "story") ? "#0284c7" : "#ffffff",
+                          color: videoFramingMode === "split-1v2i" && (format === "reel" || format === "story") ? "#ffffff" : "#1e293b",
+                          borderColor: videoFramingMode === "split-1v2i" && (format === "reel" || format === "story") ? "#0284c7" : "#cbd5e1",
+                          fontWeight: videoFramingMode === "split-1v2i" && (format === "reel" || format === "story") ? 700 : 500,
                         }}
-                        title="1 Vídeo de um lado + 2 Fotos empilhadas do outro com linha divisória personalizada e cartão de notícia no topo (Estilo Copaíba Notícias)"
+                        title="1 Vídeo de um lado + 2 Fotos empilhadas do outro no formato Vertical Reels 9:16 (1080×1920 px)"
                       >
-                        ⚖️ 1 Vídeo + 2 Imagens
+                        🎬 1 Vídeo + 2 Imagens (9:16)
+                      </button>
+                      <button
+                        type="button"
+                        className={`btn secondary ${videoFramingMode === "split-1v2i" && format === "feed" ? "active" : ""}`}
+                        onClick={() => {
+                          setVideoFramingMode("split-1v2i");
+                          setFormat("feed");
+                          cachedOverlayCanvasRef.current = null;
+                          renderCard();
+                        }}
+                        style={{
+                          fontSize: 11,
+                          padding: "6px 8px",
+                          background: videoFramingMode === "split-1v2i" && format === "feed" ? "#0284c7" : "#ffffff",
+                          color: videoFramingMode === "split-1v2i" && format === "feed" ? "#ffffff" : "#1e293b",
+                          borderColor: videoFramingMode === "split-1v2i" && format === "feed" ? "#0284c7" : "#cbd5e1",
+                          fontWeight: videoFramingMode === "split-1v2i" && format === "feed" ? 700 : 500,
+                        }}
+                        title="1 Vídeo de um lado + 2 Fotos empilhadas do outro no formato do Feed 4:5 (1080×1350 px)"
+                      >
+                        📰 1 Vídeo + 2 Imagens (Feed 4:5)
                       </button>
                     </div>
 
@@ -9897,9 +9933,22 @@ async function fixWebmDuration(blob: Blob, durationSec: number): Promise<Blob> {
                 </button>
               )}
               {(format === "feed" || format === "feed-square" || format === "reel-cover") && (
-                <button type="button" className="btn" disabled={(!selectedPost && !title && !customImageUrl) || rendering} onClick={downloadPng}>
-                  {format === "feed-square" ? "⬇️ Baixar PNG 1080×1080" : format === "reel-cover" ? "⬇️ Baixar capa 1080×1350" : "⬇️ Baixar PNG 1080×1350"}
-                </button>
+                <>
+                  <button type="button" className="btn" disabled={(!selectedPost && !title && !customImageUrl) || rendering} onClick={downloadPng}>
+                    {format === "feed-square" ? "⬇️ Baixar PNG 1080×1080" : format === "reel-cover" ? "⬇️ Baixar capa 1080×1350" : "⬇️ Baixar PNG 1080×1350"}
+                  </button>
+                  {videoReady && (
+                    <button
+                      type="button"
+                      className="btn btnMiniIaAction"
+                      disabled={recording || rendering}
+                      onClick={createReel}
+                      style={{ background: "#4f46e5" }}
+                    >
+                      {recording ? `Gravando ${recordingProgress}%...` : `🎥 Gerar Vídeo Feed 4:5 (${MINI_IA_LEVELS[miniIaLevel].name.toUpperCase()})`}
+                    </button>
+                  )}
+                </>
               )}
               {format === "story" && (
                 <>
