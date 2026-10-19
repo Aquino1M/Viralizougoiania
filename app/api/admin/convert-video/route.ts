@@ -7,7 +7,7 @@ import os from "node:os";
 import crypto from "node:crypto";
 
 export const dynamic = "force-dynamic";
-export const maxDuration = 300;
+export const maxDuration = 60;
 
 export async function POST(request: Request) {
   if (!(await isAdmin())) {

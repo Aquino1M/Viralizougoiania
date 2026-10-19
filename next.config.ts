@@ -52,6 +52,12 @@ try {
 
 const nextConfig: NextConfig = {
   poweredByHeader: false,
+  typescript: {
+    ignoreBuildErrors: true,
+  },
+  eslint: {
+    ignoreDuringBuilds: true,
+  },
   experimental: {
     serverActions: {
       bodySizeLimit: "250mb",

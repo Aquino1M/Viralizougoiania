@@ -4,7 +4,7 @@ import { resolvePublicInstagramVideo } from "@/lib/instagram-public";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
-export const maxDuration = 90;
+export const maxDuration = 60;
 
 export async function GET(request: Request) {
   if (!(await isAdmin())) return NextResponse.json({ error: "Não autorizado" }, { status: 401 });

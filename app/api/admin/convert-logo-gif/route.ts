@@ -6,7 +6,7 @@ import fsSync from "node:fs";
 import path from "node:path";
 
 export const dynamic = "force-dynamic";
-export const maxDuration = 180;
+export const maxDuration = 60;
 
 /**
  * Gerencia a logo animada transparente do portal (WebM VP9 com Alpha, MOV ProRes ou GIF)

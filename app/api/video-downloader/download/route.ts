@@ -7,7 +7,7 @@ import crypto from "node:crypto";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
-export const maxDuration = 180;
+export const maxDuration = 60;
 
 function isAllowedMediaHost(hostname: string, platform: string) {
   const host = hostname.toLowerCase().replace(/\.$/, "");
