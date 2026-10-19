@@ -58,7 +58,7 @@ export async function probeVideoInfo(videoPath: string): Promise<VideoProbeInfo>
 }
 
 export interface BuildFilterGraphOptions {
-  framingMode: "cover" | "blur-fit";
+  framingMode: "cover" | "blur-fit" | "horizontal-block" | "split";
   verticalPos: number; // -100 a +100
   editLevel: MiniIaEditLevel;
   videoFilter?: VideoFilterPreset;
@@ -67,6 +67,11 @@ export interface BuildFilterGraphOptions {
   hasAudio?: boolean;
   width?: number;
   height?: number;
+  customSaturation?: number;
+  customContrast?: number;
+  customBrightness?: number;
+  customSharpness?: number;
+  videoBlockPosY?: number;
   animatedLogo?: {
     inputIndex: number;
     x: number;
@@ -93,6 +98,11 @@ export function buildMiniIaFilterGraph(options: BuildFilterGraphOptions): {
     hasAudio = true,
     width = 1080,
     height = 1920,
+    customSaturation,
+    customContrast,
+    customBrightness,
+    customSharpness,
+    videoBlockPosY,
     animatedLogo,
   } = options;
 
@@ -106,15 +116,20 @@ export function buildMiniIaFilterGraph(options: BuildFilterGraphOptions): {
   const mirrorFilter = mirror ? "hflip," : "";
   const speedFilter = `setpts=PTS/${speed}`;
 
-  // 2. Look e color grading da Mini IA
-  const colorFilter = `eq=contrast=${cfg.contrast}:brightness=${cfg.brightness}:saturation=${cfg.saturation}`;
+  // 2. Look e color grading da Mini IA (com personalização de saturação, contraste, brilho e nitidez)
+  const effContrast = typeof customContrast === "number" ? customContrast : cfg.contrast;
+  const effBrightness = typeof customBrightness === "number" ? customBrightness : cfg.brightness;
+  const effSaturation = typeof customSaturation === "number" ? customSaturation : cfg.saturation;
+  const effSharpness = typeof customSharpness === "number" ? customSharpness : cfg.sharpness;
+
+  const colorFilter = `eq=contrast=${effContrast.toFixed(2)}:brightness=${effBrightness.toFixed(2)}:saturation=${effSaturation.toFixed(2)}`;
   let postFxFilter = colorFilter;
 
-  if (cfg.sharpness > 0) {
-    postFxFilter += `,unsharp=3:3:${cfg.sharpness.toFixed(1)}:3:3:0.0`;
+  if (effSharpness > 0) {
+    postFxFilter += `,unsharp=3:3:${effSharpness.toFixed(1)}:3:3:0.0`;
   }
-  if (cfg.grain) {
-    // 2% de micro-grão imperceptível mas destrói qualquer pHash idêntico
+  if (cfg.grain && editLevel === "alta") {
+    // Micro-grão sutil anti-pHash
     postFxFilter += `,noise=alls=2:allf=t+u,vignette=PI/4.5`;
   }
 
@@ -136,7 +151,27 @@ export function buildMiniIaFilterGraph(options: BuildFilterGraphOptions): {
   let filterComplex = "";
   let baseLayerTag = "base";
 
-  if (framingMode === "blur-fit") {
+  if (framingMode === "horizontal-block") {
+    // Bloco Horizontal Noticioso (16:9 posicionado livremente com fundo de desfoque atmosférico)
+    const normalizedY = typeof videoBlockPosY === "number"
+      ? Math.max(0.1, Math.min(0.85, videoBlockPosY))
+      : Math.max(0.1, Math.min(0.85, 0.5 + (verticalPos / 200)));
+    const posYExpr = `max(0\\,min(H-h\\,round(H*${normalizedY.toFixed(3)}-h/2)))`;
+
+    filterComplex =
+      `[0:v]${cropFilter}${speedFilter},${mirrorFilter}split=2[v_bg][v_fg];` +
+      `[v_bg]scale=${width}:${height}:force_original_aspect_ratio=increase,crop=${width}:${height},boxblur=24:5,eq=brightness=-0.35[bg];` +
+      `[v_fg]scale=${width}:-2:flags=lanczos,${postFxFilter}[fg];` +
+      `[bg][fg]overlay=(W-w)/2:${posYExpr}[${baseLayerTag}];`;
+  } else if (framingMode === "split") {
+    // Split 50/50: Superior focado/aproximado + Inferior contextual aberto
+    const halfH = Math.floor(height / 2);
+    filterComplex =
+      `[0:v]${cropFilter}${speedFilter},${mirrorFilter}split=2[v_top][v_bottom];` +
+      `[v_top]scale=${width}:${halfH}:force_original_aspect_ratio=increase,crop=${width}:${halfH},${postFxFilter}[top_crop];` +
+      `[v_bottom]scale=${width}:${halfH}:force_original_aspect_ratio=decrease,pad=${width}:${halfH}:(ow-iw)/2:(oh-ih)/2:black,${postFxFilter}[bottom_fit];` +
+      `[top_crop][bottom_fit]vstack[${baseLayerTag}];`;
+  } else if (framingMode === "blur-fit") {
     // Estilo Jornalístico: Vídeo original centralizado sem cortes + fundo ampliado com desfoque
     filterComplex =
       `[0:v]${cropFilter}${speedFilter},${mirrorFilter}split=2[v_bg][v_fg];` +

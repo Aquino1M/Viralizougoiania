@@ -5,21 +5,27 @@ import type { VideoCropRect } from "@/lib/mini-ia-constants";
 
 export interface CropVideoModalProps {
   isOpen: boolean;
-  videoElement: HTMLVideoElement | null;
+  mediaType?: "video" | "image";
+  videoElement?: HTMLVideoElement | null;
   videoUrl?: string;
+  imageElement?: HTMLImageElement | null;
+  imageUrl?: string;
   initialCrop: VideoCropRect | null;
   onApply: (crop: VideoCropRect | null) => void;
   onClose: () => void;
 }
 
-type AspectRatioPreset = "custom" | "9:16" | "1:1" | "4:5" | "16:9";
+export type AspectRatioPreset = "custom" | "original" | "9:16" | "1:1" | "16:9" | "4:3" | "9:8" | "4:5";
 
 type DragHandle = "nw" | "n" | "ne" | "e" | "se" | "s" | "sw" | "w" | "move" | "create" | null;
 
 export default function CropVideoModal({
   isOpen,
+  mediaType = "video",
   videoElement,
   videoUrl,
+  imageElement,
+  imageUrl,
   initialCrop,
   onApply,
   onClose,
@@ -31,7 +37,7 @@ export default function CropVideoModal({
   const [origH, setOrigH] = useState<number>(1920);
   const [isLoaded, setIsLoaded] = useState<boolean>(false);
 
-  // Crop atual em pixels nativos do vídeo
+  // Crop atual em pixels nativos da mídia
   const [crop, setCrop] = useState<VideoCropRect>({
     x: 0,
     y: 0,
@@ -51,11 +57,67 @@ export default function CropVideoModal({
   } | null>(null);
 
   const fallbackVideoRef = useRef<HTMLVideoElement | null>(null);
+  const fallbackImageRef = useRef<HTMLImageElement | null>(null);
+  const [loadedImage, setLoadedImage] = useState<HTMLImageElement | null>(null);
 
   // Inicializa dimensões e crop quando o modal abre
   useEffect(() => {
     if (!isOpen) return;
 
+    if (mediaType === "image") {
+      const activeImg = imageElement;
+      if (activeImg && activeImg.naturalWidth > 0 && activeImg.naturalHeight > 0) {
+        const w = activeImg.naturalWidth;
+        const h = activeImg.naturalHeight;
+        setOrigW(w);
+        setOrigH(h);
+        setIsLoaded(true);
+        setLoadedImage(activeImg);
+
+        if (initialCrop && initialCrop.width > 20 && initialCrop.height > 20) {
+          setCrop({
+            x: Math.max(0, Math.min(w - 20, initialCrop.x)),
+            y: Math.max(0, Math.min(h - 20, initialCrop.y)),
+            width: Math.min(w, initialCrop.width),
+            height: Math.min(h, initialCrop.height),
+          });
+        } else {
+          setCrop({ x: 0, y: 0, width: w, height: h });
+        }
+        setPreset("custom");
+      } else if (imageUrl) {
+        const img = new Image();
+        img.crossOrigin = "anonymous";
+        img.onload = () => {
+          const w = img.naturalWidth || 1080;
+          const h = img.naturalHeight || 1920;
+          setOrigW(w);
+          setOrigH(h);
+          setIsLoaded(true);
+          setLoadedImage(img);
+
+          if (initialCrop && initialCrop.width > 20 && initialCrop.height > 20) {
+            setCrop({
+              x: Math.max(0, Math.min(w - 20, initialCrop.x)),
+              y: Math.max(0, Math.min(h - 20, initialCrop.y)),
+              width: Math.min(w, initialCrop.width),
+              height: Math.min(h, initialCrop.height),
+            });
+          } else {
+            setCrop({ x: 0, y: 0, width: w, height: h });
+          }
+          setPreset("custom");
+        };
+        img.onerror = () => {
+          setIsLoaded(false);
+        };
+        img.src = imageUrl;
+        fallbackImageRef.current = img;
+      }
+      return;
+    }
+
+    // Caso seja vídeo
     const v = videoElement || fallbackVideoRef.current;
 
     const updateFromVideo = () => {
@@ -104,7 +166,7 @@ export default function CropVideoModal({
         v.removeEventListener("loadeddata", updateFromVideo);
       }
     };
-  }, [isOpen, videoElement, initialCrop, videoUrl]);
+  }, [isOpen, mediaType, videoElement, imageElement, initialCrop, videoUrl, imageUrl]);
 
   // Aplica preset de proporção
   const applyPreset = useCallback(
@@ -113,9 +175,13 @@ export default function CropVideoModal({
       if (newPreset === "custom") return;
 
       let targetRatio = 9 / 16;
-      if (newPreset === "1:1") targetRatio = 1;
-      else if (newPreset === "4:5") targetRatio = 4 / 5;
+      if (newPreset === "original") targetRatio = origW / Math.max(1, origH);
+      else if (newPreset === "1:1") targetRatio = 1;
       else if (newPreset === "16:9") targetRatio = 16 / 9;
+      else if (newPreset === "4:3") targetRatio = 4 / 3;
+      else if (newPreset === "9:8") targetRatio = 9 / 8;
+      else if (newPreset === "4:5") targetRatio = 4 / 5;
+      else if (newPreset === "9:16") targetRatio = 9 / 16;
 
       let newW = origW;
       let newH = Math.round(newW / targetRatio);
@@ -138,7 +204,7 @@ export default function CropVideoModal({
     [origW, origH]
   );
 
-  // Desenha no canvas: vídeo + máscara escura + caixa de crop + 8 alças
+  // Desenha no canvas: vídeo/imagem + máscara escura + caixa de crop + 8 alças
   const renderCropCanvas = useCallback(() => {
     const canvas = canvasRef.current;
     if (!canvas) return;
@@ -149,19 +215,33 @@ export default function CropVideoModal({
     if (canvas.height !== origH) canvas.height = origH;
     ctx.clearRect(0, 0, origW, origH);
 
-    const activeVid = videoElement || fallbackVideoRef.current;
-
-    // 1. Desenha o frame do vídeo
-    if (activeVid && activeVid.readyState >= 2) {
-      try {
-        ctx.drawImage(activeVid, 0, 0, origW, origH);
-      } catch {
+    // 1. Desenha o frame do vídeo ou imagem
+    if (mediaType === "image") {
+      const activeImg = imageElement || loadedImage || fallbackImageRef.current;
+      if (activeImg) {
+        try {
+          ctx.drawImage(activeImg, 0, 0, origW, origH);
+        } catch {
+          ctx.fillStyle = "#1e293b";
+          ctx.fillRect(0, 0, origW, origH);
+        }
+      } else {
         ctx.fillStyle = "#1e293b";
         ctx.fillRect(0, 0, origW, origH);
       }
     } else {
-      ctx.fillStyle = "#1e293b";
-      ctx.fillRect(0, 0, origW, origH);
+      const activeVid = videoElement || fallbackVideoRef.current;
+      if (activeVid && activeVid.readyState >= 2) {
+        try {
+          ctx.drawImage(activeVid, 0, 0, origW, origH);
+        } catch {
+          ctx.fillStyle = "#1e293b";
+          ctx.fillRect(0, 0, origW, origH);
+        }
+      } else {
+        ctx.fillStyle = "#1e293b";
+        ctx.fillRect(0, 0, origW, origH);
+      }
     }
 
     const { x, y, width, height } = crop;
@@ -216,20 +296,28 @@ export default function CropVideoModal({
     });
 
     ctx.restore();
-  }, [crop, origW, origH, videoElement]);
+  }, [crop, origW, origH, mediaType, videoElement, imageElement, loadedImage]);
 
   useEffect(() => {
     if (!isOpen) return;
     let animId: number;
     const loop = () => {
       renderCropCanvas();
-      animId = requestAnimationFrame(loop);
+      if (mediaType === "video") {
+        animId = requestAnimationFrame(loop);
+      }
     };
-    animId = requestAnimationFrame(loop);
-    return () => cancelAnimationFrame(animId);
-  }, [isOpen, renderCropCanvas]);
+    if (mediaType === "video") {
+      animId = requestAnimationFrame(loop);
+    } else {
+      renderCropCanvas();
+    }
+    return () => {
+      if (animId) cancelAnimationFrame(animId);
+    };
+  }, [isOpen, mediaType, renderCropCanvas]);
 
-  // Converte coordenadas de tela/mouse para o espaço nativo de pixels do vídeo
+  // Converte coordenadas de tela/mouse para o espaço nativo de pixels da mídia
   const getCanvasCoords = (e: React.PointerEvent<HTMLCanvasElement>) => {
     const canvas = canvasRef.current;
     if (!canvas) return { x: 0, y: 0 };
@@ -374,7 +462,7 @@ export default function CropVideoModal({
       if (isLocked) height = Math.round(width / ratio);
     }
 
-    // Clamping seguro aos limites do vídeo
+    // Clamping seguro aos limites da mídia
     if (x + width > origW) width = origW - x;
     if (y + height > origH) height = origH - y;
 
@@ -401,14 +489,14 @@ export default function CropVideoModal({
   };
 
   const handleApply = () => {
-    // Se o corte for praticamente o vídeo inteiro (99%+), passa null para renderizar direto sem overhead
-    const isFullVideo =
+    // Se o corte for praticamente a mídia inteira (99%+), passa null para renderizar direto sem overhead
+    const isFullMedia =
       crop.x <= 2 &&
       crop.y <= 2 &&
       Math.abs(crop.width - origW) <= 4 &&
       Math.abs(crop.height - origH) <= 4;
 
-    if (isFullVideo) {
+    if (isFullMedia) {
       onApply(null);
     } else {
       onApply(crop);
@@ -428,6 +516,7 @@ export default function CropVideoModal({
         zIndex: 999999,
         background: "rgba(0, 0, 0, 0.8)",
         backdropFilter: "blur(6px)",
+        WebkitBackdropFilter: "blur(6px)",
         display: "flex",
         alignItems: "center",
         justifyContent: "center",
@@ -450,7 +539,7 @@ export default function CropVideoModal({
           maxHeight: "94vh",
         }}
       >
-        {/* CABEÇALHO */}
+        {/* CABEÇALHO DO MODAL */}
         <div
           style={{
             padding: "16px 22px 14px",
@@ -472,10 +561,10 @@ export default function CropVideoModal({
                 gap: 8,
               }}
             >
-              <span>Crop Video</span>
+              <span>{mediaType === "image" ? "Crop Image" : "Crop Video"}</span>
             </h2>
             <p style={{ margin: "4px 0 0", fontSize: 12, color: "#64748b" }}>
-              Ajuste a área de corte do video arrastando as bordas ou movendo a área selecionada
+              Ajuste a área de corte da {mediaType === "image" ? "imagem" : "mídia"} arrastando as bordas ou movendo a área selecionada
             </p>
           </div>
           <button
@@ -542,10 +631,13 @@ export default function CropVideoModal({
                 }}
               >
                 <option value="custom">Personalizada</option>
-                <option value="9:16">9:16 (Reels/TikTok/Story)</option>
+                <option value="original">Original</option>
+                <option value="9:16">9:16 (Stories / Reels / TikTok)</option>
                 <option value="1:1">1:1 (Quadrado Feed)</option>
-                <option value="4:5">4:5 (Feed Retrato)</option>
                 <option value="16:9">16:9 (Horizontal)</option>
+                <option value="4:3">4:3</option>
+                <option value="9:8">9:8</option>
+                <option value="4:5">4:5 (Feed Retrato)</option>
               </select>
             </div>
 
@@ -589,7 +681,7 @@ export default function CropVideoModal({
                   <b style={{ color: "#0f172a" }}>{preset}</b>
                 </div>
                 <div style={{ display: "flex", justifyContent: "space-between", color: "#64748b", marginTop: 6, paddingTop: 6, borderTop: "1px dashed #e2e8f0" }}>
-                  <span>Video Original:</span>
+                  <span>{mediaType === "image" ? "Imagem Original:" : "Vídeo Original:"}</span>
                   <b style={{ color: "#0f172a" }}>{origW}x{origH}</b>
                 </div>
               </div>
@@ -600,9 +692,9 @@ export default function CropVideoModal({
               <div style={{ fontSize: 11, fontWeight: 700, color: "#64748b", marginBottom: 4 }}>
                 Status
               </div>
-              <div style={{ display: "flex", alignItems: "center", gap: 6, fontSize: 11.5, fontWeight: 700, color: "#16a34a" }}>
-                <span style={{ width: 8, height: 8, borderRadius: "50%", background: "#16a34a", display: "inline-block" }} />
-                <span>{isLoaded ? "Carregado" : "Aguardando vídeo"}</span>
+              <div style={{ display: "flex", alignItems: "center", gap: 6, fontSize: 11.5, fontWeight: 700, color: isLoaded ? "#16a34a" : "#f59e0b" }}>
+                <span style={{ width: 8, height: 8, borderRadius: "50%", background: isLoaded ? "#16a34a" : "#f59e0b", display: "inline-block" }} />
+                <span>{isLoaded ? "Carregado" : mediaType === "image" ? "Aguardando imagem" : "Aguardando vídeo"}</span>
               </div>
             </div>
           </div>
@@ -732,7 +824,7 @@ export default function CropVideoModal({
             Aplicar
           </button>
         </div>
-        {!videoElement && videoUrl && (
+        {mediaType === "video" && !videoElement && videoUrl && (
           <video
             ref={fallbackVideoRef}
             src={videoUrl}

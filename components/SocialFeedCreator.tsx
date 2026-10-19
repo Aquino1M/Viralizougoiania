@@ -11,6 +11,11 @@ import {
   BGM_TRACKS,
   type VideoCropRect,
 } from "@/lib/mini-ia-constants";
+import {
+  type RealOficialSfxItem,
+  DEFAULT_REAL_OFICIAL_SFX,
+  type RealOficialConfigStatus,
+} from "@/lib/real-oficial-client";
 import CropVideoModal from "./CropVideoModal";
 
 type Props = {
@@ -72,13 +77,26 @@ type ReelTextStyle =
   | "highlight-red"
   | "stroke-strong"
   | "red-bottom"
-  | "bacci-red";
+  | "bacci-red"
+  | "viral-debate"
+  | "bicolor-yellow"
+  | "split-compare";
 type ReelFontFamily = "montserrat" | "anton" | "bebas" | "poppins" | "inter" | "roboto" | "impact" | "georgia";
 type ReelFontWeight = "900" | "800" | "700" | "600" | "400" | "italic";
 type ReelTextAlign = "left" | "center" | "right";
 type ReelTextCase = "uppercase" | "lowercase" | "original";
 type ReelTagColor = "red" | "white" | "yellow" | "orange";
-type ReelTextAnimation = "typewriter" | "pop" | "slide" | "fade" | "static";
+type ReelTextAnimation =
+  | "typewriter"
+  | "pop"
+  | "slide"
+  | "fade"
+  | "static"
+  | "bounce"
+  | "zoom-in"
+  | "pulse"
+  | "karaoke"
+  | "glitch";
 type LogoColorStyle = "white" | "dark" | "gif" | "original";
 
 export interface LayoutPresetData {
@@ -108,7 +126,7 @@ export interface LayoutPresetData {
   showHandleLayer: boolean;
   showStorySticker: boolean;
   showStrongSceneWarning: boolean;
-  videoFramingMode: "cover" | "blur-fit";
+  videoFramingMode: "cover" | "blur-fit" | "horizontal-block" | "split";
   imagePosition: number;
   miniIaLevel: MiniIaEditLevel;
   miniIaMirror: boolean;
@@ -121,6 +139,15 @@ export interface LayoutPresetData {
   videoCrop?: VideoCropRect | null;
   hookPositionY?: number;
   bgmVolume?: number;
+  videoBlockPosY?: number;
+  customSaturation?: number;
+  customContrast?: number;
+  customBrightness?: number;
+  customSharpness?: number;
+  topHeadline?: string;
+  authorName?: string;
+  authorHandle?: string;
+  authorVerified?: boolean;
 }
 
 export interface LayoutPresetSlot {
@@ -168,7 +195,7 @@ const DEFAULT_PRESET_SLOTS: LayoutPresetSlot[] = [
       imagePosition: 0,
       miniIaLevel: "media",
       miniIaMirror: false,
-      miniIaTrimSeconds: 3,
+      miniIaTrimSeconds: 0,
       videoFilter: "cinema",
       cutPauses: true,
       bgmTrack: "breaking",
@@ -176,50 +203,68 @@ const DEFAULT_PRESET_SLOTS: LayoutPresetSlot[] = [
       autoHookText: "",
       hookPositionY: 307,
       bgmVolume: 15,
+      videoBlockPosY: 0.44,
+      topHeadline: "QUE LAPADA!",
+      authorName: "GUSTAVO GAYER",
+      authorHandle: "@GUSTAVOGAYER",
+      authorVerified: true,
+      customSaturation: 1.0,
+      customContrast: 1.0,
+      customBrightness: 1.0,
+      customSharpness: 0,
     },
   },
   {
     id: 2,
-    name: "📰 Feed Notícia",
-    summary: "Feed 4:5 · Selo Vermelho · Georgia",
+    name: "🏛️ Debate Político (Horizontal)",
+    summary: "Reels 9:16 · Vídeo Bloco 16:9 · Bicolor & Selo",
     savedAt: "Padrão",
     data: {
-      format: "feed",
-      reelTextStyle: "category-badge",
-      reelFontFamily: "georgia",
-      reelFontWeight: "800",
+      format: "reel",
+      reelTextStyle: "viral-debate",
+      reelFontFamily: "montserrat",
+      reelFontWeight: "900",
       reelTextAlign: "center",
       reelTextCase: "uppercase",
-      reelFontSize: 64,
+      reelFontSize: 52,
       tagColor: "yellow",
       tagPositionY: 1670,
       handle: "@viralizougoiania",
       handleFontSize: 33,
-      logoColorStyle: "white",
+      logoColorStyle: "gif",
       logoScale: 100,
       logoPosition: DEFAULT_LOGO_POSITION,
-      titlePosition: DEFAULT_TITLE_POSITION,
+      titlePosition: { x: 0.5, y: 0.72 },
       feedTitlePosition: DEFAULT_FEED_TITLE_POSITION,
       feedTitleOffsetY: 0,
       feedTitleFontSize: 0,
-      feedFontFamily: "georgia",
-      shadeOpacity: 85,
+      feedFontFamily: "montserrat",
+      shadeOpacity: 70,
       showOverlayLayer: true,
       showLogoLayer: true,
       showTitleLayer: true,
       showHandleLayer: true,
       showStorySticker: false,
       showStrongSceneWarning: false,
-      videoFramingMode: "cover",
+      videoFramingMode: "horizontal-block",
       imagePosition: 0,
-      miniIaLevel: "leve",
+      miniIaLevel: "media",
       miniIaMirror: false,
       miniIaTrimSeconds: 0,
-      videoFilter: "none",
+      videoFilter: "natural",
       cutPauses: false,
       bgmTrack: "none",
       autoHookEnabled: false,
       autoHookText: "",
+      videoBlockPosY: 0.44,
+      topHeadline: "QUE LAPADA!",
+      authorName: "GUSTAVO GAYER",
+      authorHandle: "@GUSTAVOGAYER",
+      authorVerified: true,
+      customSaturation: 1.0,
+      customContrast: 1.0,
+      customBrightness: 1.0,
+      customSharpness: 0,
     },
   },
   {
@@ -258,12 +303,21 @@ const DEFAULT_PRESET_SLOTS: LayoutPresetSlot[] = [
       imagePosition: -12,
       miniIaLevel: "media",
       miniIaMirror: false,
-      miniIaTrimSeconds: 3,
+      miniIaTrimSeconds: 0,
       videoFilter: "none",
       cutPauses: true,
       bgmTrack: "energetic",
       autoHookEnabled: false,
       autoHookText: "",
+      videoBlockPosY: 0.44,
+      topHeadline: "QUE LAPADA!",
+      authorName: "GUSTAVO GAYER",
+      authorHandle: "@GUSTAVOGAYER",
+      authorVerified: true,
+      customSaturation: 1.0,
+      customContrast: 1.0,
+      customBrightness: 1.0,
+      customSharpness: 0,
     },
   },
 ];
@@ -419,60 +473,44 @@ function applyCanvasVideoFilterOverlay(
   ctx.imageSmoothingEnabled = true;
 
   if (filterPreset === "noir") {
-    // Monocromático Preto & Branco 100% garantido em qualquer GPU/Browser
+    // Monocromático Preto & Branco elegante e natural
     ctx.globalCompositeOperation = "color";
     ctx.fillStyle = "#808080";
     ctx.fillRect(0, 0, w, h);
-    // Realce de alto contraste noir
     ctx.globalCompositeOperation = "multiply";
-    ctx.fillStyle = "rgba(0, 0, 0, 0.28)";
+    ctx.fillStyle = "rgba(0, 0, 0, 0.12)";
     ctx.fillRect(0, 0, w, h);
   } else if (filterPreset === "cinema") {
-    // Look Cinema Teal & Orange profissional
+    // Look Cinema Teal & Orange sutil e cinematográfico (pele natural, sem cores artificiais)
     ctx.globalCompositeOperation = "soft-light";
     const tealOrangeGrad = ctx.createLinearGradient(0, 0, 0, h);
-    tealOrangeGrad.addColorStop(0, "rgba(0, 180, 216, 0.28)");
-    tealOrangeGrad.addColorStop(0.5, "rgba(255, 140, 0, 0.18)");
-    tealOrangeGrad.addColorStop(1, "rgba(0, 150, 199, 0.25)");
+    tealOrangeGrad.addColorStop(0, "rgba(0, 160, 200, 0.12)");
+    tealOrangeGrad.addColorStop(0.5, "rgba(255, 150, 20, 0.08)");
+    tealOrangeGrad.addColorStop(1, "rgba(0, 130, 180, 0.10)");
     ctx.fillStyle = tealOrangeGrad;
     ctx.fillRect(0, 0, w, h);
-    ctx.globalCompositeOperation = "color-burn";
-    ctx.fillStyle = "rgba(255, 110, 0, 0.08)";
-    ctx.fillRect(0, 0, w, h);
   } else if (filterPreset === "dark_moody") {
-    // Dark Moody: Sombras densas, visual dramático de notícia
+    // Dark Moody: Sombras suaves para noticiário sério
     ctx.globalCompositeOperation = "multiply";
-    ctx.fillStyle = "rgba(10, 18, 30, 0.35)";
-    ctx.fillRect(0, 0, w, h);
-    ctx.globalCompositeOperation = "overlay";
-    ctx.fillStyle = "rgba(0, 0, 0, 0.20)";
+    ctx.fillStyle = "rgba(10, 18, 30, 0.14)";
     ctx.fillRect(0, 0, w, h);
   } else if (filterPreset === "cyberpunk") {
-    // Cyberpunk Neon Pop: Magentas e Cyan vibrantes
-    ctx.globalCompositeOperation = "color-dodge";
+    // Cyberpunk Neon Pop sutil
+    ctx.globalCompositeOperation = "soft-light";
     const cyberGrad = ctx.createLinearGradient(0, 0, w, h);
-    cyberGrad.addColorStop(0, "rgba(255, 0, 128, 0.22)");
-    cyberGrad.addColorStop(1, "rgba(0, 245, 255, 0.22)");
+    cyberGrad.addColorStop(0, "rgba(255, 0, 128, 0.10)");
+    cyberGrad.addColorStop(1, "rgba(0, 220, 255, 0.10)");
     ctx.fillStyle = cyberGrad;
     ctx.fillRect(0, 0, w, h);
-    ctx.globalCompositeOperation = "soft-light";
-    ctx.fillStyle = "rgba(180, 0, 255, 0.15)";
-    ctx.fillRect(0, 0, w, h);
   } else if (filterPreset === "vintage") {
-    // Vintage VHS / Anos 90: Tom sépia e tons quentes analógicos
+    // Vintage VHS / Anos 90 suave
     ctx.globalCompositeOperation = "soft-light";
-    ctx.fillStyle = "rgba(215, 150, 75, 0.42)";
-    ctx.fillRect(0, 0, w, h);
-    ctx.globalCompositeOperation = "color";
-    ctx.fillStyle = "rgba(200, 140, 50, 0.16)";
+    ctx.fillStyle = "rgba(215, 150, 75, 0.15)";
     ctx.fillRect(0, 0, w, h);
   } else if (filterPreset === "hdr") {
-    // HDR Vivid: Saturação vibrante e nitidez visual
-    ctx.globalCompositeOperation = "overlay";
-    ctx.fillStyle = "rgba(255, 255, 255, 0.16)";
-    ctx.fillRect(0, 0, w, h);
+    // HDR Vivid equilibrado
     ctx.globalCompositeOperation = "soft-light";
-    ctx.fillStyle = "rgba(255, 200, 100, 0.14)";
+    ctx.fillStyle = "rgba(255, 255, 255, 0.08)";
     ctx.fillRect(0, 0, w, h);
   }
 
@@ -484,7 +522,7 @@ function drawVideoWithFraming(
   video: HTMLVideoElement,
   w: number,
   h: number,
-  framingMode: "cover" | "blur-fit",
+  framingMode: "cover" | "blur-fit" | "horizontal-block" | "split",
   vertical = 0,
   mirror = false,
   miniIaConfig?: {
@@ -495,6 +533,11 @@ function drawVideoWithFraming(
     zoomMax: number;
     zoomPeriod: number;
     filterPreset?: VideoFilterPreset;
+    customSaturation?: number;
+    customContrast?: number;
+    customBrightness?: number;
+    customSharpness?: number;
+    videoBlockPosY?: number;
   },
   crop?: VideoCropRect | null
 ) {
@@ -513,12 +556,16 @@ function drawVideoWithFraming(
     ctx.translate(-w / 2, -h / 2);
   }
 
-  // Aplica Grade de Cores e Contraste da Mini IA + Filtros de Vídeo
+  // Aplica Grade de Cores e Contraste Personalizável (Saturação, Contraste, Brilho e Filtro)
   if (miniIaConfig) {
-    const c = miniIaConfig.contrast;
-    const b = 1 + miniIaConfig.brightness;
-    const s = miniIaConfig.saturation;
-    let filterString = `contrast(${c}) brightness(${b}) saturate(${s})`;
+    const satMult = (miniIaConfig.customSaturation ?? 100) / 100;
+    const conMult = (miniIaConfig.customContrast ?? 100) / 100;
+    const briAdd = (miniIaConfig.customBrightness ?? 0) / 100;
+    const effC = Math.max(0.2, (miniIaConfig.contrast || 1.0) * conMult);
+    const effB = Math.max(0.2, (1 + (miniIaConfig.brightness || 0)) + briAdd);
+    const effS = Math.max(0, (miniIaConfig.saturation || 1.0) * satMult);
+
+    let filterString = `contrast(${effC.toFixed(2)}) brightness(${effB.toFixed(2)}) saturate(${effS.toFixed(2)})`;
     if (miniIaConfig.filterPreset && miniIaConfig.filterPreset !== "none") {
       const extra = VIDEO_FILTERS[miniIaConfig.filterPreset]?.canvasFilter;
       if (extra && extra !== "none") {
@@ -530,7 +577,81 @@ function drawVideoWithFraming(
     } catch {}
   }
 
-  if (framingMode === "blur-fit") {
+  if (framingMode === "horizontal-block") {
+    // Bloco de Vídeo Horizontal (16:9 Noticioso arrastável no Preview)
+    const fullWidth = video.videoWidth || 1920;
+    const fullHeight = video.videoHeight || 1080;
+    const vAspect = fullHeight / fullWidth;
+    const blockH = Math.round(w * (vAspect > 0 ? vAspect : 9 / 16));
+    const normY = typeof miniIaConfig?.videoBlockPosY === "number" ? miniIaConfig.videoBlockPosY : 0.44;
+    const blockY = Math.max(0, Math.min(h - blockH, Math.round(normY * h - blockH / 2)));
+
+    // Fundo desfocado agradável atrás do bloco
+    if (typeof document !== "undefined") {
+      const blurCanvas = document.createElement("canvas");
+      blurCanvas.width = 135;
+      blurCanvas.height = 240;
+      const bCtx = blurCanvas.getContext("2d");
+      if (bCtx) {
+        bCtx.filter = "blur(7px) brightness(0.32)";
+        drawCover(bCtx, video, 0, 0, 135, 240, 0, crop);
+        ctx.drawImage(blurCanvas, 0, 0, w, h);
+      } else {
+        drawCover(ctx, video, 0, 0, w, h, 0, crop);
+      }
+    } else {
+      drawCover(ctx, video, 0, 0, w, h, 0, crop);
+    }
+
+    // Desenha o vídeo no bloco horizontal com sombra e definição
+    ctx.save();
+    ctx.shadowColor = "rgba(0, 0, 0, 0.9)";
+    ctx.shadowBlur = 28;
+    ctx.shadowOffsetY = 6;
+    try {
+      if (crop && crop.width > 0 && crop.height > 0) {
+        ctx.drawImage(video, crop.x, crop.y, crop.width, crop.height, 0, blockY, w, blockH);
+      } else {
+        ctx.drawImage(video, 0, blockY, w, blockH);
+      }
+    } catch {}
+    ctx.restore();
+
+    // Linhas sutis superior e inferior delimitando o bloco de vídeo
+    ctx.fillStyle = "rgba(255, 255, 255, 0.22)";
+    ctx.fillRect(0, blockY, w, 2);
+    ctx.fillRect(0, blockY + blockH - 2, w, 2);
+  } else if (framingMode === "split") {
+    // Split 50/50: Superior focado/aproximado + Inferior contextual aberto
+    const halfH = Math.floor(h / 2);
+    // Superior
+    drawCover(ctx, video, 0, 0, w, halfH, vertical, crop);
+    // Selo "Antes" / Destaque
+    ctx.save();
+    ctx.fillStyle = "rgba(0, 0, 0, 0.65)";
+    if (typeof ctx.roundRect === "function") {
+      ctx.beginPath();
+      ctx.roundRect(w - 170, halfH - 65, 140, 48, 8);
+      ctx.fill();
+    } else {
+      ctx.fillRect(w - 170, halfH - 65, 140, 48);
+    }
+    ctx.fillStyle = "#ffffff";
+    ctx.font = '900 28px "Montserrat", sans-serif';
+    ctx.textAlign = "center";
+    ctx.textBaseline = "middle";
+    ctx.fillText("Antes", w - 100, halfH - 41);
+    ctx.restore();
+
+    // Divisória no centro
+    ctx.fillStyle = "#000000";
+    ctx.fillRect(0, halfH - 2, w, 4);
+    ctx.fillStyle = "rgba(255, 255, 255, 0.7)";
+    ctx.fillRect(0, halfH - 1, w, 2);
+
+    // Inferior
+    drawContain(ctx, video, 0, halfH, w, halfH, 0, crop);
+  } else if (framingMode === "blur-fit") {
     // Desfoque em canvas reduzido (135x240): executa em < 0.5ms em vez de travar a CPU por 300ms a 1080x1920
     if (typeof document !== "undefined") {
       const blurCanvas = document.createElement("canvas");
@@ -555,7 +676,7 @@ function drawVideoWithFraming(
   // Reseta ctx.filter para evitar contaminação
   ctx.filter = "none";
 
-  // Aplica sobreposição visual de cor & estilo da Mini IA (garante 100% de fidelidade visual na tela)
+  // Aplica sobreposição visual de cor & estilo da Mini IA suave
   applyCanvasVideoFilterOverlay(ctx, w, h, miniIaConfig?.filterPreset);
 
   ctx.restore();
@@ -658,6 +779,162 @@ function drawStoryStickerGuide(ctx: CanvasRenderingContext2D, canvasWidth: numbe
   ctx.restore();
 }
 
+function drawAuthorBadgeCard(
+  ctx: CanvasRenderingContext2D,
+  name: string,
+  handle: string,
+  verified: boolean,
+  x: number,
+  y: number,
+  avatarImg?: HTMLImageElement | HTMLCanvasElement | null
+) {
+  ctx.save();
+  const avatarR = 28;
+  const avatarX = x + avatarR;
+  const avatarY = y;
+
+  // 1. Avatar circular com anel verde neon / estilizado de orador/político
+  ctx.save();
+  ctx.beginPath();
+  ctx.arc(avatarX, avatarY, avatarR + 3.5, 0, Math.PI * 2);
+  ctx.fillStyle = "#10b981"; // Borda verde vibrante do avatar
+  ctx.fill();
+
+  ctx.beginPath();
+  ctx.arc(avatarX, avatarY, avatarR, 0, Math.PI * 2);
+  ctx.closePath();
+  ctx.clip();
+  if (avatarImg && isImageDrawable(avatarImg)) {
+    ctx.drawImage(avatarImg, avatarX - avatarR, avatarY - avatarR, avatarR * 2, avatarR * 2);
+  } else {
+    const grad = ctx.createLinearGradient(avatarX - avatarR, avatarY - avatarR, avatarX + avatarR, avatarY + avatarR);
+    grad.addColorStop(0, "#334155");
+    grad.addColorStop(1, "#0f172a");
+    ctx.fillStyle = grad;
+    ctx.fill();
+    ctx.fillStyle = "#ffffff";
+    ctx.font = '900 22px "Montserrat", sans-serif';
+    ctx.textAlign = "center";
+    ctx.textBaseline = "middle";
+    const initial = (name || "V").trim().charAt(0).toUpperCase();
+    ctx.fillText(initial, avatarX, avatarY);
+  }
+  ctx.restore();
+
+  // 2. Nome do autor + Selo de Verificado
+  const textX = avatarX + avatarR + 16;
+  ctx.textAlign = "left";
+  ctx.textBaseline = "middle";
+  ctx.font = '900 28px "Montserrat", -apple-system, sans-serif';
+  ctx.fillStyle = "#ffffff";
+  ctx.shadowColor = "rgba(0,0,0,0.9)";
+  ctx.shadowBlur = 8;
+  const upperName = (name || "ORADOR").toUpperCase();
+  ctx.fillText(upperName, textX, avatarY - 14);
+
+  // Selo azul de verificado
+  if (verified) {
+    const nameMetrics = ctx.measureText(upperName);
+    const badgeX = textX + nameMetrics.width + 14;
+    const badgeY = avatarY - 14;
+    const badgeR = 11;
+
+    ctx.save();
+    ctx.fillStyle = "#38bdf8"; // Azul verificado oficial
+    ctx.beginPath();
+    ctx.arc(badgeX, badgeY, badgeR, 0, Math.PI * 2);
+    ctx.fill();
+
+    // Checkmark branco
+    ctx.strokeStyle = "#ffffff";
+    ctx.lineWidth = 2.6;
+    ctx.lineCap = "round";
+    ctx.lineJoin = "round";
+    ctx.beginPath();
+    ctx.moveTo(badgeX - 4.5, badgeY);
+    ctx.lineTo(badgeX - 1, badgeY + 3.5);
+    ctx.lineTo(badgeX + 5, badgeY - 3.5);
+    ctx.stroke();
+    ctx.restore();
+  }
+
+  // 3. Handle @usuário
+  ctx.font = '700 20px "Inter", sans-serif';
+  ctx.fillStyle = "#94a3b8";
+  ctx.shadowColor = "transparent";
+  const userHandle = handle ? (handle.startsWith("@") ? handle : `@${handle}`) : "@GUSTAVOGAYER";
+  ctx.fillText(userHandle.toUpperCase(), textX, avatarY + 16);
+
+  ctx.restore();
+}
+
+function drawAlignmentGuides(
+  ctx: CanvasRenderingContext2D,
+  w: number,
+  h: number,
+  guideX: boolean,
+  guideY: boolean
+) {
+  if (!guideX && !guideY) return;
+
+  ctx.save();
+  ctx.imageSmoothingEnabled = true;
+
+  if (guideX) {
+    const cx = Math.round(w / 2);
+    ctx.strokeStyle = "#06b6d4"; // Ciano neon
+    ctx.lineWidth = 3;
+    ctx.setLineDash([12, 6]);
+    ctx.beginPath();
+    ctx.moveTo(cx, 0);
+    ctx.lineTo(cx, h);
+    ctx.stroke();
+
+    ctx.setLineDash([]);
+    ctx.fillStyle = "#06b6d4";
+    if (typeof ctx.roundRect === "function") {
+      ctx.beginPath();
+      ctx.roundRect(cx - 55, 24, 110, 32, 8);
+      ctx.fill();
+    } else {
+      ctx.fillRect(cx - 55, 24, 110, 32);
+    }
+    ctx.fillStyle = "#000000";
+    ctx.font = '900 16px "Inter", sans-serif';
+    ctx.textAlign = "center";
+    ctx.textBaseline = "middle";
+    ctx.fillText("CENTRO X", cx, 40);
+  }
+
+  if (guideY) {
+    const cy = Math.round(h / 2);
+    ctx.strokeStyle = "#ec4899"; // Magenta neon
+    ctx.lineWidth = 3;
+    ctx.setLineDash([12, 6]);
+    ctx.beginPath();
+    ctx.moveTo(0, cy);
+    ctx.lineTo(w, cy);
+    ctx.stroke();
+
+    ctx.setLineDash([]);
+    ctx.fillStyle = "#ec4899";
+    if (typeof ctx.roundRect === "function") {
+      ctx.beginPath();
+      ctx.roundRect(24, cy - 16, 110, 32, 8);
+      ctx.fill();
+    } else {
+      ctx.fillRect(24, cy - 16, 110, 32);
+    }
+    ctx.fillStyle = "#ffffff";
+    ctx.font = '900 16px "Inter", sans-serif';
+    ctx.textAlign = "center";
+    ctx.textBaseline = "middle";
+    ctx.fillText("CENTRO Y", 79, cy);
+  }
+
+  ctx.restore();
+}
+
 let cachedOfficialWhiteLogo: HTMLImageElement | null = null;
 let cachedOfficialDarkLogo: HTMLImageElement | null = null;
 let cachedOfficialWebmLogo: HTMLVideoElement | null = null;
@@ -714,37 +991,42 @@ function getCircularRedLogo(): HTMLCanvasElement | HTMLImageElement | null {
 function getOfficialLogo(variant: "white" | "dark" | "gif"): HTMLImageElement | HTMLVideoElement | null {
   if (typeof window === "undefined") return null;
   if (variant === "gif") {
-    // 1. Tenta carregar o WebM transparente nativo (65 KB, qualidade perfeita com canal Alpha)
-    if (!cachedOfficialWebmLogo) {
-      try {
+    // 1. Tenta carregar o WebM transparente nativo (com canal Alpha)
+    if (!cachedOfficialWebmLogo && typeof document !== "undefined") {
+      const existing = document.getElementById("viralizou-animated-logo-webm") as HTMLVideoElement | null;
+      if (existing) {
+        cachedOfficialWebmLogo = existing;
+      } else if (document.body) {
         const vid = document.createElement("video");
+        vid.id = "viralizou-animated-logo-webm";
         vid.src = "/logos/Viralizou_Goiania_logo_animada_transparente.webm";
         vid.autoplay = true;
         vid.loop = true;
-        vid.defaultMuted = true;
         vid.muted = true;
+        vid.defaultMuted = true;
         vid.playsInline = true;
-        vid.crossOrigin = "anonymous";
         vid.preload = "auto";
-        vid.oncanplay = () => {
-          vid.play().catch(() => {});
-          if (typeof window !== "undefined") {
-            window.dispatchEvent(new CustomEvent("viralizou_logo_ready"));
-          }
-        };
-        vid.onloadeddata = () => {
-          vid.play().catch(() => {});
-          if (typeof window !== "undefined") {
-            window.dispatchEvent(new CustomEvent("viralizou_logo_ready"));
-          }
-        };
-        cachedOfficialWebmLogo = vid;
+        vid.style.position = "fixed";
+        vid.style.top = "0";
+        vid.style.left = "0";
+        vid.style.width = "4px";
+        vid.style.height = "4px";
+        vid.style.opacity = "0.001";
+        vid.style.pointerEvents = "none";
+        vid.style.zIndex = "-100";
+        document.body.appendChild(vid);
         vid.play().catch(() => {});
-      } catch {}
+        cachedOfficialWebmLogo = vid;
+      }
     }
 
-    if (cachedOfficialWebmLogo && isImageDrawable(cachedOfficialWebmLogo)) {
-      return cachedOfficialWebmLogo;
+    if (cachedOfficialWebmLogo) {
+      if (cachedOfficialWebmLogo.paused) {
+        cachedOfficialWebmLogo.play().catch(() => {});
+      }
+      if (isImageDrawable(cachedOfficialWebmLogo)) {
+        return cachedOfficialWebmLogo;
+      }
     }
 
     // 2. Fallback para GIF animado oficial do portal
@@ -1379,6 +1661,39 @@ function renderCaptionStyleToContext(
     return;
   }
 
+  // 4.5. ESTILO BICOLOR IMPACTO (Amarelo & Branco - Foto 1/Debate & Foto 2)
+  if (textStyle === "bicolor-yellow" || textStyle === "viral-debate") {
+    let curY = centerY - layout.height / 2 + layout.lineHeight * 0.5;
+    for (let i = 0; i < linesToDraw.length; i++) {
+      const line = linesToDraw[i];
+      if (line) {
+        ctx.font = fontString;
+        ctx.save();
+        ctx.shadowColor = "rgba(0, 0, 0, 0.98)";
+        ctx.shadowBlur = 18;
+        ctx.shadowOffsetY = 5;
+        ctx.textBaseline = "middle";
+        ctx.textAlign = textAlign;
+        let drawX = centerX;
+        if (textAlign === "left") drawX = blockLeft;
+        else if (textAlign === "right") drawX = blockRight;
+
+        const strokeW = Math.max(6, Math.round(layout.fontSize * 0.12));
+        ctx.lineWidth = strokeW;
+        ctx.strokeStyle = "#000000";
+        ctx.lineJoin = "round";
+        ctx.strokeText(line, drawX, curY);
+
+        // Alterna entre branco e amarelo ouro vibrante
+        ctx.fillStyle = i % 2 === 0 ? "#ffffff" : "#ffd700";
+        ctx.fillText(line, drawX, curY);
+        ctx.restore();
+      }
+      curY += layout.lineHeight;
+    }
+    return;
+  }
+
   // 5. ESTILOS FAIXA / HIGHLIGHT / STROKE / STANDARD
   let currentY = centerY - layout.height / 2 + layout.lineHeight * 0.5;
 
@@ -1581,7 +1896,85 @@ function drawReelHeadline(
   canvasHeight: number = REEL_H,
   maxWidth: number = 820,
   handle: string = "@VIRALIZOUGOIANIA",
+  debateMeta?: {
+    topHeadline?: string;
+    authorName?: string;
+    authorHandle?: string;
+    authorVerified?: boolean;
+  }
 ) {
+  // Estilo Debate Político (Vídeo Horizontal - Imagem 1 de referência)
+  if (textStyle === "viral-debate") {
+    ctx.save();
+    ctx.imageSmoothingEnabled = true;
+    ctx.imageSmoothingQuality = "high";
+    (ctx as any).textRendering = "geometricPrecision";
+
+    // 1. Manchete Punch do Topo ("QUE LAPADA!")
+    const topText = (debateMeta?.topHeadline || category || "QUE LAPADA!").trim().toUpperCase();
+    const topY = Math.round(canvasHeight * 0.10);
+    const topFontSize = Math.min(84, Math.max(54, fontSize > 0 ? fontSize : 68));
+    ctx.font = getReelFont(fontFamily || "montserrat", topFontSize, "900");
+    ctx.textAlign = "center";
+    ctx.textBaseline = "middle";
+
+    ctx.save();
+    ctx.shadowColor = "rgba(0, 0, 0, 0.98)";
+    ctx.shadowBlur = 24;
+    ctx.shadowOffsetY = 6;
+    ctx.lineWidth = Math.max(7, Math.round(topFontSize * 0.13));
+    ctx.strokeStyle = "#000000";
+    ctx.lineJoin = "round";
+    ctx.strokeText(topText, W / 2, topY);
+    ctx.fillStyle = "#ffffff";
+    ctx.fillText(topText, W / 2, topY);
+    ctx.restore();
+
+    // 2. Manchete Inferior Bicolor Noticiosa
+    const bottomY = typeof position?.y === "number" && position.y > 0 && position.y < 1
+      ? Math.round(position.y * canvasHeight)
+      : Math.round(canvasHeight * 0.70);
+
+    const effFontSize = fontSize > 0 ? Math.min(fontSize, 54) : 48;
+    ctx.font = getReelFont(fontFamily || "montserrat", effFontSize, "900");
+    const layout = getCachedReelTitleLayout(ctx, headline, fontFamily || "montserrat", "900", textCase || "uppercase", effFontSize, maxWidth);
+
+    const lineH = Math.round(effFontSize * 1.18);
+    const totalH = layout.lines.length * lineH;
+    let curY = bottomY - totalH / 2;
+
+    for (let i = 0; i < layout.lines.length; i++) {
+      const line = layout.lines[i];
+      if (line) {
+        ctx.save();
+        ctx.shadowColor = "rgba(0, 0, 0, 0.98)";
+        ctx.shadowBlur = 18;
+        ctx.shadowOffsetY = 5;
+        ctx.textAlign = textAlign || "center";
+        ctx.textBaseline = "middle";
+        const strokeW = Math.max(6, Math.round(effFontSize * 0.12));
+        ctx.lineWidth = strokeW;
+        ctx.strokeStyle = "#000000";
+        ctx.lineJoin = "round";
+        ctx.strokeText(line, W / 2, curY);
+        ctx.fillStyle = i % 2 === 0 ? "#ffffff" : "#ffd700";
+        ctx.fillText(line, W / 2, curY);
+        ctx.restore();
+      }
+      curY += lineH;
+    }
+
+    // 3. Cartão do Autor / Orador com Avatar e Selo Verificado (Estilo Foto 1)
+    const authorY = curY + 44;
+    const authorName = debateMeta?.authorName || "GUSTAVO GAYER";
+    const authorHandle = debateMeta?.authorHandle || "@GUSTAVOGAYER";
+    const authorVerified = debateMeta?.authorVerified !== false;
+    drawAuthorBadgeCard(ctx, authorName, authorHandle, authorVerified, 72, authorY);
+
+    ctx.restore();
+    return;
+  }
+
   // Estilo Bloco Vermelho Notícia (TVT / Notícias): Fundo vermelho sólido cobrindo o terço inferior + manchete branca à esquerda + rodapé clean
   if (textStyle === "red-bottom") {
     const defaultBannerY = Math.round(canvasHeight * 0.615); // ~1180px em 1920
@@ -2032,6 +2425,59 @@ function drawReelHeadline(
     ctx.clip();
     ctx.drawImage(raster.canvas, drawX, drawY);
     ctx.restore();
+  } else if (animation === "bounce") {
+    // Pulo elástico dinâmico com amortecimento
+    const t = rawProgress;
+    let s = 1;
+    if (t < 1) {
+      const p = 0.3;
+      s = Math.pow(2, -10 * t) * Math.sin(((t - p / 4) * (2 * Math.PI)) / p) + 1;
+    }
+    ctx.translate(centerX, centerY);
+    ctx.scale(Math.max(0.1, s), Math.max(0.1, s));
+    ctx.drawImage(raster.canvas, -raster.originX, -raster.originY);
+  } else if (animation === "zoom-in") {
+    // Impacto cinematográfico de 1.35x para 1.0x com desaceleração
+    const easeOutQuad = 1 - (1 - rawProgress) * (1 - rawProgress);
+    const scale = 1.35 - 0.35 * easeOutQuad;
+    ctx.globalAlpha = Math.min(1, rawProgress * 1.8);
+    ctx.translate(centerX, centerY);
+    ctx.scale(scale, scale);
+    ctx.drawImage(raster.canvas, -raster.originX, -raster.originY);
+  } else if (animation === "pulse") {
+    // Pulsação rítmica contínua
+    const beat = (Math.sin(currentTime * 4.5) + 1) * 0.5;
+    const scale = 1.0 + 0.045 * beat;
+    ctx.translate(centerX, centerY);
+    ctx.scale(scale, scale);
+    ctx.drawImage(raster.canvas, -raster.originX, -raster.originY);
+  } else if (animation === "karaoke") {
+    // Karaokê com varredura de luz neon contínua
+    ctx.drawImage(raster.canvas, drawX, drawY);
+    const sweepProgress = (currentTime % 2.5) / 2.5;
+    const sweepX = drawX + raster.width * sweepProgress;
+    ctx.save();
+    ctx.globalCompositeOperation = "source-atop";
+    const sweepGrad = ctx.createLinearGradient(sweepX - 80, 0, sweepX + 80, 0);
+    sweepGrad.addColorStop(0, "rgba(255, 215, 0, 0)");
+    sweepGrad.addColorStop(0.5, "rgba(255, 255, 255, 0.95)");
+    sweepGrad.addColorStop(1, "rgba(255, 215, 0, 0)");
+    ctx.fillStyle = sweepGrad;
+    ctx.fillRect(drawX, drawY, raster.width, raster.height);
+    ctx.restore();
+  } else if (animation === "glitch") {
+    // Micro-deslocamento de urgência
+    const isGlitching = rawProgress < 0.85 && Math.sin(currentTime * 24) > 0.45;
+    if (isGlitching) {
+      const shiftX = (Math.random() - 0.5) * 16;
+      const shiftY = (Math.random() - 0.5) * 6;
+      ctx.save();
+      ctx.globalAlpha = 0.85;
+      ctx.drawImage(raster.canvas, drawX + shiftX, drawY + shiftY);
+      ctx.restore();
+    } else {
+      ctx.drawImage(raster.canvas, drawX, drawY);
+    }
   } else {
     // Modo estático ou pós-conclusão da animação (0.05ms)
     ctx.drawImage(raster.canvas, drawX, drawY);
@@ -2069,7 +2515,7 @@ function drawReelFrame(
   showHandleLayer: boolean = true,
   showStorySticker: boolean = false,
   format: PublicationFormat = "reel",
-  framingMode: "cover" | "blur-fit" = "cover",
+  framingMode: "cover" | "blur-fit" | "horizontal-block" | "split" = "cover",
   imageVertical: number = 0,
   mirror: boolean = false,
   miniIaConfig?: {
@@ -2083,6 +2529,15 @@ function drawReelFrame(
     autoHookEnabled?: boolean;
     autoHookText?: string;
     hookPositionY?: number;
+    customSaturation?: number;
+    customContrast?: number;
+    customBrightness?: number;
+    customSharpness?: number;
+    videoBlockPosY?: number;
+    topHeadline?: string;
+    authorName?: string;
+    authorHandle?: string;
+    authorVerified?: boolean;
   },
   crop?: VideoCropRect | null
 ) {
@@ -2146,6 +2601,12 @@ function drawReelFrame(
       REEL_H,
       820,
       handle || "@VIRALIZOUGOIANIA",
+      {
+        topHeadline: miniIaConfig?.topHeadline,
+        authorName: miniIaConfig?.authorName,
+        authorHandle: miniIaConfig?.authorHandle,
+        authorVerified: miniIaConfig?.authorVerified,
+      }
     );
   }
 
@@ -2237,6 +2698,12 @@ function buildReelOverlayCanvas(
   showHandleLayer: boolean = true,
   showStorySticker: boolean = true,
   format: PublicationFormat = "reel",
+  debateMeta?: {
+    topHeadline?: string;
+    authorName?: string;
+    authorHandle?: string;
+    authorVerified?: boolean;
+  }
 ): HTMLCanvasElement {
   const canvas = document.createElement("canvas");
   canvas.width = W;
@@ -2299,6 +2766,7 @@ function buildReelOverlayCanvas(
       REEL_H,
       820,
       handle || "@VIRALIZOUGOIANIA",
+      debateMeta
     );
   }
 
@@ -2424,7 +2892,70 @@ export default function SocialFeedCreator({ posts, onBack, initialPost, onOpenCo
   const [showTitleLayer, setShowTitleLayer] = useState<boolean>(true);
   const [showHandleLayer, setShowHandleLayer] = useState<boolean>(true);
   const [showStorySticker, setShowStorySticker] = useState<boolean>(false);
-  const [videoFramingMode, setVideoFramingMode] = useState<"cover" | "blur-fit">("cover");
+  const [videoFramingMode, setVideoFramingMode] = useState<"cover" | "blur-fit" | "horizontal-block" | "split">("cover");
+  const [videoBlockPosY, setVideoBlockPosY] = useState<number>(() => {
+    try {
+      const saved = localStorage.getItem("viralizou_video_block_pos_y");
+      if (saved) return Number(saved) || 0.44;
+    } catch {}
+    return 0.44;
+  });
+  const videoBlockPosYRef = useRef<number>(0.44);
+  const videoDragRef = useRef<{ pointerId: number; offsetY: number } | null>(null);
+
+  useEffect(() => {
+    videoBlockPosYRef.current = videoBlockPosY;
+  }, [videoBlockPosY]);
+
+  // Calibração Manual Fina de Imagem & Cor (Sem visual artificial)
+  const [customSaturation, setCustomSaturation] = useState<number>(() => {
+    try {
+      const s = localStorage.getItem("viralizou_custom_saturation");
+      if (s) return Number(s) || 1.0;
+    } catch {}
+    return 1.0;
+  });
+  const [customContrast, setCustomContrast] = useState<number>(() => {
+    try {
+      const s = localStorage.getItem("viralizou_custom_contrast");
+      if (s) return Number(s) || 1.0;
+    } catch {}
+    return 1.0;
+  });
+  const [customBrightness, setCustomBrightness] = useState<number>(() => {
+    try {
+      const s = localStorage.getItem("viralizou_custom_brightness");
+      if (s) return Number(s) || 1.0;
+    } catch {}
+    return 1.0;
+  });
+  const [customSharpness, setCustomSharpness] = useState<number>(() => {
+    try {
+      const s = localStorage.getItem("viralizou_custom_sharpness");
+      if (s) return Number(s) || 0;
+    } catch {}
+    return 0;
+  });
+
+  // Metadados do Layout Debate Político
+  const [topHeadline, setTopHeadline] = useState<string>("QUE LAPADA!");
+  const [authorName, setAuthorName] = useState<string>("GUSTAVO GAYER");
+  const [authorHandle, setAuthorHandle] = useState<string>("@GUSTAVOGAYER");
+  const [authorVerified, setAuthorVerified] = useState<boolean>(true);
+
+  // Guias magnéticas de alinhamento ao centro
+  const [snapGuideX, setSnapGuideX] = useState<boolean>(false);
+  const [snapGuideY, setSnapGuideY] = useState<boolean>(false);
+  const snapGuideXRef = useRef<boolean>(false);
+  const snapGuideYRef = useRef<boolean>(false);
+
+  // Correção Gramatical Inteligente de Título
+  const [isCorrectingTitle, setIsCorrectingTitle] = useState<boolean>(false);
+  const [titleCorrectedSuccess, setTitleCorrectedSuccess] = useState<string>("");
+
+  // Camadas bloqueadas contra arraste acidental
+  const [lockedLayers, setLockedLayers] = useState<{ [key: string]: boolean }>({});
+
   const [imagePosition, setImagePosition] = useState(0);
   const [feedTitleFontSize, setFeedTitleFontSize] = useState<number>(0); // 0 = automático
   const [feedFontFamily, setFeedFontFamily] = useState<ReelFontFamily>("georgia");
@@ -2435,7 +2966,7 @@ export default function SocialFeedCreator({ posts, onBack, initialPost, onOpenCo
   const [renderLogs, setRenderLogs] = useState<string[]>([]);
   const [miniIaLevel, setMiniIaLevel] = useState<MiniIaEditLevel>("media");
   const [miniIaMirror, setMiniIaMirror] = useState<boolean>(false);
-  const [miniIaTrimSeconds, setMiniIaTrimSeconds] = useState<number>(3); // Padrão sempre corta 3 segundos
+  const [miniIaTrimSeconds, setMiniIaTrimSeconds] = useState<number>(0); // Padrão 0s (só corta se o usuário pedir)
   const [videoFilter, setVideoFilter] = useState<VideoFilterPreset>("none");
   const videoFilterRef = useRef<VideoFilterPreset>("none");
   const [cutPauses, setCutPauses] = useState<boolean>(true);
@@ -2460,6 +2991,56 @@ export default function SocialFeedCreator({ posts, onBack, initialPost, onOpenCo
   const [isPlayingBgm, setIsPlayingBgm] = useState<boolean>(false);
   const [bgmCountdown, setBgmCountdown] = useState<number>(10);
 
+  // Integração Real Oficial (Token Vercel & Catálogo de SFX)
+  const [realOficialStatus, setRealOficialStatus] = useState<RealOficialConfigStatus | null>(null);
+  const [realOficialSfxList, setRealOficialSfxList] = useState<RealOficialSfxItem[]>(DEFAULT_REAL_OFICIAL_SFX);
+  const [selectedSfxPreset, setSelectedSfxPreset] = useState<"transitions" | "punch" | "news" | "none">("transitions");
+  const [playingSfxId, setPlayingSfxId] = useState<string | null>(null);
+  const [sfxVolume, setSfxVolume] = useState<number>(35);
+  const [showVercelTokenModal, setShowVercelTokenModal] = useState<boolean>(false);
+  const sfxAudioRef = useRef<HTMLAudioElement | null>(null);
+
+  useEffect(() => {
+    fetch("/api/admin/real-oficial")
+      .then((res) => res.json())
+      .then((data) => {
+        if (data.ok) {
+          if (data.status) setRealOficialStatus(data.status);
+          if (Array.isArray(data.sfx) && data.sfx.length > 0) {
+            setRealOficialSfxList(data.sfx);
+          }
+        }
+      })
+      .catch((err) => {
+        console.warn("[SocialFeedCreator] Erro ao carregar status do Real Oficial:", err);
+      });
+  }, []);
+
+  function handlePlaySfx(sfxItem: RealOficialSfxItem) {
+    if (playingSfxId === sfxItem.id) {
+      if (sfxAudioRef.current) {
+        sfxAudioRef.current.pause();
+        sfxAudioRef.current.currentTime = 0;
+      }
+      setPlayingSfxId(null);
+      return;
+    }
+    if (sfxAudioRef.current) {
+      sfxAudioRef.current.pause();
+    }
+    try {
+      const audio = new Audio(sfxItem.url);
+      audio.volume = Math.max(0.01, Math.min(1, sfxVolume / 100));
+      sfxAudioRef.current = audio;
+      setPlayingSfxId(sfxItem.id);
+      audio.onended = () => setPlayingSfxId(null);
+      audio.onerror = () => setPlayingSfxId(null);
+      audio.play().catch(() => setPlayingSfxId(null));
+    } catch {
+      setPlayingSfxId(null);
+    }
+  }
+
   useEffect(() => {
     autoHookEnabledRef.current = autoHookEnabled;
   }, [autoHookEnabled]);
@@ -2469,7 +3050,11 @@ export default function SocialFeedCreator({ posts, onBack, initialPost, onOpenCo
   }, [hookPositionY]);
   const [videoDuration, setVideoDuration] = useState<number>(0);
   const [videoCrop, setVideoCrop] = useState<VideoCropRect | null>(null);
+  const [imageCrop, setImageCrop] = useState<VideoCropRect | null>(null);
+  const [cropMediaType, setCropMediaType] = useState<"video" | "image">("video");
   const [showCropModal, setShowCropModal] = useState<boolean>(false);
+  type ControlTab = "media" | "mini-ia" | "title-layout" | "branding-layers";
+  const [activeTab, setActiveTab] = useState<ControlTab>("media");
 
   const effectiveHookText = autoHookText.trim() || (title || selectedPost?.title || "LIVRO CAIU SOZINHO NO CHÃO");
   const computedKeywords = useMemo(() => {
@@ -2566,6 +3151,18 @@ export default function SocialFeedCreator({ posts, onBack, initialPost, onOpenCo
     if (typeof d.bgmVolume === "number") {
       chooseBgmVolume(d.bgmVolume);
     }
+    if (typeof d.videoBlockPosY === "number") {
+      setVideoBlockPosY(d.videoBlockPosY);
+      videoBlockPosYRef.current = d.videoBlockPosY;
+    }
+    if (typeof d.topHeadline === "string") setTopHeadline(d.topHeadline);
+    if (typeof d.authorName === "string") setAuthorName(d.authorName);
+    if (typeof d.authorHandle === "string") setAuthorHandle(d.authorHandle);
+    if (typeof d.authorVerified === "boolean") setAuthorVerified(d.authorVerified);
+    if (typeof d.customSaturation === "number") setCustomSaturation(d.customSaturation);
+    if (typeof d.customContrast === "number") setCustomContrast(d.customContrast);
+    if (typeof d.customBrightness === "number") setCustomBrightness(d.customBrightness);
+    if (typeof d.customSharpness === "number") setCustomSharpness(d.customSharpness);
 
     setActiveSlotId(slot.id);
     setSlotFeedback(`⚡ ${slot.name} carregado no preview!`);
@@ -2623,6 +3220,15 @@ export default function SocialFeedCreator({ posts, onBack, initialPost, onOpenCo
           videoCrop,
           hookPositionY: hookPositionYRef.current || hookPositionY,
           bgmVolume,
+          videoBlockPosY: videoBlockPosYRef.current || videoBlockPosY,
+          topHeadline,
+          authorName,
+          authorHandle,
+          authorVerified,
+          customSaturation,
+          customContrast,
+          customBrightness,
+          customSharpness,
         },
       };
     });
@@ -2637,11 +3243,20 @@ export default function SocialFeedCreator({ posts, onBack, initialPost, onOpenCo
   }
 
   function handleApplyCrop(newCrop: VideoCropRect | null) {
-    setVideoCrop(newCrop);
-    if (newCrop) {
-      try { localStorage.setItem("viralizou_video_crop", JSON.stringify(newCrop)); } catch {}
+    if (cropMediaType === "video") {
+      setVideoCrop(newCrop);
+      if (newCrop) {
+        try { localStorage.setItem("viralizou_video_crop", JSON.stringify(newCrop)); } catch {}
+      } else {
+        try { localStorage.removeItem("viralizou_video_crop"); } catch {}
+      }
     } else {
-      try { localStorage.removeItem("viralizou_video_crop"); } catch {}
+      setImageCrop(newCrop);
+      if (newCrop) {
+        try { localStorage.setItem("viralizou_image_crop", JSON.stringify(newCrop)); } catch {}
+      } else {
+        try { localStorage.removeItem("viralizou_image_crop"); } catch {}
+      }
     }
     cachedOverlayCanvasRef.current = null;
     renderCard();
@@ -2762,7 +3377,36 @@ export default function SocialFeedCreator({ posts, onBack, initialPost, onOpenCo
   function chooseMiniIaTrimSeconds(sec: number) {
     const val = Math.max(0, Math.min(60, Math.round(Number(sec) || 0)));
     setMiniIaTrimSeconds(val);
+    if (val === 0 && videoPreviewRef.current) {
+      videoPreviewRef.current.currentTime = 0;
+    }
     try { localStorage.setItem("viralizou_mini_ia_trim_seconds", String(val)); } catch {}
+  }
+
+  async function handleCorrectTitle() {
+    if (!title || !title.trim()) return;
+    setIsCorrectingTitle(true);
+    setTitleCorrectedSuccess("");
+    try {
+      const res = await fetch("/api/admin/correct-title", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ text: title }),
+      });
+      const data = await res.json();
+      if (data.ok && data.correctedText) {
+        setTitle(data.correctedText);
+        cachedOverlayCanvasRef.current = null;
+        setTitleCorrectedSuccess(`✨ Corrigido com sucesso via ${data.source === "gemini" ? "Inteligência Artificial" : "Gramática Jornalística"}!`);
+        setTimeout(() => setTitleCorrectedSuccess(""), 4500);
+      } else {
+        setMessage(data.error || "Não foi possível corrigir a frase.");
+      }
+    } catch {
+      setMessage("Erro ao conectar com o serviço de correção gramatical.");
+    } finally {
+      setIsCorrectingTitle(false);
+    }
   }
 
   function addLog(msg: string) {
@@ -2910,6 +3554,13 @@ export default function SocialFeedCreator({ posts, onBack, initialPost, onOpenCo
           if (parsed && typeof parsed.width === "number") setVideoCrop(parsed);
         } catch {}
       }
+      const savedImgCrop = localStorage.getItem("viralizou_image_crop");
+      if (savedImgCrop) {
+        try {
+          const parsed = JSON.parse(savedImgCrop);
+          if (parsed && typeof parsed.width === "number") setImageCrop(parsed);
+        } catch {}
+      }
       const importedUrl = localStorage.getItem("viralizou_import_video_url");
       if (importedUrl) {
         setImportVideoUrl(importedUrl);
@@ -2981,7 +3632,7 @@ export default function SocialFeedCreator({ posts, onBack, initialPost, onOpenCo
                 ctx.translate(currentW, 0);
                 ctx.scale(-1, 1);
               }
-              drawCover(ctx, customImageRef.current, 0, 0, currentW, currentH, imagePosition);
+              drawCover(ctx, customImageRef.current, 0, 0, currentW, currentH, imagePosition, imageCrop);
               ctx.restore();
               mediaDrawn = true;
             }
@@ -3000,7 +3651,7 @@ export default function SocialFeedCreator({ posts, onBack, initialPost, onOpenCo
               ctx.translate(currentW, 0);
               ctx.scale(-1, 1);
             }
-            drawCover(ctx, img, 0, 0, currentW, currentH, imagePosition);
+            drawCover(ctx, img, 0, 0, currentW, currentH, imagePosition, imageCrop);
             ctx.restore();
             mediaDrawn = true;
           } catch (e) {
@@ -3187,7 +3838,7 @@ export default function SocialFeedCreator({ posts, onBack, initialPost, onOpenCo
               ctx.translate(currentW, 0);
               ctx.scale(-1, 1);
             }
-            drawCover(ctx, customImageRef.current, 0, 0, currentW, coverH, imagePosition);
+            drawCover(ctx, customImageRef.current, 0, 0, currentW, coverH, imagePosition, imageCrop);
             ctx.restore();
             mediaDrawn = true;
           }
@@ -3219,7 +3870,7 @@ export default function SocialFeedCreator({ posts, onBack, initialPost, onOpenCo
             ctx.translate(currentW, 0);
             ctx.scale(-1, 1);
           }
-          drawCover(ctx, img, 0, 0, currentW, coverH, imagePosition);
+          drawCover(ctx, img, 0, 0, currentW, coverH, imagePosition, imageCrop);
           ctx.restore();
           mediaDrawn = true;
         } catch (e) {
@@ -3353,7 +4004,7 @@ export default function SocialFeedCreator({ posts, onBack, initialPost, onOpenCo
   useEffect(() => {
     renderCard();
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [selectedPost?.slug, selectedPost?.updated_at, customImageUrl, title, logoData, handle, imagePosition, feedTitleFontSize, feedFontFamily, feedTitlePosition.x, feedTitlePosition.y, feedTitleOffsetY, format, logoPosition.x, logoPosition.y, titlePosition.x, titlePosition.y, reelTextStyle, reelFontFamily, reelFontWeight, reelTextAlign, reelTextCase, reelFontSize, tagColor, tagPositionY, showSafeZone, reelTextAnimation, showStrongSceneWarning, logoScale, handleFontSize, shadeOpacity, showOverlayLayer, showLogoLayer, showTitleLayer, showHandleLayer, showStorySticker, logoColorStyle, miniIaMirror]);
+  }, [selectedPost?.slug, selectedPost?.updated_at, customImageUrl, title, logoData, handle, imagePosition, feedTitleFontSize, feedFontFamily, feedTitlePosition.x, feedTitlePosition.y, feedTitleOffsetY, format, logoPosition.x, logoPosition.y, titlePosition.x, titlePosition.y, reelTextStyle, reelFontFamily, reelFontWeight, reelTextAlign, reelTextCase, reelFontSize, tagColor, tagPositionY, showSafeZone, reelTextAnimation, showStrongSceneWarning, logoScale, handleFontSize, shadeOpacity, showOverlayLayer, showLogoLayer, showTitleLayer, showHandleLayer, showStorySticker, logoColorStyle, miniIaMirror, imageCrop]);
 
   // MAX CACHE: Pré-renderiza todo o layout visual da legenda e sobreposições em 1080x1920
   // Isso zera 100% dos cálculos na CPU durante a reprodução do vídeo e evita travamentos
@@ -3386,6 +4037,12 @@ export default function SocialFeedCreator({ posts, onBack, initialPost, onOpenCo
         showHandleLayer,
         showStorySticker,
         format,
+        {
+          topHeadline,
+          authorName,
+          authorHandle,
+          authorVerified,
+        }
       );
       cachedOverlayCanvasRef.current = overlayCanvas;
     } catch (err) {
@@ -3397,6 +4054,7 @@ export default function SocialFeedCreator({ posts, onBack, initialPost, onOpenCo
     reelTextStyle, reelFontFamily, reelFontWeight, reelTextAlign, reelTextCase, reelFontSize,
     showStrongSceneWarning, handleFontSize, tagColor, tagPositionY,
     shadeOpacity, showOverlayLayer, showLogoLayer, showTitleLayer, showHandleLayer, showStorySticker,
+    topHeadline, authorName, authorHandle, authorVerified,
   ]);
 
   // Carrega a logo personalizada no ref sempre que logoData mudar
@@ -3435,6 +4093,12 @@ export default function SocialFeedCreator({ posts, onBack, initialPost, onOpenCo
                 showHandleLayer,
                 showStorySticker,
                 format,
+                {
+                  topHeadline,
+                  authorName,
+                  authorHandle,
+                  authorVerified,
+                }
               );
             } catch {}
           }
@@ -3484,11 +4148,20 @@ export default function SocialFeedCreator({ posts, onBack, initialPost, onOpenCo
                 zoomMax: miniIaCfg.zoomMax,
                 zoomPeriod: miniIaCfg.zoomPeriod,
                 filterPreset: videoFilterRef.current || videoFilter,
+                customSaturation,
+                customContrast,
+                customBrightness,
+                customSharpness,
+                videoBlockPosY: videoBlockPosYRef.current ?? videoBlockPosY,
+                topHeadline,
+                authorName,
+                authorHandle,
+                authorVerified,
               },
               videoCrop
             );
             // Ultra-rápido: usa o overlay cacheado apenas quando não estiver arrastando elementos interativos
-            const isDraggingAny = Boolean(tagDragRef.current || titleDragRef.current || logoDragRef.current || hookDragRef.current);
+            const isDraggingAny = Boolean(tagDragRef.current || titleDragRef.current || logoDragRef.current || hookDragRef.current || videoDragRef.current);
             if (cachedOverlayCanvasRef.current && !isDraggingAny) {
               ctx.drawImage(cachedOverlayCanvasRef.current, 0, 0);
               if (showLogoLayer && logoColorStyle === "gif") {
@@ -3552,6 +4225,15 @@ export default function SocialFeedCreator({ posts, onBack, initialPost, onOpenCo
                   autoHookEnabled: autoHookEnabledRef.current && autoHookEnabled,
                   autoHookText: effectiveHookText,
                   hookPositionY: hookPositionYRef.current || hookPositionY,
+                  customSaturation,
+                  customContrast,
+                  customBrightness,
+                  customSharpness,
+                  videoBlockPosY: videoBlockPosYRef.current ?? videoBlockPosY,
+                  topHeadline,
+                  authorName,
+                  authorHandle,
+                  authorVerified,
                 },
                 videoCrop
               );
@@ -3565,6 +4247,9 @@ export default function SocialFeedCreator({ posts, onBack, initialPost, onOpenCo
               } else {
                 drawReelSafeZone(ctx);
               }
+            }
+            if (snapGuideXRef.current || snapGuideYRef.current) {
+              drawAlignmentGuides(ctx, W, REEL_H, snapGuideXRef.current, snapGuideYRef.current);
             }
             lastRenderedAt = timestamp;
           }
@@ -4048,6 +4733,7 @@ export default function SocialFeedCreator({ posts, onBack, initialPost, onOpenCo
 
   function onPreviewPointerDown(event: ReactPointerEvent<HTMLCanvasElement>) {
     const { width: currentW, height: currentH } = getCanvasDimensions(format);
+
     // 0. GANCHO VIRAL AUTO-EDIT (se ativo)
     if (autoHookEnabled && effectiveHookText) {
       const hookY = hookPositionYRef.current || hookPositionY;
@@ -4063,7 +4749,31 @@ export default function SocialFeedCreator({ posts, onBack, initialPost, onOpenCo
       }
     }
 
-    if (format === "reel" || format === "story") {
+    // 0.1. BLOCO DE VÍDEO HORIZONTAL (Arraste livre delimitado no preview sem sair da tela)
+    if (videoFramingMode === "horizontal-block" && !lockedLayers["video"] && videoPreviewRef.current) {
+      const v = videoPreviewRef.current;
+      const fullWidth = v.videoWidth || 1920;
+      const fullHeight = v.videoHeight || 1080;
+      const vAspect = fullHeight / fullWidth;
+      const blockH = Math.round(currentW * (vAspect > 0 ? vAspect : 9 / 16));
+      const normY = videoBlockPosYRef.current ?? videoBlockPosY;
+      const blockY = Math.max(0, Math.min(currentH - blockH, Math.round(normY * currentH - blockH / 2)));
+      const rect = event.currentTarget.getBoundingClientRect();
+      const y = ((event.clientY - rect.top) / rect.height) * currentH;
+
+      if (y >= blockY && y <= blockY + blockH) {
+        event.preventDefault();
+        event.currentTarget.setPointerCapture(event.pointerId);
+        videoDragRef.current = {
+          pointerId: event.pointerId,
+          offsetY: y - normY * currentH,
+        };
+        setDraggingLogo(true);
+        return;
+      }
+    }
+
+    if (!lockedLayers["title"] && (format === "reel" || format === "story")) {
       const ctx = event.currentTarget.getContext("2d");
       if (ctx) {
         const rect = event.currentTarget.getBoundingClientRect();
@@ -4114,7 +4824,7 @@ export default function SocialFeedCreator({ posts, onBack, initialPost, onOpenCo
       }
     }
 
-    if (format === "feed" || format === "feed-square") {
+    if (!lockedLayers["title"] && (format === "feed" || format === "feed-square")) {
       const ctx = event.currentTarget.getContext("2d");
       if (ctx) {
         const fitted = fitHeadline(ctx, (title || selectedPost?.title || "Título da notícia").trim(), 920, feedTitleFontSize, feedFontFamily);
@@ -4137,7 +4847,7 @@ export default function SocialFeedCreator({ posts, onBack, initialPost, onOpenCo
     }
 
     // 3. TAG / ASSINATURA DO CONTEÚDO (@viralizougoiania)
-    if (showHandleLayer && handle && handle.trim()) {
+    if (!lockedLayers["handle"] && showHandleLayer && handle && handle.trim()) {
       const tagText = handle.trim();
       const currentTagY = getEffectiveTagY(format, tagPositionYRef.current || tagPositionY);
       const ctx = event.currentTarget.getContext("2d");
@@ -4172,31 +4882,79 @@ export default function SocialFeedCreator({ posts, onBack, initialPost, onOpenCo
       }
     }
 
-    const logo = logoImageRef.current || getRenderableLogo(null, logoColorStyle);
-    if (!logo || !isImageDrawable(logo)) return;
-
-    const rect = event.currentTarget.getBoundingClientRect();
-    const x = ((event.clientX - rect.left) / rect.width) * currentW;
-    const y = ((event.clientY - rect.top) / rect.height) * currentH;
-    const { width, height } = getLogoSize(logo, format, format === "reel" || format === "story" ? logoScale / 100 : 1);
-    const centerX = logoPositionRef.current.x * currentW;
-    const centerY = logoPositionRef.current.y * currentH;
-    if (x < centerX - width / 2 || x > centerX + width / 2 || y < centerY - height / 2 || y > centerY + height / 2) return;
-
-    event.preventDefault();
-    event.currentTarget.setPointerCapture(event.pointerId);
-    cachedOverlayCanvasRef.current = null;
-    logoDragRef.current = { pointerId: event.pointerId, offsetX: x / currentW - logoPositionRef.current.x, offsetY: y / currentH - logoPositionRef.current.y };
-    setDraggingLogo(true);
+    if (!lockedLayers["logo"]) {
+      const logo = logoImageRef.current || getRenderableLogo(null, logoColorStyle);
+      if (logo && isImageDrawable(logo)) {
+        const rect = event.currentTarget.getBoundingClientRect();
+        const x = ((event.clientX - rect.left) / rect.width) * currentW;
+        const y = ((event.clientY - rect.top) / rect.height) * currentH;
+        const { width, height } = getLogoSize(logo, format, format === "reel" || format === "story" ? logoScale / 100 : 1);
+        const centerX = logoPositionRef.current.x * currentW;
+        const centerY = logoPositionRef.current.y * currentH;
+        if (x >= centerX - width / 2 && x <= centerX + width / 2 && y >= centerY - height / 2 && y <= centerY + height / 2) {
+          event.preventDefault();
+          event.currentTarget.setPointerCapture(event.pointerId);
+          cachedOverlayCanvasRef.current = null;
+          logoDragRef.current = { pointerId: event.pointerId, offsetX: x / currentW - logoPositionRef.current.x, offsetY: y / currentH - logoPositionRef.current.y };
+          setDraggingLogo(true);
+        }
+      }
+    }
   }
 
   function onPreviewPointerMove(event: ReactPointerEvent<HTMLCanvasElement>) {
     const { width: currentW, height: currentH } = getCanvasDimensions(format);
+
+    // Arraste do Bloco de Vídeo Horizontal
+    const videoDrag = videoDragRef.current;
+    if (videoDrag?.pointerId === event.pointerId) {
+      const rect = event.currentTarget.getBoundingClientRect();
+      const y = ((event.clientY - rect.top) / rect.height) * currentH;
+      const rawNormY = (y - videoDrag.offsetY) / currentH;
+
+      const v = videoPreviewRef.current;
+      const fullWidth = v?.videoWidth || 1920;
+      const fullHeight = v?.videoHeight || 1080;
+      const vAspect = fullHeight / fullWidth;
+      const blockH = Math.round(currentW * (vAspect > 0 ? vAspect : 9 / 16));
+      const minNormY = (blockH / 2) / currentH;
+      const maxNormY = 1 - (blockH / 2) / currentH;
+
+      let newY = Math.min(maxNormY, Math.max(minNormY, rawNormY));
+
+      let snappedY = false;
+      if (Math.abs(newY - 0.5) < 0.025) {
+        newY = 0.5;
+        snappedY = true;
+      } else if (Math.abs(newY - 0.44) < 0.02) {
+        newY = 0.44;
+        snappedY = true;
+      }
+      setSnapGuideY(snappedY);
+      snapGuideYRef.current = snappedY;
+
+      videoBlockPosYRef.current = Number(newY.toFixed(3));
+      setVideoBlockPosY(Number(newY.toFixed(3)));
+      if (format !== "reel" && (!videoUrl || !videoPreviewRef.current)) {
+        renderCard();
+      }
+      return;
+    }
+
     const hookDrag = hookDragRef.current;
     if (hookDrag?.pointerId === event.pointerId) {
       const rect = event.currentTarget.getBoundingClientRect();
       const y = ((event.clientY - rect.top) / rect.height) * currentH;
-      const newY = Math.min(currentH - 120, Math.max(80, Math.round(y - hookDrag.offsetY)));
+      let newY = Math.min(currentH - 120, Math.max(80, Math.round(y - hookDrag.offsetY)));
+
+      let snappedY = false;
+      if (Math.abs(newY - currentH / 2) < 25) {
+        newY = Math.round(currentH / 2);
+        snappedY = true;
+      }
+      setSnapGuideY(snappedY);
+      snapGuideYRef.current = snappedY;
+
       hookPositionYRef.current = newY;
       setHookPositionY(newY);
       cachedOverlayCanvasRef.current = null;
@@ -4227,21 +4985,53 @@ export default function SocialFeedCreator({ posts, onBack, initialPost, onOpenCo
       if (format === "reel" || format === "story") {
         if (reelTextStyle === "bacci-red") {
           const rawY = (event.clientY - rect.top) / rect.height - titleDrag.offsetY;
-          const newY = Math.min(0.75, Math.max(0.30, rawY));
+          let newY = Math.min(0.75, Math.max(0.30, rawY));
+          let snappedY = false;
+          if (Math.abs(newY - 0.58) < 0.02) {
+            newY = 0.58;
+            snappedY = true;
+          }
+          setSnapGuideY(snappedY);
+          snapGuideYRef.current = snappedY;
           const position = { x: 0.5, y: Number(newY.toFixed(3)) };
           titlePositionRef.current = position;
           setTitlePosition(position);
         } else if (reelTextStyle === "red-bottom") {
           const rawY = (event.clientY - rect.top) / rect.height - titleDrag.offsetY;
-          const newY = Math.min(0.80, Math.max(0.40, rawY));
+          let newY = Math.min(0.80, Math.max(0.40, rawY));
+          let snappedY = false;
+          if (Math.abs(newY - 0.615) < 0.02) {
+            newY = 0.615;
+            snappedY = true;
+          }
+          setSnapGuideY(snappedY);
+          snapGuideYRef.current = snappedY;
           const position = { x: 0.5, y: Number(newY.toFixed(3)) };
           titlePositionRef.current = position;
           setTitlePosition(position);
         } else {
           const layout = ctx ? getCachedReelTitleLayout(ctx, title || selectedPost?.title || "", reelFontFamily, reelFontWeight, reelTextCase, reelFontSize, 820) : { width: 0, height: 0 };
+          let rawX = (event.clientX - rect.left) / rect.width - titleDrag.offsetX;
+          let rawY = (event.clientY - rect.top) / rect.height - titleDrag.offsetY;
+
+          let snappedX = false;
+          let snappedY = false;
+          if (Math.abs(rawX - 0.5) < 0.03) {
+            rawX = 0.5;
+            snappedX = true;
+          }
+          if (Math.abs(rawY - 0.5) < 0.03) {
+            rawY = 0.5;
+            snappedY = true;
+          }
+          setSnapGuideX(snappedX);
+          snapGuideXRef.current = snappedX;
+          setSnapGuideY(snappedY);
+          snapGuideYRef.current = snappedY;
+
           const position = {
-            x: Math.min(1 - layout.width / (2 * currentW), Math.max(layout.width / (2 * currentW), (event.clientX - rect.left) / rect.width - titleDrag.offsetX)),
-            y: Math.min(1 - layout.height / (2 * currentH), Math.max(layout.height / (2 * currentH), (event.clientY - rect.top) / rect.height - titleDrag.offsetY)),
+            x: Math.min(1 - layout.width / (2 * currentW), Math.max(layout.width / (2 * currentW), rawX)),
+            y: Math.min(1 - layout.height / (2 * currentH), Math.max(layout.height / (2 * currentH), rawY)),
           };
           titlePositionRef.current = position;
           setTitlePosition(position);
@@ -4251,9 +5041,27 @@ export default function SocialFeedCreator({ posts, onBack, initialPost, onOpenCo
         ctx.font = getReelFont(feedFontFamily, fitted.size);
         const width = Math.max(...fitted.lines.map((line) => ctx.measureText(line).width), 0);
         const height = fitted.lines.length * fitted.size * 1.1;
+        let rawX = (event.clientX - rect.left) / rect.width - titleDrag.offsetX;
+        let rawY = (event.clientY - rect.top) / rect.height - titleDrag.offsetY;
+
+        let snappedX = false;
+        let snappedY = false;
+        if (Math.abs(rawX - 0.5) < 0.03) {
+          rawX = 0.5;
+          snappedX = true;
+        }
+        if (Math.abs(rawY - 0.5) < 0.03) {
+          rawY = 0.5;
+          snappedY = true;
+        }
+        setSnapGuideX(snappedX);
+        snapGuideXRef.current = snappedX;
+        setSnapGuideY(snappedY);
+        snapGuideYRef.current = snappedY;
+
         const position = {
-          x: Math.min(1 - width / (2 * currentW), Math.max(width / (2 * currentW), (event.clientX - rect.left) / rect.width - titleDrag.offsetX)),
-          y: Math.min(1 - height / (2 * currentH), Math.max(height / (2 * currentH), (event.clientY - rect.top) / rect.height - titleDrag.offsetY)),
+          x: Math.min(1 - width / (2 * currentW), Math.max(width / (2 * currentW), rawX)),
+          y: Math.min(1 - height / (2 * currentH), Math.max(height / (2 * currentH), rawY)),
         };
         feedTitlePositionRef.current = position;
         setFeedTitlePosition(position);
@@ -4271,9 +5079,27 @@ export default function SocialFeedCreator({ posts, onBack, initialPost, onOpenCo
     const logo = logoImageRef.current;
     const rect = event.currentTarget.getBoundingClientRect();
     const { width, height } = logo ? getLogoSize(logo, format, format === "reel" || format === "story" ? logoScale / 100 : 1) : { width: 0, height: 0 };
+    let rawX = (event.clientX - rect.left) / rect.width - drag.offsetX;
+    let rawY = (event.clientY - rect.top) / rect.height - drag.offsetY;
+
+    let snappedX = false;
+    let snappedY = false;
+    if (Math.abs(rawX - 0.5) < 0.03) {
+      rawX = 0.5;
+      snappedX = true;
+    }
+    if (Math.abs(rawY - 0.5) < 0.03) {
+      rawY = 0.5;
+      snappedY = true;
+    }
+    setSnapGuideX(snappedX);
+    snapGuideXRef.current = snappedX;
+    setSnapGuideY(snappedY);
+    snapGuideYRef.current = snappedY;
+
     const position = {
-      x: Math.min(1 - width / (2 * currentW), Math.max(width / (2 * currentW), (event.clientX - rect.left) / rect.width - drag.offsetX)),
-      y: Math.min(1 - height / (2 * currentH), Math.max(height / (2 * currentH), (event.clientY - rect.top) / rect.height - drag.offsetY)),
+      x: Math.min(1 - width / (2 * currentW), Math.max(width / (2 * currentW), rawX)),
+      y: Math.min(1 - height / (2 * currentH), Math.max(height / (2 * currentH), rawY)),
     };
     logoPositionRef.current = position;
     setLogoPosition(position);
@@ -4284,6 +5110,22 @@ export default function SocialFeedCreator({ posts, onBack, initialPost, onOpenCo
   }
 
   function onPreviewPointerUp(event: ReactPointerEvent<HTMLCanvasElement>) {
+    setSnapGuideX(false);
+    snapGuideXRef.current = false;
+    setSnapGuideY(false);
+    snapGuideYRef.current = false;
+
+    if (videoDragRef.current?.pointerId === event.pointerId) {
+      videoDragRef.current = null;
+      setDraggingLogo(false);
+      try {
+        localStorage.setItem("viralizou_video_block_pos_y", String(videoBlockPosYRef.current || 0.44));
+      } catch {}
+      renderCard();
+      if (event.currentTarget.hasPointerCapture(event.pointerId)) event.currentTarget.releasePointerCapture(event.pointerId);
+      return;
+    }
+
     if (hookDragRef.current?.pointerId === event.pointerId) {
       hookDragRef.current = null;
       setDraggingLogo(false);
@@ -4441,6 +5283,13 @@ async function fixWebmDuration(blob: Blob, durationSec: number): Promise<Blob> {
         formData.append("videoFilter", videoFilter);
         formData.append("bgmTrack", bgmTrack);
         formData.append("bgmVolume", String(bgmVolume));
+        formData.append("customSaturation", String(customSaturation));
+        formData.append("customContrast", String(customContrast));
+        formData.append("customBrightness", String(customBrightness));
+        formData.append("customSharpness", String(customSharpness));
+        formData.append("videoBlockPosY", String(videoBlockPosYRef.current || videoBlockPosY));
+        formData.append("sfxPreset", selectedSfxPreset);
+        formData.append("sfxVolume", String(sfxVolume));
 
         if (videoCrop) {
           formData.append("cropX", String(Math.round(videoCrop.x)));
@@ -4998,6 +5847,158 @@ async function fixWebmDuration(blob: Blob, durationSec: number): Promise<Blob> {
             </div>
           </div>
 
+          {/* BARRA DE NAVEGAÇÃO DE ABAS / PAINÉIS DO CRIADOR */}
+          <div
+            role="tablist"
+            style={{
+              display: "grid",
+              gridTemplateColumns: "repeat(4, 1fr)",
+              gap: 6,
+              marginBottom: 16,
+              background: "#0f172a",
+              padding: "6px",
+              borderRadius: 12,
+              border: "1px solid rgba(255, 255, 255, 0.12)",
+              boxShadow: "0 4px 14px rgba(0,0,0,0.25)",
+            }}
+          >
+            <button
+              type="button"
+              role="tab"
+              aria-selected={activeTab === "media"}
+              onClick={() => setActiveTab("media")}
+              style={{
+                padding: "8px 6px",
+                borderRadius: 8,
+                border: activeTab === "media" ? "1px solid #38bdf8" : "1px solid transparent",
+                background: activeTab === "media" ? "rgba(56, 189, 248, 0.18)" : "transparent",
+                color: activeTab === "media" ? "#38bdf8" : "#94a3b8",
+                fontSize: 12,
+                fontWeight: 700,
+                cursor: "pointer",
+                display: "flex",
+                flexDirection: "column",
+                alignItems: "center",
+                justifyContent: "center",
+                gap: 4,
+                transition: "all 0.15s ease",
+              }}
+            >
+              <div style={{ display: "flex", alignItems: "center", gap: 5 }}>
+                <span style={{ fontSize: 14 }}>📁</span>
+                <span>Mídia</span>
+                {(videoUrl || customImageUrl || selectedPost?.image_url) && (
+                  <span style={{ width: 6, height: 6, borderRadius: "50%", background: "#4ade80", display: "inline-block" }} />
+                )}
+              </div>
+              <span style={{ fontSize: 10, opacity: 0.75, fontWeight: 500 }}>Upload & Enquadramento</span>
+            </button>
+
+            <button
+              type="button"
+              role="tab"
+              aria-selected={activeTab === "mini-ia"}
+              onClick={() => setActiveTab("mini-ia")}
+              style={{
+                padding: "8px 6px",
+                borderRadius: 8,
+                border: activeTab === "mini-ia" ? "1px solid #c084fc" : "1px solid transparent",
+                background: activeTab === "mini-ia" ? "rgba(192, 132, 252, 0.18)" : "transparent",
+                color: activeTab === "mini-ia" ? "#c084fc" : "#94a3b8",
+                fontSize: 12,
+                fontWeight: 700,
+                cursor: "pointer",
+                display: "flex",
+                flexDirection: "column",
+                alignItems: "center",
+                justifyContent: "center",
+                gap: 4,
+                transition: "all 0.15s ease",
+              }}
+            >
+              <div style={{ display: "flex", alignItems: "center", gap: 5 }}>
+                <span style={{ fontSize: 14 }}>⚡</span>
+                <span>Mini IA</span>
+                {format === "reel" || format === "story" ? (
+                  <span style={{ fontSize: 9, background: "#8b5cf6", color: "#fff", padding: "1px 4px", borderRadius: 3, fontWeight: 800 }}>
+                    AI
+                  </span>
+                ) : null}
+              </div>
+              <span style={{ fontSize: 10, opacity: 0.75, fontWeight: 500 }}>Anti-Detecção & SFX</span>
+            </button>
+
+            <button
+              type="button"
+              role="tab"
+              aria-selected={activeTab === "title-layout"}
+              onClick={() => setActiveTab("title-layout")}
+              style={{
+                padding: "8px 6px",
+                borderRadius: 8,
+                border: activeTab === "title-layout" ? "1px solid #fbbf24" : "1px solid transparent",
+                background: activeTab === "title-layout" ? "rgba(251, 191, 36, 0.18)" : "transparent",
+                color: activeTab === "title-layout" ? "#fbbf24" : "#94a3b8",
+                fontSize: 12,
+                fontWeight: 700,
+                cursor: "pointer",
+                display: "flex",
+                flexDirection: "column",
+                alignItems: "center",
+                justifyContent: "center",
+                gap: 4,
+                transition: "all 0.15s ease",
+              }}
+            >
+              <div style={{ display: "flex", alignItems: "center", gap: 5 }}>
+                <span style={{ fontSize: 14 }}>📰</span>
+                <span>Legenda</span>
+                {title && (
+                  <span style={{ width: 6, height: 6, borderRadius: "50%", background: "#4ade80", display: "inline-block" }} />
+                )}
+              </div>
+              <span style={{ fontSize: 10, opacity: 0.75, fontWeight: 500 }}>Título & Estilo</span>
+            </button>
+
+            <button
+              type="button"
+              role="tab"
+              aria-selected={activeTab === "branding-layers"}
+              onClick={() => setActiveTab("branding-layers")}
+              style={{
+                padding: "8px 6px",
+                borderRadius: 8,
+                border: activeTab === "branding-layers" ? "1px solid #4ade80" : "1px solid transparent",
+                background: activeTab === "branding-layers" ? "rgba(74, 222, 128, 0.18)" : "transparent",
+                color: activeTab === "branding-layers" ? "#4ade80" : "#94a3b8",
+                fontSize: 12,
+                fontWeight: 700,
+                cursor: "pointer",
+                display: "flex",
+                flexDirection: "column",
+                alignItems: "center",
+                justifyContent: "center",
+                gap: 4,
+                transition: "all 0.15s ease",
+              }}
+            >
+              <div style={{ display: "flex", alignItems: "center", gap: 5 }}>
+                <span style={{ fontSize: 14 }}>🏢</span>
+                <span>Marca</span>
+                {logoColorStyle === "gif" && (
+                  <span style={{ fontSize: 9, background: "#16a34a", color: "#fff", padding: "1px 4px", borderRadius: 3, fontWeight: 800 }}>
+                    ALPHA
+                  </span>
+                )}
+              </div>
+              <span style={{ fontSize: 10, opacity: 0.75, fontWeight: 500 }}>Logo, Tag & Camadas</span>
+            </button>
+          </div>
+
+
+          {/* PAINEL 1: MÍDIA & NOTÍCIA */}
+          {activeTab === "media" && (
+            <div className="adminFeedTabPanel" style={{ display: "flex", flexDirection: "column", gap: 14 }}>
           <div className="field">
             <label>🔗 Link da notícia do Viralizougoiania</label>
             <div className="adminFeedUrlRow">
@@ -5054,15 +6055,69 @@ async function fixWebmDuration(blob: Blob, durationSec: number): Promise<Blob> {
 
             {/* 1. UPLOAD DE FOTO / IMAGEM (Feed, Capa ou Story) */}
             <div style={{ marginBottom: 12 }}>
-              <label style={{ fontSize: 12, fontWeight: 600, color: "#334155", display: "block", marginBottom: 4 }}>
-                🖼️ Enviar Foto / Imagem do seu dispositivo (PNG, JPG, WebP)
-              </label>
+              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 4 }}>
+                <label style={{ fontSize: 12, fontWeight: 600, color: "#334155", margin: 0 }}>
+                  🖼️ Enviar Foto / Imagem do seu dispositivo (PNG, JPG, WebP)
+                </label>
+                {(customImageUrl || selectedPost?.image_url) && (
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setCropMediaType("image");
+                      setShowCropModal(true);
+                    }}
+                    style={{
+                      display: "inline-flex",
+                      alignItems: "center",
+                      gap: 5,
+                      background: "#2563eb",
+                      color: "#ffffff",
+                      border: "none",
+                      borderRadius: 6,
+                      padding: "3px 10px",
+                      fontSize: 11,
+                      fontWeight: 700,
+                      cursor: "pointer",
+                      boxShadow: "0 2px 5px rgba(37,99,235,0.25)",
+                      transition: "all 0.15s ease",
+                    }}
+                    title="Ajustar corte (crop) da foto ou imagem"
+                  >
+                    <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                      <path d="M6 2v14a2 2 0 0 0 2 2h14" />
+                      <path d="M18 22V8a2 2 0 0 0-2-2H2" />
+                    </svg>
+                    <span>✂️ Ajustar Corte (Crop)</span>
+                  </button>
+                )}
+              </div>
               <input ref={imageInputRef} type="file" accept="image/png,image/jpeg,image/webp" onChange={onImageChange} />
-              <small style={{ color: "#64748b", display: "block", marginTop: 2 }}>
-                {format === "reel" || format === "story"
-                  ? "Envie uma foto caso queira usar imagem estática de fundo nos Stories ou Reels."
-                  : "Perfeito para montar post do Feed (4:5 e 1:1) e Capas diretamente."}
-              </small>
+              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginTop: 3 }}>
+                <small style={{ color: "#64748b" }}>
+                  {format === "reel" || format === "story"
+                    ? "Envie uma foto caso queira usar imagem estática de fundo nos Stories ou Reels."
+                    : "Perfeito para montar post do Feed (4:5 e 1:1) e Capas diretamente."}
+                </small>
+                {imageCrop && (
+                  <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
+                    <span style={{ fontSize: 10, background: "#dbeafe", color: "#1d4ed8", padding: "1px 6px", borderRadius: 4, fontWeight: 700 }}>
+                      ✂️ Corte: {Math.round(imageCrop.width)}×{Math.round(imageCrop.height)} px
+                    </span>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setImageCrop(null);
+                        try { localStorage.removeItem("viralizou_image_crop"); } catch {}
+                        cachedOverlayCanvasRef.current = null;
+                        renderCard();
+                      }}
+                      style={{ background: "transparent", border: "none", color: "#dc2626", fontSize: 10.5, fontWeight: 700, cursor: "pointer", textDecoration: "underline" }}
+                    >
+                      Resetar
+                    </button>
+                  </div>
+                )}
+              </div>
             </div>
 
             {/* 2. UPLOAD DE VÍDEO E IMPORTADOR DE LINK (APENAS REELS E STORIES) */}
@@ -5073,31 +6128,82 @@ async function fixWebmDuration(blob: Blob, durationSec: number): Promise<Blob> {
                     <label style={{ fontSize: 12, fontWeight: 600, color: "#334155" }}>
                       🎬 Enviar Vídeo do seu dispositivo (MP4, MOV, WebM)
                     </label>
-                    {onOpenCompressor && (
-                      <button
-                        type="button"
-                        onClick={onOpenCompressor}
-                        style={{ background: "#fef3c7", border: "1px solid #fde68a", color: "#92400e", borderRadius: 6, padding: "2px 8px", fontSize: 11, fontWeight: 700, cursor: "pointer" }}
-                        title="Abre o Compressor de Vídeo para WhatsApp"
-                      >
-                        🗜️ Compressor WhatsApp
-                      </button>
-                    )}
+                    <div style={{ display: "flex", gap: 6, alignItems: "center" }}>
+                      {videoUrl && (
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setCropMediaType("video");
+                            setShowCropModal(true);
+                          }}
+                          style={{
+                            display: "inline-flex",
+                            alignItems: "center",
+                            gap: 5,
+                            background: "#2563eb",
+                            color: "#ffffff",
+                            border: "none",
+                            borderRadius: 6,
+                            padding: "2px 8px",
+                            fontSize: 11,
+                            fontWeight: 700,
+                            cursor: "pointer",
+                            boxShadow: "0 2px 5px rgba(37,99,235,0.25)",
+                            transition: "all 0.15s ease",
+                          }}
+                          title="Ajustar corte (crop) do vídeo"
+                        >
+                          <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                            <path d="M6 2v14a2 2 0 0 0 2 2h14" />
+                            <path d="M18 22V8a2 2 0 0 0-2-2H2" />
+                          </svg>
+                          <span>✂️ Ajustar Corte (Crop)</span>
+                        </button>
+                      )}
+                      {onOpenCompressor && (
+                        <button
+                          type="button"
+                          onClick={onOpenCompressor}
+                          style={{ background: "#fef3c7", border: "1px solid #fde68a", color: "#92400e", borderRadius: 6, padding: "2px 8px", fontSize: 11, fontWeight: 700, cursor: "pointer" }}
+                          title="Abre o Compressor de Vídeo para WhatsApp"
+                        >
+                          🗜️ Compressor WhatsApp
+                        </button>
+                      )}
+                    </div>
                   </div>
                   <input ref={videoInputRef} type="file" accept="video/*" onChange={onVideoChange} />
                   <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginTop: 3 }}>
                     <small style={{ color: "#64748b" }}>
                       {videoFileName ? `${videoFileName}${videoReady ? " · pronto para prévia" : " · carregando..."}` : "Vídeo de até 250 MB para Reels ou Stories."}
                     </small>
-                    {videoUrl && (
-                      <button
-                        type="button"
-                        onClick={removeVideo}
-                        style={{ background: "transparent", border: "none", color: "#dc2626", fontSize: 11, fontWeight: 700, cursor: "pointer", textDecoration: "underline" }}
-                      >
-                        Remover vídeo
-                      </button>
-                    )}
+                    <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+                      {videoCrop && (
+                        <div style={{ display: "flex", alignItems: "center", gap: 4 }}>
+                          <span style={{ fontSize: 10, background: "#dbeafe", color: "#1d4ed8", padding: "1px 6px", borderRadius: 4, fontWeight: 700 }}>
+                            ✂️ Corte: {Math.round(videoCrop.width)}×{Math.round(videoCrop.height)} px
+                          </span>
+                          <button
+                            type="button"
+                            onClick={() => {
+                              handleApplyCrop(null);
+                            }}
+                            style={{ background: "transparent", border: "none", color: "#dc2626", fontSize: 10.5, fontWeight: 700, cursor: "pointer", textDecoration: "underline" }}
+                          >
+                            Resetar
+                          </button>
+                        </div>
+                      )}
+                      {videoUrl && (
+                        <button
+                          type="button"
+                          onClick={removeVideo}
+                          style={{ background: "transparent", border: "none", color: "#dc2626", fontSize: 11, fontWeight: 700, cursor: "pointer", textDecoration: "underline" }}
+                        >
+                          Remover vídeo
+                        </button>
+                      )}
+                    </div>
                   </div>
                 </div>
 
@@ -5140,40 +6246,110 @@ async function fixWebmDuration(blob: Blob, durationSec: number): Promise<Blob> {
                     <div style={{ fontSize: 11, fontWeight: 700, color: "#1e293b", marginBottom: 6 }}>
                       📐 Enquadramento do Vídeo no Reel/Story (9:16)
                     </div>
-                    <div style={{ display: "flex", gap: 8 }}>
+                    <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(130px, 1fr))", gap: 6 }}>
                       <button
                         type="button"
                         className={`btn secondary ${videoFramingMode === "cover" ? "active" : ""}`}
                         onClick={() => setVideoFramingMode("cover")}
                         style={{
-                          flex: 1,
                           fontSize: 11,
-                          padding: "5px 8px",
+                          padding: "6px 8px",
                           background: videoFramingMode === "cover" ? "#0284c7" : "#ffffff",
                           color: videoFramingMode === "cover" ? "#ffffff" : "#1e293b",
                           borderColor: videoFramingMode === "cover" ? "#0284c7" : "#cbd5e1",
                           fontWeight: videoFramingMode === "cover" ? 700 : 500,
                         }}
                       >
-                        🔍 Preencher Tela (Zoom 9:16)
+                        🔍 Preencher (9:16)
                       </button>
                       <button
                         type="button"
                         className={`btn secondary ${videoFramingMode === "blur-fit" ? "active" : ""}`}
                         onClick={() => setVideoFramingMode("blur-fit")}
                         style={{
-                          flex: 1,
                           fontSize: 11,
-                          padding: "5px 8px",
+                          padding: "6px 8px",
                           background: videoFramingMode === "blur-fit" ? "#0284c7" : "#ffffff",
                           color: videoFramingMode === "blur-fit" ? "#ffffff" : "#1e293b",
                           borderColor: videoFramingMode === "blur-fit" ? "#0284c7" : "#cbd5e1",
                           fontWeight: videoFramingMode === "blur-fit" ? 700 : 500,
                         }}
                       >
-                        📰 Jornalístico (Fundo Desfocado)
+                        📰 Fundo Desfocado
+                      </button>
+                      <button
+                        type="button"
+                        className={`btn secondary ${videoFramingMode === "horizontal-block" ? "active" : ""}`}
+                        onClick={() => setVideoFramingMode("horizontal-block")}
+                        style={{
+                          fontSize: 11,
+                          padding: "6px 8px",
+                          background: videoFramingMode === "horizontal-block" ? "#0284c7" : "#ffffff",
+                          color: videoFramingMode === "horizontal-block" ? "#ffffff" : "#1e293b",
+                          borderColor: videoFramingMode === "horizontal-block" ? "#0284c7" : "#cbd5e1",
+                          fontWeight: videoFramingMode === "horizontal-block" ? 700 : 500,
+                        }}
+                        title="Vídeo horizontal 16:9 posicionado como bloco arrastável na tela com sombra 3D e fundo suave"
+                      >
+                        📺 Bloco Horizontal
+                      </button>
+                      <button
+                        type="button"
+                        className={`btn secondary ${videoFramingMode === "split" ? "active" : ""}`}
+                        onClick={() => setVideoFramingMode("split")}
+                        style={{
+                          fontSize: 11,
+                          padding: "6px 8px",
+                          background: videoFramingMode === "split" ? "#0284c7" : "#ffffff",
+                          color: videoFramingMode === "split" ? "#ffffff" : "#1e293b",
+                          borderColor: videoFramingMode === "split" ? "#0284c7" : "#cbd5e1",
+                          fontWeight: videoFramingMode === "split" ? 700 : 500,
+                        }}
+                        title="Divisão 50/50: Superior focado/zoom e inferior amplo de contexto"
+                      >
+                        👥 Split 50/50
                       </button>
                     </div>
+
+                    {videoFramingMode === "horizontal-block" && (
+                      <div style={{ marginTop: 8, padding: "8px 10px", background: "#f8fafc", borderRadius: 6, border: "1px solid #e2e8f0" }}>
+                        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 4 }}>
+                          <span style={{ fontSize: 11, fontWeight: 700, color: "#334155" }}>
+                            ↕️ Posição Vertical do Bloco de Vídeo: <b style={{ color: "#0284c7" }}>{Math.round(videoBlockPosY * 100)}%</b>
+                          </span>
+                          <button
+                            type="button"
+                            className="captionTagBadge"
+                            onClick={() => {
+                              setVideoBlockPosY(0.44);
+                              videoBlockPosYRef.current = 0.44;
+                              try { localStorage.setItem("viralizou_video_block_pos_y", "0.44"); } catch {}
+                              cachedOverlayCanvasRef.current = null;
+                            }}
+                            style={{ fontSize: 10, padding: "2px 6px" }}
+                          >
+                            Reset (44%)
+                          </button>
+                        </div>
+                        <input
+                          type="range"
+                          min={15}
+                          max={80}
+                          value={Math.round(videoBlockPosY * 100)}
+                          onChange={(e) => {
+                            const val = Number(e.target.value) / 100;
+                            setVideoBlockPosY(val);
+                            videoBlockPosYRef.current = val;
+                            try { localStorage.setItem("viralizou_video_block_pos_y", String(val)); } catch {}
+                            cachedOverlayCanvasRef.current = null;
+                          }}
+                          style={{ width: "100%", accentColor: "#0284c7" }}
+                        />
+                        <small style={{ color: "#64748b", fontSize: 10, display: "block", marginTop: 2 }}>
+                          💡 Dica: Você também pode clicar e arrastar o vídeo direto na tela de prévia!
+                        </small>
+                      </div>
+                    )}
                   </div>
                 )}
 
@@ -5192,7 +6368,10 @@ async function fixWebmDuration(blob: Blob, durationSec: number): Promise<Blob> {
                     <div style={{ display: "flex", gap: 8, alignItems: "center", flexWrap: "wrap" }}>
                       <button
                         type="button"
-                        onClick={() => setShowCropModal(true)}
+                        onClick={() => {
+                          setCropMediaType("video");
+                          setShowCropModal(true);
+                        }}
                         style={{
                           display: "inline-flex",
                           alignItems: "center",
@@ -5321,6 +6500,83 @@ async function fixWebmDuration(blob: Blob, durationSec: number): Promise<Blob> {
               </div>
             </div>
           )}
+
+              <div style={{ marginTop: 8, display: "flex", justifyContent: "flex-end" }}>
+                <button
+                  type="button"
+                  className="btn"
+                  onClick={() => setActiveTab(format === "reel" || format === "story" ? "mini-ia" : "title-layout")}
+                  style={{
+                    display: "inline-flex",
+                    alignItems: "center",
+                    gap: 6,
+                    background: format === "reel" || format === "story" ? "#7c3aed" : "#2563eb",
+                    color: "#ffffff",
+                    fontWeight: 700,
+                    fontSize: 12,
+                    padding: "8px 16px",
+                    borderRadius: 8,
+                    cursor: "pointer",
+                  }}
+                >
+                  <span>{format === "reel" || format === "story" ? "Avançar para Mini IA Studio ⚡" : "Avançar para Título & Legenda 📰"}</span>
+                  <span>→</span>
+                </button>
+              </div>
+            </div>
+          )}
+
+
+          {/* PAINEL 2: MINI IA STUDIO */}
+          {activeTab === "mini-ia" && (
+            <div className="adminFeedTabPanel" style={{ display: "flex", flexDirection: "column", gap: 14 }}>
+              {format !== "reel" && format !== "story" && (
+                <div
+                  style={{
+                    background: "linear-gradient(135deg, rgba(30, 41, 59, 0.95), rgba(15, 23, 42, 0.98))",
+                    border: "1px solid rgba(139, 92, 246, 0.35)",
+                    borderRadius: 12,
+                    padding: "16px 18px",
+                    marginBottom: 4,
+                    boxShadow: "0 4px 14px rgba(0,0,0,0.25)",
+                  }}
+                >
+                  <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 8 }}>
+                    <span style={{ fontSize: 24 }}>⚡</span>
+                    <div>
+                      <h4 style={{ margin: 0, fontSize: 14, fontWeight: 800, color: "#f8fafc" }}>
+                        Mini IA Studio · Modo Feed Ativo ({format === "feed-square" ? "Quadrado 1:1" : format === "reel-cover" ? "Capa Reels" : "Feed 4:5"})
+                      </h4>
+                      <p style={{ margin: "2px 0 0", fontSize: 11.5, color: "#94a3b8" }}>
+                        Crie e personalize o visual de posts e capas diretamente no Feed.
+                      </p>
+                    </div>
+                  </div>
+                  <p style={{ fontSize: 11.5, color: "#cbd5e1", lineHeight: 1.5, margin: "0 0 12px" }}>
+                    A suite completa com <b>Anti-Detecção Instagram, Cortes Inteligentes de Retenção, Efeitos Sonoros (SFX) do Real Oficial e Trilha Sonora</b> é ativada nos formatos de vídeo <b>Reels 9:16</b> e <b>Stories 9:16</b>.
+                  </p>
+                  <button
+                    type="button"
+                    onClick={() => setFormat("reel")}
+                    style={{
+                      display: "inline-flex",
+                      alignItems: "center",
+                      gap: 6,
+                      background: "#7c3aed",
+                      color: "#ffffff",
+                      border: "none",
+                      borderRadius: 8,
+                      padding: "8px 14px",
+                      fontSize: 11.5,
+                      fontWeight: 700,
+                      cursor: "pointer",
+                      boxShadow: "0 2px 6px rgba(124, 58, 237, 0.35)",
+                    }}
+                  >
+                    <span>🎬 Mudar Formato para Reels 9:16 e Ativar Vídeo</span>
+                  </button>
+                </div>
+              )}
 
           {/* 5. MINI IA DE EDIÇÃO ANTI-DIRETRIZES DO INSTAGRAM (ORIGINALIDADE & ALCANCE - APENAS REELS E STORIES) */}
           {(format === "reel" || format === "story") && (
@@ -5765,6 +7021,160 @@ async function fixWebmDuration(blob: Blob, durationSec: number): Promise<Blob> {
                       </div>
                     </div>
                   )}
+
+                  {/* SEÇÃO SFX E EFEITOS SONOROS - REAL OFICIAL */}
+                  <div
+                    style={{
+                      background: "rgba(15, 23, 42, 0.85)",
+                      border: "1px solid rgba(139, 92, 246, 0.35)",
+                      borderRadius: 8,
+                      padding: "10px 12px",
+                      marginTop: 8,
+                      marginBottom: 4,
+                    }}
+                  >
+                    <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 6, flexWrap: "wrap", gap: 6 }}>
+                      <div style={{ display: "flex", alignItems: "center", gap: 7 }}>
+                        <span style={{ fontSize: 14 }}>🔊</span>
+                        <span style={{ fontSize: 12, fontWeight: 800, color: "#f8fafc" }}>
+                          Efeitos Sonoros (SFX) · Real Oficial
+                        </span>
+                      </div>
+                      <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
+                        {realOficialStatus?.configured ? (
+                          <span
+                            style={{
+                              fontSize: 10,
+                              background: "rgba(34, 197, 94, 0.2)",
+                              color: "#4ade80",
+                              border: "1px solid #22c55e",
+                              padding: "2px 7px",
+                              borderRadius: 999,
+                              fontWeight: 800,
+                            }}
+                          >
+                            ● Token Vercel Ativo ({realOficialStatus.maskedToken})
+                          </span>
+                        ) : (
+                          <button
+                            type="button"
+                            onClick={() => setShowVercelTokenModal(true)}
+                            style={{
+                              background: "rgba(234, 179, 8, 0.15)",
+                              color: "#facc15",
+                              border: "1px solid rgba(234, 179, 8, 0.4)",
+                              padding: "3px 8px",
+                              borderRadius: 999,
+                              fontSize: 10,
+                              fontWeight: 700,
+                              cursor: "pointer",
+                              display: "inline-flex",
+                              alignItems: "center",
+                              gap: 4,
+                            }}
+                          >
+                            <span>⚙️</span> Adicionar Token na Vercel
+                          </button>
+                        )}
+                      </div>
+                    </div>
+
+                    <p style={{ margin: "0 0 8px", fontSize: 10.5, color: "#94a3b8", lineHeight: 1.4 }}>
+                      Adiciona cortes sonoros de transição, batidas de gancho e alertas para engajamento instantâneo estilo TikTok & Reels.
+                    </p>
+
+                    {/* Presets de SFX */}
+                    <div style={{ display: "flex", gap: 6, flexWrap: "wrap", marginBottom: 10 }}>
+                      {[
+                        { id: "transitions", label: "⚡ Transição (Whoosh & Pop)" },
+                        { id: "punch", label: "💥 Impacto & Sub-Bass" },
+                        { id: "news", label: "📰 Noticiário (Sino & Flash)" },
+                        { id: "none", label: "🔇 Sem SFX" },
+                      ].map((item) => (
+                        <button
+                          key={item.id}
+                          type="button"
+                          onClick={() => setSelectedSfxPreset(item.id as any)}
+                          style={{
+                            padding: "4px 9px",
+                            fontSize: 11,
+                            fontWeight: selectedSfxPreset === item.id ? 800 : 600,
+                            borderRadius: 6,
+                            border: selectedSfxPreset === item.id ? "1.5px solid #8b5cf6" : "1px solid rgba(255,255,255,0.12)",
+                            background: selectedSfxPreset === item.id ? "linear-gradient(135deg, #7c3aed, #6d28d9)" : "rgba(30, 41, 59, 0.7)",
+                            color: selectedSfxPreset === item.id ? "#ffffff" : "#cbd5e1",
+                            cursor: "pointer",
+                            transition: "all 0.15s ease",
+                          }}
+                        >
+                          {item.label}
+                        </button>
+                      ))}
+                    </div>
+
+                    {/* Catálogo com Pré-escuta de SFX */}
+                    <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(130px, 1fr))", gap: 6, marginBottom: 8 }}>
+                      {realOficialSfxList.slice(0, 6).map((sfx) => {
+                        const isPlaying = playingSfxId === sfx.id;
+                        return (
+                          <div
+                            key={sfx.id}
+                            style={{
+                              background: isPlaying ? "rgba(139, 92, 246, 0.25)" : "rgba(15, 23, 42, 0.6)",
+                              border: isPlaying ? "1px solid #8b5cf6" : "1px solid rgba(255,255,255,0.08)",
+                              borderRadius: 6,
+                              padding: "6px 8px",
+                              display: "flex",
+                              alignItems: "center",
+                              justifyContent: "space-between",
+                            }}
+                          >
+                            <div style={{ overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", marginRight: 4 }}>
+                              <span style={{ fontSize: 11, color: isPlaying ? "#c084fc" : "#e2e8f0", fontWeight: 700 }}>
+                                {sfx.icon} {sfx.name}
+                              </span>
+                            </div>
+                            <button
+                              type="button"
+                              onClick={() => handlePlaySfx(sfx)}
+                              style={{
+                                background: isPlaying ? "#ef4444" : "#4f46e5",
+                                color: "#ffffff",
+                                border: "none",
+                                borderRadius: 4,
+                                padding: "2px 6px",
+                                fontSize: 10,
+                                fontWeight: 800,
+                                cursor: "pointer",
+                                flexShrink: 0,
+                              }}
+                              title={isPlaying ? "Parar áudio" : "Ouvir efeito sonoro"}
+                            >
+                              {isPlaying ? "⏹️" : "▶️"}
+                            </button>
+                          </div>
+                        );
+                      })}
+                    </div>
+
+                    {/* Volume dos SFX */}
+                    {selectedSfxPreset !== "none" && (
+                      <div style={{ display: "flex", alignItems: "center", gap: 8, paddingTop: 6, borderTop: "1px dashed rgba(255,255,255,0.1)" }}>
+                        <span style={{ fontSize: 10.5, color: "#cbd5e1", minWidth: 90 }}>
+                          Volume do SFX: <b style={{ color: "#a78bfa" }}>{sfxVolume}%</b>
+                        </span>
+                        <input
+                          type="range"
+                          min={5}
+                          max={100}
+                          step={5}
+                          value={sfxVolume}
+                          onChange={(e) => setSfxVolume(Number(e.target.value))}
+                          style={{ flex: 1, accentColor: "#8b5cf6" }}
+                        />
+                      </div>
+                    )}
+                  </div>
                 </div>
 
                 {/* Checkbox: Cortar pausas */}
@@ -5808,6 +7218,141 @@ async function fixWebmDuration(blob: Blob, durationSec: number): Promise<Blob> {
                     );
                   })}
                 </div>
+
+                {/* CALIBRAÇÃO MANUAL FINA (NÃO-ARTIFICIAL) */}
+                <div
+                  style={{
+                    marginTop: 10,
+                    background: "rgba(15, 23, 42, 0.75)",
+                    border: "1px solid rgba(139, 92, 246, 0.25)",
+                    borderRadius: 8,
+                    padding: "10px 12px",
+                  }}
+                >
+                  <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 8 }}>
+                    <span style={{ fontSize: 11, fontWeight: 700, color: "#f8fafc" }}>
+                      🎛️ Calibração Natural Fina (Anti-Artificial)
+                    </span>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setCustomSaturation(1.0);
+                        setCustomContrast(1.0);
+                        setCustomBrightness(1.0);
+                        setCustomSharpness(0);
+                        try {
+                          localStorage.setItem("viralizou_custom_saturation", "1.0");
+                          localStorage.setItem("viralizou_custom_contrast", "1.0");
+                          localStorage.setItem("viralizou_custom_brightness", "1.0");
+                          localStorage.setItem("viralizou_custom_sharpness", "0");
+                        } catch {}
+                        cachedOverlayCanvasRef.current = null;
+                        renderCard();
+                      }}
+                      style={{
+                        background: "rgba(255,255,255,0.08)",
+                        color: "#94a3b8",
+                        border: "1px solid rgba(255,255,255,0.12)",
+                        borderRadius: 4,
+                        fontSize: 10,
+                        padding: "2px 6px",
+                        cursor: "pointer",
+                      }}
+                    >
+                      Restaurar Padrão
+                    </button>
+                  </div>
+
+                  <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "8px 12px" }}>
+                    {/* Saturação */}
+                    <div>
+                      <div style={{ display: "flex", justifyContent: "space-between", fontSize: 10.5, color: "#cbd5e1", marginBottom: 2 }}>
+                        <span>Saturação:</span>
+                        <b style={{ color: "#38bdf8" }}>{Math.round(customSaturation * 100)}%</b>
+                      </div>
+                      <input
+                        type="range"
+                        min={0}
+                        max={2}
+                        step={0.05}
+                        value={customSaturation}
+                        onChange={(e) => {
+                          const val = Number(e.target.value);
+                          setCustomSaturation(val);
+                          try { localStorage.setItem("viralizou_custom_saturation", String(val)); } catch {}
+                          cachedOverlayCanvasRef.current = null;
+                        }}
+                        style={{ width: "100%", accentColor: "#38bdf8" }}
+                      />
+                    </div>
+
+                    {/* Contraste */}
+                    <div>
+                      <div style={{ display: "flex", justifyContent: "space-between", fontSize: 10.5, color: "#cbd5e1", marginBottom: 2 }}>
+                        <span>Contraste:</span>
+                        <b style={{ color: "#38bdf8" }}>{Math.round(customContrast * 100)}%</b>
+                      </div>
+                      <input
+                        type="range"
+                        min={0.7}
+                        max={1.5}
+                        step={0.05}
+                        value={customContrast}
+                        onChange={(e) => {
+                          const val = Number(e.target.value);
+                          setCustomContrast(val);
+                          try { localStorage.setItem("viralizou_custom_contrast", String(val)); } catch {}
+                          cachedOverlayCanvasRef.current = null;
+                        }}
+                        style={{ width: "100%", accentColor: "#38bdf8" }}
+                      />
+                    </div>
+
+                    {/* Brilho */}
+                    <div>
+                      <div style={{ display: "flex", justifyContent: "space-between", fontSize: 10.5, color: "#cbd5e1", marginBottom: 2 }}>
+                        <span>Brilho:</span>
+                        <b style={{ color: "#38bdf8" }}>{Math.round(customBrightness * 100)}%</b>
+                      </div>
+                      <input
+                        type="range"
+                        min={0.7}
+                        max={1.4}
+                        step={0.05}
+                        value={customBrightness}
+                        onChange={(e) => {
+                          const val = Number(e.target.value);
+                          setCustomBrightness(val);
+                          try { localStorage.setItem("viralizou_custom_brightness", String(val)); } catch {}
+                          cachedOverlayCanvasRef.current = null;
+                        }}
+                        style={{ width: "100%", accentColor: "#38bdf8" }}
+                      />
+                    </div>
+
+                    {/* Nitidez */}
+                    <div>
+                      <div style={{ display: "flex", justifyContent: "space-between", fontSize: 10.5, color: "#cbd5e1", marginBottom: 2 }}>
+                        <span>Nitidez:</span>
+                        <b style={{ color: "#38bdf8" }}>{customSharpness}%</b>
+                      </div>
+                      <input
+                        type="range"
+                        min={0}
+                        max={100}
+                        step={5}
+                        value={customSharpness}
+                        onChange={(e) => {
+                          const val = Number(e.target.value);
+                          setCustomSharpness(val);
+                          try { localStorage.setItem("viralizou_custom_sharpness", String(val)); } catch {}
+                          cachedOverlayCanvasRef.current = null;
+                        }}
+                        style={{ width: "100%", accentColor: "#38bdf8" }}
+                      />
+                    </div>
+                  </div>
+                </div>
               </div>
 
               <div className="miniIaDetailCard">
@@ -5828,6 +7373,402 @@ async function fixWebmDuration(blob: Blob, durationSec: number): Promise<Blob> {
             </div>
           )}
 
+              <div style={{ marginTop: 8, display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+                <button
+                  type="button"
+                  className="btn secondary"
+                  onClick={() => setActiveTab("media")}
+                  style={{ fontSize: 12, padding: "7px 14px", cursor: "pointer" }}
+                >
+                  ← 📁 Mídia & Notícia
+                </button>
+                <button
+                  type="button"
+                  className="btn"
+                  onClick={() => setActiveTab("title-layout")}
+                  style={{
+                    display: "inline-flex",
+                    alignItems: "center",
+                    gap: 6,
+                    background: "#2563eb",
+                    color: "#ffffff",
+                    fontWeight: 700,
+                    fontSize: 12,
+                    padding: "8px 16px",
+                    borderRadius: 8,
+                    cursor: "pointer",
+                  }}
+                >
+                  <span>Avançar para Título & Legenda 📰</span>
+                  <span>→</span>
+                </button>
+              </div>
+            </div>
+          )}
+
+
+          {/* PAINEL 3: TÍTULO & LEGENDA */}
+          {activeTab === "title-layout" && (
+            <div className="adminFeedTabPanel" style={{ display: "flex", flexDirection: "column", gap: 14 }}>
+          <div className="field">
+            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 6, flexWrap: "wrap", gap: 6 }}>
+              <label style={{ margin: 0 }}>📰 Título na arte</label>
+              <button
+                type="button"
+                onClick={handleCorrectTitle}
+                disabled={isCorrectingTitle || !title || !title.trim()}
+                title="Corrige erros ortográficos, concordância e pontuação jornalística automaticamente"
+                style={{
+                  display: "inline-flex",
+                  alignItems: "center",
+                  gap: 6,
+                  background: isCorrectingTitle ? "#475569" : "linear-gradient(135deg, #4f46e5, #7c3aed)",
+                  color: "#ffffff",
+                  border: "none",
+                  borderRadius: 6,
+                  padding: "4px 10px",
+                  fontSize: 11,
+                  fontWeight: 700,
+                  cursor: isCorrectingTitle || !title?.trim() ? "not-allowed" : "pointer",
+                  boxShadow: "0 2px 6px rgba(124, 58, 237, 0.35)",
+                  transition: "all 0.15s ease",
+                }}
+              >
+                {isCorrectingTitle ? (
+                  <>
+                    <span style={{ display: "inline-block", animation: "spin 1s linear infinite" }}>⏳</span>
+                    Corrigindo Frase...
+                  </>
+                ) : (
+                  <>
+                    <span>✨</span> Corrigir Gramática
+                  </>
+                )}
+              </button>
+            </div>
+
+            {titleCorrectedSuccess && (
+              <div
+                style={{
+                  background: "rgba(34, 197, 94, 0.15)",
+                  border: "1px solid #22c55e",
+                  borderRadius: 6,
+                  padding: "6px 10px",
+                  color: "#15803d",
+                  fontSize: 11.5,
+                  fontWeight: 700,
+                  marginBottom: 8,
+                  display: "flex",
+                  alignItems: "center",
+                  gap: 6,
+                }}
+              >
+                {titleCorrectedSuccess}
+              </div>
+            )}
+
+            <textarea
+              rows={4}
+              value={title}
+              onChange={(e) => setTitle(e.target.value)}
+              placeholder="O título da notícia aparece automaticamente e você pode ajustar antes de baixar."
+            />
+            <small>Arraste o título na prévia para escolher onde ele aparece{format === "feed" ? "; a posição é salva neste navegador." : "."}</small>
+
+            {reelTextStyle === "viral-debate" && (
+              <div
+                style={{
+                  marginTop: 12,
+                  padding: "12px 14px",
+                  background: "rgba(30, 58, 138, 0.12)",
+                  border: "1px solid rgba(59, 130, 246, 0.35)",
+                  borderRadius: 10,
+                }}
+              >
+                <div style={{ fontSize: 13, fontWeight: 800, color: "#93c5fd", marginBottom: 10, display: "flex", alignItems: "center", gap: 6 }}>
+                  <span>🏛️</span> Configurações do Debate Político / Vídeo Horizontal
+                </div>
+
+                <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "8px 12px", marginBottom: 10 }}>
+                  <div>
+                    <label style={{ fontSize: 11, fontWeight: 700, color: "#cbd5e1", marginBottom: 4, display: "block" }}>
+                      💥 Manchete de Topo (Grito/Impacto):
+                    </label>
+                    <input
+                      type="text"
+                      value={topHeadline}
+                      onChange={(e) => {
+                        setTopHeadline(e.target.value);
+                        cachedOverlayCanvasRef.current = null;
+                      }}
+                      placeholder="Ex: QUE LAPADA!"
+                      style={{ width: "100%", fontSize: 12, fontWeight: 800, padding: "5px 8px" }}
+                    />
+                  </div>
+                  <div>
+                    <label style={{ fontSize: 11, fontWeight: 700, color: "#cbd5e1", marginBottom: 4, display: "block" }}>
+                      👤 Nome do Orador / Político:
+                    </label>
+                    <input
+                      type="text"
+                      value={authorName}
+                      onChange={(e) => {
+                        setAuthorName(e.target.value);
+                        cachedOverlayCanvasRef.current = null;
+                      }}
+                      placeholder="Ex: GUSTAVO GAYER"
+                      style={{ width: "100%", fontSize: 12, fontWeight: 700, padding: "5px 8px" }}
+                    />
+                  </div>
+                  <div>
+                    <label style={{ fontSize: 11, fontWeight: 700, color: "#cbd5e1", marginBottom: 4, display: "block" }}>
+                      @ Rede Social / Handle:
+                    </label>
+                    <input
+                      type="text"
+                      value={authorHandle}
+                      onChange={(e) => {
+                        setAuthorHandle(e.target.value);
+                        cachedOverlayCanvasRef.current = null;
+                      }}
+                      placeholder="Ex: @GUSTAVOGAYER"
+                      style={{ width: "100%", fontSize: 12, padding: "5px 8px" }}
+                    />
+                  </div>
+                  <div style={{ display: "flex", alignItems: "center", paddingTop: 18 }}>
+                    <label style={{ display: "flex", alignItems: "center", gap: 6, fontSize: 11.5, fontWeight: 700, color: "#60a5fa", cursor: "pointer" }}>
+                      <input
+                        type="checkbox"
+                        checked={authorVerified}
+                        onChange={(e) => {
+                          setAuthorVerified(e.target.checked);
+                          cachedOverlayCanvasRef.current = null;
+                        }}
+                        style={{ accentColor: "#3b82f6" }}
+                      />
+                      <span>✓ Selo de Verificado Oficial</span>
+                    </label>
+                  </div>
+                </div>
+
+                <div style={{ borderTop: "1px dashed rgba(147, 197, 253, 0.25)", paddingTop: 8 }}>
+                  <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 4 }}>
+                    <span style={{ fontSize: 11, fontWeight: 700, color: "#bfdbfe" }}>
+                      ↕️ Posição Vertical do Bloco de Vídeo: <b style={{ color: "#60a5fa" }}>{Math.round(videoBlockPosY * 100)}%</b>
+                    </span>
+                    <button
+                      type="button"
+                      className="captionTagBadge"
+                      onClick={() => {
+                        setVideoBlockPosY(0.44);
+                        videoBlockPosYRef.current = 0.44;
+                        try { localStorage.setItem("viralizou_video_block_pos_y", "0.44"); } catch {}
+                        cachedOverlayCanvasRef.current = null;
+                      }}
+                      style={{ fontSize: 10, padding: "2px 6px" }}
+                    >
+                      Reset (44%)
+                    </button>
+                  </div>
+                  <input
+                    type="range"
+                    min={20}
+                    max={75}
+                    step={1}
+                    value={Math.round(videoBlockPosY * 100)}
+                    onChange={(e) => {
+                      const val = Number(e.target.value) / 100;
+                      setVideoBlockPosY(val);
+                      videoBlockPosYRef.current = val;
+                      try { localStorage.setItem("viralizou_video_block_pos_y", String(val)); } catch {}
+                      cachedOverlayCanvasRef.current = null;
+                    }}
+                    style={{ width: "100%", accentColor: "#3b82f6" }}
+                  />
+                  <small style={{ color: "#93c5fd", fontSize: 10.5, display: "block", marginTop: 4 }}>
+                    💡 Dica: Arraste o bloco de vídeo diretamente na tela de prévia! As linhas guias azuis/roxas ajudarão a centralizar com precisão magnética.
+                  </small>
+                </div>
+              </div>
+            )}
+
+            {reelTextStyle === "bacci-red" && (
+              <div style={{ marginTop: 12, padding: "12px 14px", background: "rgba(220, 38, 38, 0.08)", border: "1px solid rgba(220, 38, 38, 0.3)", borderRadius: 10 }}>
+                <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 8 }}>
+                  <label style={{ fontSize: 13, fontWeight: 750, color: "#fca5a5", display: "flex", alignItems: "center", gap: 6, margin: 0 }}>
+                    ↕️ Altura do Layout Bacci: <span style={{ color: "#ffffff", fontFamily: "monospace", fontSize: 14 }}>{Math.round((titlePosition.y || 0.58) * 100)}%</span> ({Math.round((titlePosition.y || 0.58) * 1920)}px)
+                  </label>
+                  <button
+                    type="button"
+                    style={{ fontSize: 11, padding: "3px 9px", background: "#374151", color: "#f3f4f6", border: "none", borderRadius: 6, cursor: "pointer", fontWeight: 700 }}
+                    onClick={() => {
+                      const pos = { x: 0.5, y: 0.58 };
+                      titlePositionRef.current = pos;
+                      setTitlePosition(pos);
+                      try { localStorage.setItem("viralizou_reel_title_position", JSON.stringify(pos)); } catch {}
+                      cachedOverlayCanvasRef.current = null;
+                      renderCard();
+                    }}
+                  >
+                    Reset (58%)
+                  </button>
+                </div>
+                <input
+                  type="range"
+                  min={30}
+                  max={75}
+                  step={1}
+                  value={Math.round((titlePosition.y || 0.58) * 100)}
+                  onChange={(e) => {
+                    const val = Number(e.target.value) / 100;
+                    const pos = { x: titlePosition.x || 0.5, y: val };
+                    titlePositionRef.current = pos;
+                    setTitlePosition(pos);
+                    try { localStorage.setItem("viralizou_reel_title_position", JSON.stringify(pos)); } catch {}
+                    cachedOverlayCanvasRef.current = null;
+                    renderCard();
+                  }}
+                  style={{ width: "100%", accentColor: "#ef4444" }}
+                />
+                <div style={{ display: "flex", gap: 6, marginTop: 8, flexWrap: "wrap" }}>
+                  <button
+                    type="button"
+                    className="captionTagBadge"
+                    onClick={() => {
+                      const pos = { x: 0.5, y: 0.46 };
+                      titlePositionRef.current = pos;
+                      setTitlePosition(pos);
+                      try { localStorage.setItem("viralizou_reel_title_position", JSON.stringify(pos)); } catch {}
+                      cachedOverlayCanvasRef.current = null;
+                      renderCard();
+                    }}
+                  >
+                    🔼 Mais Alto (46%)
+                  </button>
+                  <button
+                    type="button"
+                    className="captionTagBadge"
+                    onClick={() => {
+                      const pos = { x: 0.5, y: 0.58 };
+                      titlePositionRef.current = pos;
+                      setTitlePosition(pos);
+                      try { localStorage.setItem("viralizou_reel_title_position", JSON.stringify(pos)); } catch {}
+                      cachedOverlayCanvasRef.current = null;
+                      renderCard();
+                    }}
+                  >
+                    ↔️ Padrão Bacci (58%)
+                  </button>
+                  <button
+                    type="button"
+                    className="captionTagBadge"
+                    onClick={() => {
+                      const pos = { x: 0.5, y: 0.68 };
+                      titlePositionRef.current = pos;
+                      setTitlePosition(pos);
+                      try { localStorage.setItem("viralizou_reel_title_position", JSON.stringify(pos)); } catch {}
+                      cachedOverlayCanvasRef.current = null;
+                      renderCard();
+                    }}
+                  >
+                    🔽 Mais Baixo (68%)
+                  </button>
+                </div>
+                <small style={{ display: "block", marginTop: 6, color: "#cbd5e1", fontSize: 11 }}>
+                  💡 Dica: Você também pode clicar e arrastar o layout Bacci diretamente na tela de prévia!
+                </small>
+              </div>
+            )}
+
+            {reelTextStyle === "red-bottom" && (
+              <div style={{ marginTop: 12, padding: "12px 14px", background: "rgba(229, 0, 20, 0.08)", border: "1px solid rgba(229, 0, 20, 0.3)", borderRadius: 10 }}>
+                <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 8 }}>
+                  <label style={{ fontSize: 13, fontWeight: 750, color: "#fca5a5", display: "flex", alignItems: "center", gap: 6, margin: 0 }}>
+                    ↕️ Altura do Bloco Vermelho (TVT): <span style={{ color: "#ffffff", fontFamily: "monospace", fontSize: 14 }}>{Math.round((titlePosition.y || 0.615) * 100)}%</span> ({Math.round((titlePosition.y || 0.615) * 1920)}px)
+                  </label>
+                  <button
+                    type="button"
+                    style={{ fontSize: 11, padding: "3px 9px", background: "#374151", color: "#f3f4f6", border: "none", borderRadius: 6, cursor: "pointer", fontWeight: 700 }}
+                    onClick={() => {
+                      const pos = { x: 0.5, y: 0.615 };
+                      titlePositionRef.current = pos;
+                      setTitlePosition(pos);
+                      try { localStorage.setItem("viralizou_reel_title_position", JSON.stringify(pos)); } catch {}
+                      cachedOverlayCanvasRef.current = null;
+                      renderCard();
+                    }}
+                  >
+                    Reset (61.5%)
+                  </button>
+                </div>
+                <input
+                  type="range"
+                  min={40}
+                  max={80}
+                  step={1}
+                  value={Math.round((titlePosition.y || 0.615) * 100)}
+                  onChange={(e) => {
+                    const val = Number(e.target.value) / 100;
+                    const pos = { x: titlePosition.x || 0.5, y: val };
+                    titlePositionRef.current = pos;
+                    setTitlePosition(pos);
+                    try { localStorage.setItem("viralizou_reel_title_position", JSON.stringify(pos)); } catch {}
+                    cachedOverlayCanvasRef.current = null;
+                    renderCard();
+                  }}
+                  style={{ width: "100%", accentColor: "#e50014" }}
+                />
+                <div style={{ display: "flex", gap: 6, marginTop: 8, flexWrap: "wrap" }}>
+                  <button
+                    type="button"
+                    className="captionTagBadge"
+                    onClick={() => {
+                      const pos = { x: 0.5, y: 0.50 };
+                      titlePositionRef.current = pos;
+                      setTitlePosition(pos);
+                      try { localStorage.setItem("viralizou_reel_title_position", JSON.stringify(pos)); } catch {}
+                      cachedOverlayCanvasRef.current = null;
+                      renderCard();
+                    }}
+                  >
+                    🔼 Mais Alto (50%)
+                  </button>
+                  <button
+                    type="button"
+                    className="captionTagBadge"
+                    onClick={() => {
+                      const pos = { x: 0.5, y: 0.615 };
+                      titlePositionRef.current = pos;
+                      setTitlePosition(pos);
+                      try { localStorage.setItem("viralizou_reel_title_position", JSON.stringify(pos)); } catch {}
+                      cachedOverlayCanvasRef.current = null;
+                      renderCard();
+                    }}
+                  >
+                    ↔️ Padrão TVT (61.5%)
+                  </button>
+                  <button
+                    type="button"
+                    className="captionTagBadge"
+                    onClick={() => {
+                      const pos = { x: 0.5, y: 0.72 };
+                      titlePositionRef.current = pos;
+                      setTitlePosition(pos);
+                      try { localStorage.setItem("viralizou_reel_title_position", JSON.stringify(pos)); } catch {}
+                      cachedOverlayCanvasRef.current = null;
+                      renderCard();
+                    }}
+                  >
+                    🔽 Mais Baixo (72%)
+                  </button>
+                </div>
+                <small style={{ display: "block", marginTop: 6, color: "#cbd5e1", fontSize: 11 }}>
+                  💡 Dica: Você também pode clicar e arrastar o bloco vermelho diretamente na tela de prévia!
+                </small>
+              </div>
+            )}
+          </div>
+
           <div className="captionStudioBox">
             <div className="captionHeaderTitle">
               <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
@@ -5844,22 +7785,6 @@ async function fixWebmDuration(blob: Blob, durationSec: number): Promise<Blob> {
               </div>
               <span>{format === "feed" ? "Feed 4:5" : format === "feed-square" ? "Feed quadrado 1:1" : format === "reel-cover" ? "Capa do Reels 4:5" : format === "story" ? "Story 9:16" : "Reel 9:16"}</span>
             </div>
-
-            <div className="captionStudioField">
-              <label className="captionSafeZoneToggle">
-                <span>🧩 Painel de camadas</span>
-                <input type="checkbox" checked={showLayerPanel} onChange={(e) => toggleLayerPanel(e.target.checked)} />
-              </label>
-              {showLayerPanel && (
-                <div className="captionTagShortcuts" style={{ marginTop: 8 }}>
-                  <label className="captionSafeZoneToggle"><span>Logo</span><input type="checkbox" checked={showLogoLayer} onChange={(e) => toggleLogoLayer(e.target.checked)} /></label>
-                  <label className="captionSafeZoneToggle"><span>Título</span><input type="checkbox" checked={showTitleLayer} onChange={(e) => toggleTitleLayer(e.target.checked)} /></label>
-                  <label className="captionSafeZoneToggle"><span>Tag / assinatura</span><input type="checkbox" checked={showHandleLayer} onChange={(e) => toggleHandleLayer(e.target.checked)} /></label>
-                  {format === "story" && <label className="captionSafeZoneToggle"><span>Guia de figurinha (só prévia)</span><input type="checkbox" checked={showStorySticker} onChange={(e) => toggleStorySticker(e.target.checked)} /></label>}
-                </div>
-              )}
-            </div>
-
             <div className="captionStudioField">
               <label>Fonte</label>
               <select
@@ -6054,6 +7979,68 @@ async function fixWebmDuration(blob: Blob, durationSec: number): Promise<Blob> {
                 >
                   📺 Estilo Bacci (Tarja Vermelha & Logo Circular)
                 </button>
+                <button
+                  type="button"
+                  className={`captionStyleBtn ${reelTextStyle === "viral-debate" ? "active" : ""}`}
+                  onClick={() => {
+                    chooseReelTextStyle("viral-debate");
+                    setVideoFramingMode("horizontal-block");
+                    chooseReelFontFamily("montserrat");
+                    chooseReelFontWeight("900");
+                    chooseReelFontSize(64);
+                    chooseReelTextAlign("center");
+                    setVideoBlockPosY(0.44);
+                    videoBlockPosYRef.current = 0.44;
+                  }}
+                  style={{
+                    background: reelTextStyle === "viral-debate" ? "linear-gradient(135deg, #1e3a8a, #0284c7)" : undefined,
+                    color: reelTextStyle === "viral-debate" ? "#ffffff" : undefined,
+                    borderColor: reelTextStyle === "viral-debate" ? "#38bdf8" : undefined,
+                    fontWeight: reelTextStyle === "viral-debate" ? 800 : 600,
+                  }}
+                  title="Debate Político / Vídeo Horizontal: Manchete topo de impacto (QUE LAPADA!), vídeo 16:9 em bloco, manchete bicolor e crachá do orador com selo verificado"
+                >
+                  🏛️ Debate Político (Vídeo Horizontal)
+                </button>
+                <button
+                  type="button"
+                  className={`captionStyleBtn ${reelTextStyle === "split-compare" ? "active" : ""}`}
+                  onClick={() => {
+                    chooseReelTextStyle("split-compare");
+                    setVideoFramingMode("split");
+                    chooseReelFontFamily("anton");
+                    chooseReelFontWeight("900");
+                    chooseReelFontSize(58);
+                  }}
+                  style={{
+                    background: reelTextStyle === "split-compare" ? "linear-gradient(135deg, #7c3aed, #4f46e5)" : undefined,
+                    color: reelTextStyle === "split-compare" ? "#ffffff" : undefined,
+                    borderColor: reelTextStyle === "split-compare" ? "#a855f7" : undefined,
+                    fontWeight: reelTextStyle === "split-compare" ? 800 : 600,
+                  }}
+                  title="Split 50/50 Comparativo: Tela dividida meio a meio para comparar antes/depois, reações ou duas câmeras"
+                >
+                  👥 Split Comparativo (50/50)
+                </button>
+                <button
+                  type="button"
+                  className={`captionStyleBtn ${reelTextStyle === "bicolor-yellow" ? "active" : ""}`}
+                  onClick={() => {
+                    chooseReelTextStyle("bicolor-yellow");
+                    chooseReelFontFamily("montserrat");
+                    chooseReelFontWeight("900");
+                    chooseReelFontSize(68);
+                  }}
+                  style={{
+                    background: reelTextStyle === "bicolor-yellow" ? "linear-gradient(135deg, #ca8a04, #eab308)" : undefined,
+                    color: reelTextStyle === "bicolor-yellow" ? "#000000" : undefined,
+                    borderColor: reelTextStyle === "bicolor-yellow" ? "#facc15" : undefined,
+                    fontWeight: reelTextStyle === "bicolor-yellow" ? 800 : 600,
+                  }}
+                  title="Impacto Amarelo & Branco: Linhas alternadas em amarelo vibrante e branco puro para máxima retenção visual"
+                >
+                  🟡 Impacto Amarelo & Branco
+                </button>
                 <button type="button" className={`captionStyleBtn ${reelTextStyle === "highlight" || reelTextStyle === "highlight-yellow" ? "active" : ""}`} onClick={() => chooseReelTextStyle("highlight")} title="Faixa amarela noticiosa em destaque (Alto impacto)">🟨 Faixa Noticiosa (Destaque)</button> {false && (<><button
                   type="button"
                   className={`captionStyleBtn ${reelTextStyle === "left-border" ? "active" : ""}`}
@@ -6142,6 +8129,41 @@ async function fixWebmDuration(blob: Blob, durationSec: number): Promise<Blob> {
                   </button>
                   <button
                     type="button"
+                    className={`captionColorPill ${reelTextAnimation === "bounce" ? "active" : ""}`}
+                    onClick={() => chooseReelTextAnimation("bounce")}
+                  >
+                    🏀 Pulo Elástico
+                  </button>
+                  <button
+                    type="button"
+                    className={`captionColorPill ${reelTextAnimation === "zoom-in" ? "active" : ""}`}
+                    onClick={() => chooseReelTextAnimation("zoom-in")}
+                  >
+                    🔍 Zoom In
+                  </button>
+                  <button
+                    type="button"
+                    className={`captionColorPill ${reelTextAnimation === "pulse" ? "active" : ""}`}
+                    onClick={() => chooseReelTextAnimation("pulse")}
+                  >
+                    💓 Pulso / Ritmo
+                  </button>
+                  <button
+                    type="button"
+                    className={`captionColorPill ${reelTextAnimation === "karaoke" ? "active" : ""}`}
+                    onClick={() => chooseReelTextAnimation("karaoke")}
+                  >
+                    🎤 Karaokê Neon
+                  </button>
+                  <button
+                    type="button"
+                    className={`captionColorPill ${reelTextAnimation === "glitch" ? "active" : ""}`}
+                    onClick={() => chooseReelTextAnimation("glitch")}
+                  >
+                    ⚡ Glitch / Urgência
+                  </button>
+                  <button
+                    type="button"
                     className={`captionColorPill ${reelTextAnimation === "slide" ? "active" : ""}`}
                     onClick={() => chooseReelTextAnimation("slide")}
                   >
@@ -6209,287 +8231,43 @@ async function fixWebmDuration(blob: Blob, durationSec: number): Promise<Blob> {
             )}
           </div>
 
-          <div className="field">
-            <label>📰 Título na arte</label>
-            <textarea
-              rows={4}
-              value={title}
-              onChange={(e) => setTitle(e.target.value)}
-              placeholder="O título da notícia aparece automaticamente e você pode ajustar antes de baixar."
-            />
-            <small>Arraste o título na prévia para escolher onde ele aparece{format === "feed" ? "; a posição é salva neste navegador." : "."}</small>
-
-            {reelTextStyle === "bacci-red" && (
-              <div style={{ marginTop: 12, padding: "12px 14px", background: "rgba(220, 38, 38, 0.08)", border: "1px solid rgba(220, 38, 38, 0.3)", borderRadius: 10 }}>
-                <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 8 }}>
-                  <label style={{ fontSize: 13, fontWeight: 750, color: "#fca5a5", display: "flex", alignItems: "center", gap: 6, margin: 0 }}>
-                    ↕️ Altura do Layout Bacci: <span style={{ color: "#ffffff", fontFamily: "monospace", fontSize: 14 }}>{Math.round((titlePosition.y || 0.58) * 100)}%</span> ({Math.round((titlePosition.y || 0.58) * 1920)}px)
-                  </label>
-                  <button
-                    type="button"
-                    style={{ fontSize: 11, padding: "3px 9px", background: "#374151", color: "#f3f4f6", border: "none", borderRadius: 6, cursor: "pointer", fontWeight: 700 }}
-                    onClick={() => {
-                      const pos = { x: 0.5, y: 0.58 };
-                      titlePositionRef.current = pos;
-                      setTitlePosition(pos);
-                      try { localStorage.setItem("viralizou_reel_title_position", JSON.stringify(pos)); } catch {}
-                      cachedOverlayCanvasRef.current = null;
-                      renderCard();
-                    }}
-                  >
-                    Reset (58%)
-                  </button>
-                </div>
-                <input
-                  type="range"
-                  min={30}
-                  max={75}
-                  step={1}
-                  value={Math.round((titlePosition.y || 0.58) * 100)}
-                  onChange={(e) => {
-                    const val = Number(e.target.value) / 100;
-                    const pos = { x: titlePosition.x || 0.5, y: val };
-                    titlePositionRef.current = pos;
-                    setTitlePosition(pos);
-                    try { localStorage.setItem("viralizou_reel_title_position", JSON.stringify(pos)); } catch {}
-                    cachedOverlayCanvasRef.current = null;
-                    renderCard();
+              <div style={{ marginTop: 8, display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+                <button
+                  type="button"
+                  className="btn secondary"
+                  onClick={() => setActiveTab(format === "reel" || format === "story" ? "mini-ia" : "media")}
+                  style={{ fontSize: 12, padding: "7px 14px", cursor: "pointer" }}
+                >
+                  ← {format === "reel" || format === "story" ? "⚡ Mini IA Studio" : "📁 Mídia & Notícia"}
+                </button>
+                <button
+                  type="button"
+                  className="btn"
+                  onClick={() => setActiveTab("branding-layers")}
+                  style={{
+                    display: "inline-flex",
+                    alignItems: "center",
+                    gap: 6,
+                    background: "#16a34a",
+                    color: "#ffffff",
+                    fontWeight: 700,
+                    fontSize: 12,
+                    padding: "8px 16px",
+                    borderRadius: 8,
+                    cursor: "pointer",
                   }}
-                  style={{ width: "100%", accentColor: "#ef4444" }}
-                />
-                <div style={{ display: "flex", gap: 6, marginTop: 8, flexWrap: "wrap" }}>
-                  <button
-                    type="button"
-                    className="captionTagBadge"
-                    onClick={() => {
-                      const pos = { x: 0.5, y: 0.46 };
-                      titlePositionRef.current = pos;
-                      setTitlePosition(pos);
-                      try { localStorage.setItem("viralizou_reel_title_position", JSON.stringify(pos)); } catch {}
-                      cachedOverlayCanvasRef.current = null;
-                      renderCard();
-                    }}
-                  >
-                    🔼 Mais Alto (46%)
-                  </button>
-                  <button
-                    type="button"
-                    className="captionTagBadge"
-                    onClick={() => {
-                      const pos = { x: 0.5, y: 0.58 };
-                      titlePositionRef.current = pos;
-                      setTitlePosition(pos);
-                      try { localStorage.setItem("viralizou_reel_title_position", JSON.stringify(pos)); } catch {}
-                      cachedOverlayCanvasRef.current = null;
-                      renderCard();
-                    }}
-                  >
-                    ↔️ Padrão Bacci (58%)
-                  </button>
-                  <button
-                    type="button"
-                    className="captionTagBadge"
-                    onClick={() => {
-                      const pos = { x: 0.5, y: 0.68 };
-                      titlePositionRef.current = pos;
-                      setTitlePosition(pos);
-                      try { localStorage.setItem("viralizou_reel_title_position", JSON.stringify(pos)); } catch {}
-                      cachedOverlayCanvasRef.current = null;
-                      renderCard();
-                    }}
-                  >
-                    🔽 Mais Baixo (68%)
-                  </button>
-                </div>
-                <small style={{ display: "block", marginTop: 6, color: "#cbd5e1", fontSize: 11 }}>
-                  💡 Dica: Você também pode clicar e arrastar o layout Bacci diretamente na tela de prévia!
-                </small>
-              </div>
-            )}
-
-            {reelTextStyle === "red-bottom" && (
-              <div style={{ marginTop: 12, padding: "12px 14px", background: "rgba(229, 0, 20, 0.08)", border: "1px solid rgba(229, 0, 20, 0.3)", borderRadius: 10 }}>
-                <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 8 }}>
-                  <label style={{ fontSize: 13, fontWeight: 750, color: "#fca5a5", display: "flex", alignItems: "center", gap: 6, margin: 0 }}>
-                    ↕️ Altura do Bloco Vermelho (TVT): <span style={{ color: "#ffffff", fontFamily: "monospace", fontSize: 14 }}>{Math.round((titlePosition.y || 0.615) * 100)}%</span> ({Math.round((titlePosition.y || 0.615) * 1920)}px)
-                  </label>
-                  <button
-                    type="button"
-                    style={{ fontSize: 11, padding: "3px 9px", background: "#374151", color: "#f3f4f6", border: "none", borderRadius: 6, cursor: "pointer", fontWeight: 700 }}
-                    onClick={() => {
-                      const pos = { x: 0.5, y: 0.615 };
-                      titlePositionRef.current = pos;
-                      setTitlePosition(pos);
-                      try { localStorage.setItem("viralizou_reel_title_position", JSON.stringify(pos)); } catch {}
-                      cachedOverlayCanvasRef.current = null;
-                      renderCard();
-                    }}
-                  >
-                    Reset (61.5%)
-                  </button>
-                </div>
-                <input
-                  type="range"
-                  min={40}
-                  max={80}
-                  step={1}
-                  value={Math.round((titlePosition.y || 0.615) * 100)}
-                  onChange={(e) => {
-                    const val = Number(e.target.value) / 100;
-                    const pos = { x: titlePosition.x || 0.5, y: val };
-                    titlePositionRef.current = pos;
-                    setTitlePosition(pos);
-                    try { localStorage.setItem("viralizou_reel_title_position", JSON.stringify(pos)); } catch {}
-                    cachedOverlayCanvasRef.current = null;
-                    renderCard();
-                  }}
-                  style={{ width: "100%", accentColor: "#e50014" }}
-                />
-                <div style={{ display: "flex", gap: 6, marginTop: 8, flexWrap: "wrap" }}>
-                  <button
-                    type="button"
-                    className="captionTagBadge"
-                    onClick={() => {
-                      const pos = { x: 0.5, y: 0.50 };
-                      titlePositionRef.current = pos;
-                      setTitlePosition(pos);
-                      try { localStorage.setItem("viralizou_reel_title_position", JSON.stringify(pos)); } catch {}
-                      cachedOverlayCanvasRef.current = null;
-                      renderCard();
-                    }}
-                  >
-                    🔼 Mais Alto (50%)
-                  </button>
-                  <button
-                    type="button"
-                    className="captionTagBadge"
-                    onClick={() => {
-                      const pos = { x: 0.5, y: 0.615 };
-                      titlePositionRef.current = pos;
-                      setTitlePosition(pos);
-                      try { localStorage.setItem("viralizou_reel_title_position", JSON.stringify(pos)); } catch {}
-                      cachedOverlayCanvasRef.current = null;
-                      renderCard();
-                    }}
-                  >
-                    ↔️ Padrão TVT (61.5%)
-                  </button>
-                  <button
-                    type="button"
-                    className="captionTagBadge"
-                    onClick={() => {
-                      const pos = { x: 0.5, y: 0.72 };
-                      titlePositionRef.current = pos;
-                      setTitlePosition(pos);
-                      try { localStorage.setItem("viralizou_reel_title_position", JSON.stringify(pos)); } catch {}
-                      cachedOverlayCanvasRef.current = null;
-                      renderCard();
-                    }}
-                  >
-                    🔽 Mais Baixo (72%)
-                  </button>
-                </div>
-                <small style={{ display: "block", marginTop: 6, color: "#cbd5e1", fontSize: 11 }}>
-                  💡 Dica: Você também pode clicar e arrastar o bloco vermelho diretamente na tela de prévia!
-                </small>
-              </div>
-            )}
-          </div>
-
-          <div className="field">
-            <label>🏷️ Tag / Assinatura do Conteúdo</label>
-            <input value={handle} onChange={(e) => saveHandle(e.target.value)} placeholder="@viralizougoiania, FUTEBOL, POLÍTICA, CELEBRIDADES..." />
-            <div className="captionTagShortcuts">
-              <span style={{ fontSize: 11, color: "#94a3b8", alignSelf: "center" }}>Tags rápidas:</span>
-              <button type="button" className="captionTagBadge" onClick={() => saveHandle("@viralizougoiania")}>@viralizougoiania</button>
-              <button type="button" className="captionTagBadge" onClick={() => saveHandle("FUTEBOL")}>⚽ FUTEBOL</button>
-              <button type="button" className="captionTagBadge" onClick={() => saveHandle("POLÍTICA")}>🏛️ POLÍTICA</button>
-              <button type="button" className="captionTagBadge" onClick={() => saveHandle("CELEBRIDADES")}>⭐ CELEBRIDADES</button>
-              <button type="button" className="captionTagBadge" onClick={() => saveHandle("GOIÁS")}>📍 GOIÁS</button>
-              <button type="button" className="captionTagBadge" onClick={() => saveHandle("URGENTE")}>🚨 URGENTE</button>
-            </div>
-
-            <div style={{ marginTop: 10, display: "flex", flexDirection: "column", gap: 10 }}>
-              <div>
-                <small style={{ display: "block", marginBottom: 6, fontWeight: 700 }}>Cor da Legenda / Tag:</small>
-                <div className="captionColorGroup">
-                  <button
-                    type="button"
-                    className={`captionColorPill ${tagColor === "red" ? "active" : ""}`}
-                    onClick={() => chooseTagColor("red")}
-                  >
-                    <span className="captionColorCircle" style={{ background: "#ff3b30" }} />
-                    🔴 Vermelho (Destaque)
-                  </button>
-                  <button
-                    type="button"
-                    className={`captionColorPill ${tagColor === "white" ? "active" : ""}`}
-                    onClick={() => chooseTagColor("white")}
-                  >
-                    <span className="captionColorCircle" style={{ background: "#ffffff" }} />
-                    ⚪ Branco
-                  </button>
-                  <button
-                    type="button"
-                    className={`captionColorPill ${tagColor === "yellow" ? "active" : ""}`}
-                    onClick={() => chooseTagColor("yellow")}
-                  >
-                    <span className="captionColorCircle" style={{ background: "#ffcc00" }} />
-                    🟡 Amarelo
-                  </button>
-                  <button
-                    type="button"
-                    className={`captionColorPill ${tagColor === "orange" ? "active" : ""}`}
-                    onClick={() => chooseTagColor("orange")}
-                  >
-                    <span className="captionColorCircle" style={{ background: "#ff5a1f" }} />
-                    🟠 Laranja
-                  </button>
-                </div>
-              </div>
-
-              <div>
-                <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-                  <small style={{ fontWeight: 700 }}>Tamanho da fonte do @ / Tag: <b>{handleFontSize}px</b></small>
-                </div>
-                <input
-                  type="range"
-                  min="18"
-                  max="72"
-                  value={handleFontSize}
-                  onChange={(e) => saveReelHandleSize(Number(e.target.value))}
-                />
-              </div>
-
-              <div>
-                <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 4 }}>
-                  <small style={{ fontWeight: 700 }}>↕️ Altura da Tag: <b>{getEffectiveTagY(format, tagPositionY)}px</b></small>
-                  {tagPositionY !== getEffectiveTagY(format, 0) && (
-                    <button
-                      type="button"
-                      className="captionTagBadge"
-                      onClick={() => chooseTagPositionY(getEffectiveTagY(format, 0))}
-                      title="Restaura a altura segura padrão deste formato"
-                    >
-                      Reset ({getEffectiveTagY(format, 0)}px)
-                    </button>
-                  )}
-                </div>
-                <input
-                  type="range"
-                  min="50"
-                  max={getCanvasDimensions(format).height - 30}
-                  step="5"
-                  value={getEffectiveTagY(format, tagPositionY)}
-                  onChange={(e) => chooseTagPositionY(Number(e.target.value))}
-                />
-                <small style={{ color: "#8b5cf6", display: "block", marginTop: 4, fontWeight: 600 }}>
-                  🖱️ Dica: Você também pode clicar e arrastar a <b>Tag / Assinatura</b> diretamente na prévia com o mouse!
-                </small>
+                >
+                  <span>Avançar para Marca & Camadas 🏢</span>
+                  <span>→</span>
+                </button>
               </div>
             </div>
-          </div>
+          )}
 
+
+          {/* PAINEL 4: MARCA & CAMADAS */}
+          {activeTab === "branding-layers" && (
+            <div className="adminFeedTabPanel" style={{ display: "flex", flexDirection: "column", gap: 14 }}>
           <div className="field">
             <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 6, flexWrap: "wrap", gap: 6 }}>
               <label style={{ margin: 0 }}>🏢 Logo do jornal</label>
@@ -6514,10 +8292,10 @@ async function fixWebmDuration(blob: Blob, durationSec: number): Promise<Blob> {
                   type="button"
                   className={`logoColorStyleBtn ${logoColorStyle === "gif" ? "active" : ""}`}
                   onClick={() => chooseLogoColorStyle("gif")}
-                  title="Logo Oficial Animada em GIF (Sem fundo verde, com efeito de brilho)"
-                  style={logoColorStyle === "gif" ? { borderColor: "#8b5cf6", color: "#c084fc", background: "rgba(139, 92, 246, 0.15)" } : {}}
+                  title="Logo Oficial Animada Transparente (WebM com Alpha nativo de 65 KB, sem fundo verde e com brilho 3D)"
+                  style={logoColorStyle === "gif" ? { borderColor: "#8b5cf6", color: "#c084fc", background: "rgba(139, 92, 246, 0.15)", fontWeight: 700 } : {}}
                 >
-                  ✨ Animada (GIF)
+                  ✨ Animada (WebM / Alpha)
                 </button>
                 <button
                   type="button"
@@ -6661,6 +8439,539 @@ async function fixWebmDuration(blob: Blob, durationSec: number): Promise<Blob> {
             </div>
           </div>
 
+          <div className="field">
+            <label>🏷️ Tag / Assinatura do Conteúdo</label>
+            <input value={handle} onChange={(e) => saveHandle(e.target.value)} placeholder="@viralizougoiania, FUTEBOL, POLÍTICA, CELEBRIDADES..." />
+            <div className="captionTagShortcuts">
+              <span style={{ fontSize: 11, color: "#94a3b8", alignSelf: "center" }}>Tags rápidas:</span>
+              <button type="button" className="captionTagBadge" onClick={() => saveHandle("@viralizougoiania")}>@viralizougoiania</button>
+              <button type="button" className="captionTagBadge" onClick={() => saveHandle("FUTEBOL")}>⚽ FUTEBOL</button>
+              <button type="button" className="captionTagBadge" onClick={() => saveHandle("POLÍTICA")}>🏛️ POLÍTICA</button>
+              <button type="button" className="captionTagBadge" onClick={() => saveHandle("CELEBRIDADES")}>⭐ CELEBRIDADES</button>
+              <button type="button" className="captionTagBadge" onClick={() => saveHandle("GOIÁS")}>📍 GOIÁS</button>
+              <button type="button" className="captionTagBadge" onClick={() => saveHandle("URGENTE")}>🚨 URGENTE</button>
+            </div>
+
+            <div style={{ marginTop: 10, display: "flex", flexDirection: "column", gap: 10 }}>
+              <div>
+                <small style={{ display: "block", marginBottom: 6, fontWeight: 700 }}>Cor da Legenda / Tag:</small>
+                <div className="captionColorGroup">
+                  <button
+                    type="button"
+                    className={`captionColorPill ${tagColor === "red" ? "active" : ""}`}
+                    onClick={() => chooseTagColor("red")}
+                  >
+                    <span className="captionColorCircle" style={{ background: "#ff3b30" }} />
+                    🔴 Vermelho (Destaque)
+                  </button>
+                  <button
+                    type="button"
+                    className={`captionColorPill ${tagColor === "white" ? "active" : ""}`}
+                    onClick={() => chooseTagColor("white")}
+                  >
+                    <span className="captionColorCircle" style={{ background: "#ffffff" }} />
+                    ⚪ Branco
+                  </button>
+                  <button
+                    type="button"
+                    className={`captionColorPill ${tagColor === "yellow" ? "active" : ""}`}
+                    onClick={() => chooseTagColor("yellow")}
+                  >
+                    <span className="captionColorCircle" style={{ background: "#ffcc00" }} />
+                    🟡 Amarelo
+                  </button>
+                  <button
+                    type="button"
+                    className={`captionColorPill ${tagColor === "orange" ? "active" : ""}`}
+                    onClick={() => chooseTagColor("orange")}
+                  >
+                    <span className="captionColorCircle" style={{ background: "#ff5a1f" }} />
+                    🟠 Laranja
+                  </button>
+                </div>
+              </div>
+
+              <div>
+                <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+                  <small style={{ fontWeight: 700 }}>Tamanho da fonte do @ / Tag: <b>{handleFontSize}px</b></small>
+                </div>
+                <input
+                  type="range"
+                  min="18"
+                  max="72"
+                  value={handleFontSize}
+                  onChange={(e) => saveReelHandleSize(Number(e.target.value))}
+                />
+              </div>
+
+              <div>
+                <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 4 }}>
+                  <small style={{ fontWeight: 700 }}>↕️ Altura da Tag: <b>{getEffectiveTagY(format, tagPositionY)}px</b></small>
+                  {tagPositionY !== getEffectiveTagY(format, 0) && (
+                    <button
+                      type="button"
+                      className="captionTagBadge"
+                      onClick={() => chooseTagPositionY(getEffectiveTagY(format, 0))}
+                      title="Restaura a altura segura padrão deste formato"
+                    >
+                      Reset ({getEffectiveTagY(format, 0)}px)
+                    </button>
+                  )}
+                </div>
+                <input
+                  type="range"
+                  min="50"
+                  max={getCanvasDimensions(format).height - 30}
+                  step="5"
+                  value={getEffectiveTagY(format, tagPositionY)}
+                  onChange={(e) => chooseTagPositionY(Number(e.target.value))}
+                />
+                <small style={{ color: "#8b5cf6", display: "block", marginTop: 4, fontWeight: 600 }}>
+                  🖱️ Dica: Você também pode clicar e arrastar a <b>Tag / Assinatura</b> diretamente na prévia com o mouse!
+                </small>
+              </div>
+            </div>
+          </div>
+
+            {/* PAINEL PROFISSIONAL DE CAMADAS (LAYERS STACK) */}
+            <div
+              style={{
+                marginBottom: 12,
+                background: "#0f172a",
+                border: "1px solid #334155",
+                borderRadius: 8,
+                padding: "10px 12px",
+              }}
+            >
+              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+                <div style={{ display: "flex", alignItems: "center", gap: 7 }}>
+                  <span style={{ fontSize: 13 }}>🧩</span>
+                  <span style={{ fontSize: 12, fontWeight: 800, color: "#f8fafc" }}>
+                    Painel de Camadas & Bloqueio (Layers Stack)
+                  </span>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => toggleLayerPanel(!showLayerPanel)}
+                  style={{
+                    background: "rgba(255,255,255,0.08)",
+                    border: "1px solid rgba(255,255,255,0.15)",
+                    color: "#94a3b8",
+                    borderRadius: 4,
+                    fontSize: 10,
+                    padding: "2px 7px",
+                    cursor: "pointer",
+                  }}
+                >
+                  {showLayerPanel ? "Recolher ▲" : "Expandir ▼"}
+                </button>
+              </div>
+
+              {showLayerPanel && (
+                <div style={{ display: "flex", flexDirection: "column", gap: 6, marginTop: 10 }}>
+                  {/* Camada 1: Vídeo / Mídia de Fundo */}
+                  <div
+                    style={{
+                      display: "flex",
+                      alignItems: "center",
+                      justifyContent: "space-between",
+                      background: "rgba(30, 41, 59, 0.7)",
+                      border: "1px solid rgba(51, 65, 85, 0.6)",
+                      borderRadius: 6,
+                      padding: "5px 8px",
+                    }}
+                  >
+                    <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
+                      <span style={{ fontSize: 13 }}>🎬</span>
+                      <span style={{ fontSize: 11, fontWeight: 700, color: "#e2e8f0" }}>Vídeo / Mídia Principal</span>
+                      {videoFramingMode === "horizontal-block" && (
+                        <span style={{ fontSize: 9.5, background: "rgba(2, 132, 199, 0.2)", color: "#38bdf8", padding: "1px 5px", borderRadius: 3 }}>
+                          Bloco 16:9
+                        </span>
+                      )}
+                    </div>
+                    <div style={{ display: "flex", alignItems: "center", gap: 5 }}>
+                      <button
+                        type="button"
+                        onClick={() => setLockedLayers((prev) => ({ ...prev, video: !prev.video }))}
+                        title={lockedLayers["video"] ? "Destravar camada de vídeo" : "Travar posição do vídeo contra arraste acidental"}
+                        style={{
+                          background: lockedLayers["video"] ? "rgba(239, 68, 68, 0.2)" : "rgba(255,255,255,0.08)",
+                          color: lockedLayers["video"] ? "#f87171" : "#94a3b8",
+                          border: `1px solid ${lockedLayers["video"] ? "#ef4444" : "rgba(255,255,255,0.12)"}`,
+                          borderRadius: 4,
+                          fontSize: 10,
+                          padding: "2px 6px",
+                          cursor: "pointer",
+                        }}
+                      >
+                        {lockedLayers["video"] ? "🔒 Travado" : "🔓 Livre"}
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setImagePosition(0);
+                          if (videoFramingMode === "horizontal-block") {
+                            setVideoBlockPosY(0.44);
+                            videoBlockPosYRef.current = 0.44;
+                            try { localStorage.setItem("viralizou_video_block_pos_y", "0.44"); } catch {}
+                          }
+                          cachedOverlayCanvasRef.current = null;
+                        }}
+                        title="Centralizar posição vertical do vídeo"
+                        style={{
+                          background: "rgba(255,255,255,0.08)",
+                          color: "#cbd5e1",
+                          border: "1px solid rgba(255,255,255,0.12)",
+                          borderRadius: 4,
+                          fontSize: 10,
+                          padding: "2px 6px",
+                          cursor: "pointer",
+                        }}
+                      >
+                        🎯
+                      </button>
+                    </div>
+                  </div>
+
+                  {/* Camada 2: Título da Arte / Manchete */}
+                  <div
+                    style={{
+                      display: "flex",
+                      alignItems: "center",
+                      justifyContent: "space-between",
+                      background: "rgba(30, 41, 59, 0.7)",
+                      border: "1px solid rgba(51, 65, 85, 0.6)",
+                      borderRadius: 6,
+                      padding: "5px 8px",
+                    }}
+                  >
+                    <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
+                      <span style={{ fontSize: 13 }}>📰</span>
+                      <span style={{ fontSize: 11, fontWeight: 700, color: showTitleLayer ? "#e2e8f0" : "#64748b" }}>Título / Manchete</span>
+                    </div>
+                    <div style={{ display: "flex", alignItems: "center", gap: 5 }}>
+                      <button
+                        type="button"
+                        onClick={() => toggleTitleLayer(!showTitleLayer)}
+                        title={showTitleLayer ? "Ocultar camada de título" : "Exibir camada de título"}
+                        style={{
+                          background: showTitleLayer ? "rgba(34, 197, 94, 0.15)" : "rgba(255,255,255,0.08)",
+                          color: showTitleLayer ? "#4ade80" : "#94a3b8",
+                          border: `1px solid ${showTitleLayer ? "#22c55e" : "rgba(255,255,255,0.12)"}`,
+                          borderRadius: 4,
+                          fontSize: 10,
+                          padding: "2px 6px",
+                          cursor: "pointer",
+                        }}
+                      >
+                        {showTitleLayer ? "👁️ Visível" : "🚫 Oculto"}
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => setLockedLayers((prev) => ({ ...prev, title: !prev.title }))}
+                        title={lockedLayers["title"] ? "Destravar camada de título" : "Travar posição do título contra arraste acidental"}
+                        style={{
+                          background: lockedLayers["title"] ? "rgba(239, 68, 68, 0.2)" : "rgba(255,255,255,0.08)",
+                          color: lockedLayers["title"] ? "#f87171" : "#94a3b8",
+                          border: `1px solid ${lockedLayers["title"] ? "#ef4444" : "rgba(255,255,255,0.12)"}`,
+                          borderRadius: 4,
+                          fontSize: 10,
+                          padding: "2px 6px",
+                          cursor: "pointer",
+                        }}
+                      >
+                        {lockedLayers["title"] ? "🔒 Travado" : "🔓 Livre"}
+                      </button>
+                      <button
+                        type="button"
+                        onClick={centerTitleAndBox}
+                        title="Centralizar manchete e caixa no meio"
+                        style={{
+                          background: "rgba(255,255,255,0.08)",
+                          color: "#cbd5e1",
+                          border: "1px solid rgba(255,255,255,0.12)",
+                          borderRadius: 4,
+                          fontSize: 10,
+                          padding: "2px 6px",
+                          cursor: "pointer",
+                        }}
+                      >
+                        🎯
+                      </button>
+                    </div>
+                  </div>
+
+                  {/* Camada 3: Logo do Portal */}
+                  <div
+                    style={{
+                      display: "flex",
+                      alignItems: "center",
+                      justifyContent: "space-between",
+                      background: "rgba(30, 41, 59, 0.7)",
+                      border: "1px solid rgba(51, 65, 85, 0.6)",
+                      borderRadius: 6,
+                      padding: "5px 8px",
+                    }}
+                  >
+                    <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
+                      <span style={{ fontSize: 13 }}>✨</span>
+                      <span style={{ fontSize: 11, fontWeight: 700, color: showLogoLayer ? "#e2e8f0" : "#64748b" }}>Logo Oficial</span>
+                      {logoColorStyle === "gif" && (
+                        <span style={{ fontSize: 9.5, background: "rgba(168, 85, 247, 0.2)", color: "#c084fc", padding: "1px 5px", borderRadius: 3 }}>
+                          Alpha WebM
+                        </span>
+                      )}
+                    </div>
+                    <div style={{ display: "flex", alignItems: "center", gap: 5 }}>
+                      <button
+                        type="button"
+                        onClick={() => toggleLogoLayer(!showLogoLayer)}
+                        title={showLogoLayer ? "Ocultar logo" : "Exibir logo"}
+                        style={{
+                          background: showLogoLayer ? "rgba(34, 197, 94, 0.15)" : "rgba(255,255,255,0.08)",
+                          color: showLogoLayer ? "#4ade80" : "#94a3b8",
+                          border: `1px solid ${showLogoLayer ? "#22c55e" : "rgba(255,255,255,0.12)"}`,
+                          borderRadius: 4,
+                          fontSize: 10,
+                          padding: "2px 6px",
+                          cursor: "pointer",
+                        }}
+                      >
+                        {showLogoLayer ? "👁️ Visível" : "🚫 Oculto"}
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => setLockedLayers((prev) => ({ ...prev, logo: !prev.logo }))}
+                        title={lockedLayers["logo"] ? "Destravar logo" : "Travar logo contra arraste acidental"}
+                        style={{
+                          background: lockedLayers["logo"] ? "rgba(239, 68, 68, 0.2)" : "rgba(255,255,255,0.08)",
+                          color: lockedLayers["logo"] ? "#f87171" : "#94a3b8",
+                          border: `1px solid ${lockedLayers["logo"] ? "#ef4444" : "rgba(255,255,255,0.12)"}`,
+                          borderRadius: 4,
+                          fontSize: 10,
+                          padding: "2px 6px",
+                          cursor: "pointer",
+                        }}
+                      >
+                        {lockedLayers["logo"] ? "🔒 Travado" : "🔓 Livre"}
+                      </button>
+                      <button
+                        type="button"
+                        onClick={centerLogo}
+                        title="Centralizar logo no topo"
+                        style={{
+                          background: "rgba(255,255,255,0.08)",
+                          color: "#cbd5e1",
+                          border: "1px solid rgba(255,255,255,0.12)",
+                          borderRadius: 4,
+                          fontSize: 10,
+                          padding: "2px 6px",
+                          cursor: "pointer",
+                        }}
+                      >
+                        🎯
+                      </button>
+                    </div>
+                  </div>
+
+                  {/* Camada 4: Assinatura / Tag */}
+                  <div
+                    style={{
+                      display: "flex",
+                      alignItems: "center",
+                      justifyContent: "space-between",
+                      background: "rgba(30, 41, 59, 0.7)",
+                      border: "1px solid rgba(51, 65, 85, 0.6)",
+                      borderRadius: 6,
+                      padding: "5px 8px",
+                    }}
+                  >
+                    <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
+                      <span style={{ fontSize: 13 }}>🏷️</span>
+                      <span style={{ fontSize: 11, fontWeight: 700, color: showHandleLayer ? "#e2e8f0" : "#64748b" }}>Assinatura / Tag</span>
+                    </div>
+                    <div style={{ display: "flex", alignItems: "center", gap: 5 }}>
+                      <button
+                        type="button"
+                        onClick={() => toggleHandleLayer(!showHandleLayer)}
+                        style={{
+                          background: showHandleLayer ? "rgba(34, 197, 94, 0.15)" : "rgba(255,255,255,0.08)",
+                          color: showHandleLayer ? "#4ade80" : "#94a3b8",
+                          border: `1px solid ${showHandleLayer ? "#22c55e" : "rgba(255,255,255,0.12)"}`,
+                          borderRadius: 4,
+                          fontSize: 10,
+                          padding: "2px 6px",
+                          cursor: "pointer",
+                        }}
+                      >
+                        {showHandleLayer ? "👁️ Visível" : "🚫 Oculto"}
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => setLockedLayers((prev) => ({ ...prev, handle: !prev.handle }))}
+                        style={{
+                          background: lockedLayers["handle"] ? "rgba(239, 68, 68, 0.2)" : "rgba(255,255,255,0.08)",
+                          color: lockedLayers["handle"] ? "#f87171" : "#94a3b8",
+                          border: `1px solid ${lockedLayers["handle"] ? "#ef4444" : "rgba(255,255,255,0.12)"}`,
+                          borderRadius: 4,
+                          fontSize: 10,
+                          padding: "2px 6px",
+                          cursor: "pointer",
+                        }}
+                      >
+                        {lockedLayers["handle"] ? "🔒 Travado" : "🔓 Livre"}
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => {
+                          chooseTagPositionY(1670);
+                          tagPositionYRef.current = 1670;
+                          cachedOverlayCanvasRef.current = null;
+                        }}
+                        title="Restaurar posição padrão (1670px)"
+                        style={{
+                          background: "rgba(255,255,255,0.08)",
+                          color: "#cbd5e1",
+                          border: "1px solid rgba(255,255,255,0.12)",
+                          borderRadius: 4,
+                          fontSize: 10,
+                          padding: "2px 6px",
+                          cursor: "pointer",
+                        }}
+                      >
+                        🎯
+                      </button>
+                    </div>
+                  </div>
+
+                  {/* Camada 5: Gancho Viral Auto-Edit (Reels/Stories) */}
+                  {(format === "reel" || format === "story") && (
+                    <div
+                      style={{
+                        display: "flex",
+                        alignItems: "center",
+                        justifyContent: "space-between",
+                        background: "rgba(30, 41, 59, 0.7)",
+                        border: "1px solid rgba(51, 65, 85, 0.6)",
+                        borderRadius: 6,
+                        padding: "5px 8px",
+                      }}
+                    >
+                      <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
+                        <span style={{ fontSize: 13 }}>⚡</span>
+                        <span style={{ fontSize: 11, fontWeight: 700, color: autoHookEnabled ? "#facc15" : "#64748b" }}>Gancho Viral (Tarja)</span>
+                      </div>
+                      <div style={{ display: "flex", alignItems: "center", gap: 5 }}>
+                        <button
+                          type="button"
+                          onClick={() => toggleAutoHook(!autoHookEnabled)}
+                          style={{
+                            background: autoHookEnabled ? "rgba(234, 179, 8, 0.2)" : "rgba(255,255,255,0.08)",
+                            color: autoHookEnabled ? "#facc15" : "#94a3b8",
+                            border: `1px solid ${autoHookEnabled ? "#eab308" : "rgba(255,255,255,0.12)"}`,
+                            borderRadius: 4,
+                            fontSize: 10,
+                            padding: "2px 6px",
+                            cursor: "pointer",
+                          }}
+                        >
+                          {autoHookEnabled ? "👁️ Ativo" : "🚫 Inativo"}
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => setLockedLayers((prev) => ({ ...prev, hook: !prev.hook }))}
+                          style={{
+                            background: lockedLayers["hook"] ? "rgba(239, 68, 68, 0.2)" : "rgba(255,255,255,0.08)",
+                            color: lockedLayers["hook"] ? "#f87171" : "#94a3b8",
+                            border: `1px solid ${lockedLayers["hook"] ? "#ef4444" : "rgba(255,255,255,0.12)"}`,
+                            borderRadius: 4,
+                            fontSize: 10,
+                            padding: "2px 6px",
+                            cursor: "pointer",
+                          }}
+                        >
+                          {lockedLayers["hook"] ? "🔒 Travado" : "🔓 Livre"}
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setHookPositionY(307);
+                            hookPositionYRef.current = 307;
+                            cachedOverlayCanvasRef.current = null;
+                          }}
+                          title="Restaurar posição padrão no topo (307px)"
+                          style={{
+                            background: "rgba(255,255,255,0.08)",
+                            color: "#cbd5e1",
+                            border: "1px solid rgba(255,255,255,0.12)",
+                            borderRadius: 4,
+                            fontSize: 10,
+                            padding: "2px 6px",
+                            cursor: "pointer",
+                          }}
+                        >
+                          🎯
+                        </button>
+                      </div>
+                    </div>
+                  )}
+
+                  {/* Camada 6: Guia de Figurinha (Story) */}
+                  {format === "story" && (
+                    <div
+                      style={{
+                        display: "flex",
+                        alignItems: "center",
+                        justifyContent: "space-between",
+                        background: "rgba(30, 41, 59, 0.7)",
+                        border: "1px solid rgba(51, 65, 85, 0.6)",
+                        borderRadius: 6,
+                        padding: "5px 8px",
+                      }}
+                    >
+                      <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
+                        <span style={{ fontSize: 13 }}>📎</span>
+                        <span style={{ fontSize: 11, fontWeight: 700, color: showStorySticker ? "#e2e8f0" : "#64748b" }}>Guia de Figurinha</span>
+                      </div>
+                      <button
+                        type="button"
+                        onClick={() => toggleStorySticker(!showStorySticker)}
+                        style={{
+                          background: showStorySticker ? "rgba(34, 197, 94, 0.15)" : "rgba(255,255,255,0.08)",
+                          color: showStorySticker ? "#4ade80" : "#94a3b8",
+                          border: `1px solid ${showStorySticker ? "#22c55e" : "rgba(255,255,255,0.12)"}`,
+                          borderRadius: 4,
+                          fontSize: 10,
+                          padding: "2px 6px",
+                          cursor: "pointer",
+                        }}
+                      >
+                        {showStorySticker ? "👁️ Visível" : "🚫 Oculto"}
+                      </button>
+                    </div>
+                  )}
+                </div>
+              )}
+            </div>
+
+              <div style={{ marginTop: 8, display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+                <button
+                  type="button"
+                  className="btn secondary"
+                  onClick={() => setActiveTab("title-layout")}
+                  style={{ fontSize: 12, padding: "7px 14px", cursor: "pointer" }}
+                >
+                  ← 📰 Título & Legenda
+                </button>
+                <div style={{ display: "flex", alignItems: "center", gap: 6, fontSize: 12, fontWeight: 700, color: "#16a34a" }}>
+                  <span>✅ Tudo configurado! Veja a prévia ao lado</span>
+                  <span>👉</span>
+                </div>
+              </div>
+            </div>
+          )}
+
 
           {selectedPost && (
             <div className="adminFeedSelected">
@@ -6740,7 +9051,61 @@ async function fixWebmDuration(blob: Blob, durationSec: number): Promise<Blob> {
         </div>
 
         <div className="adminFeedPreview">
-          <div className="adminFeedCanvasFrame" data-format={format}>
+          <div className="adminFeedCanvasFrame" data-format={format} style={{ position: "relative" }}>
+            {/* Botão de Corte (Crop) Rápido Direto no Preview */}
+            {(videoUrl || customImageUrl || selectedPost?.image_url) && (
+              <div
+                style={{
+                  position: "absolute",
+                  top: 10,
+                  right: 10,
+                  zIndex: 40,
+                  display: "flex",
+                  gap: 6,
+                  alignItems: "center",
+                }}
+              >
+                <button
+                  type="button"
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    if (videoUrl && (format === "reel" || format === "story")) {
+                      setCropMediaType("video");
+                    } else {
+                      setCropMediaType("image");
+                    }
+                    setShowCropModal(true);
+                  }}
+                  style={{
+                    background: "rgba(15, 23, 42, 0.88)",
+                    color: "#ffffff",
+                    border: "1px solid rgba(255, 255, 255, 0.25)",
+                    borderRadius: 8,
+                    padding: "6px 12px",
+                    fontSize: 11.5,
+                    fontWeight: 700,
+                    cursor: "pointer",
+                    display: "inline-flex",
+                    alignItems: "center",
+                    gap: 6,
+                    boxShadow: "0 4px 14px rgba(0,0,0,0.45)",
+                    backdropFilter: "blur(6px)",
+                    WebkitBackdropFilter: "blur(6px)",
+                    transition: "all 0.15s ease",
+                  }}
+                  title="Ajustar corte (crop) da mídia visível no preview"
+                >
+                  <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="#38bdf8" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                    <path d="M6 2v14a2 2 0 0 0 2 2h14" />
+                    <path d="M18 22V8a2 2 0 0 0-2-2H2" />
+                  </svg>
+                  <span>✂️ Ajustar Corte</span>
+                  {((format === "reel" || format === "story") ? videoCrop : imageCrop) && (
+                    <span style={{ width: 7, height: 7, borderRadius: "50%", background: "#4ade80", display: "inline-block" }} />
+                  )}
+                </button>
+              </div>
+            )}
             <canvas
               ref={canvasRef}
               width={W}
@@ -6800,6 +9165,7 @@ async function fixWebmDuration(blob: Blob, durationSec: number): Promise<Blob> {
       />
       {/* Player contínuo da Logo Oficial Animada Transparente (WebM VP9 com Alpha / GIF fallback) */}
       <video
+        id="viralizou-animated-logo-webm"
         ref={(el) => {
           if (el) {
             animatedLogoRef.current = el;
@@ -6821,24 +9187,247 @@ async function fixWebmDuration(blob: Blob, durationSec: number): Promise<Blob> {
         }}
         style={{
           position: "fixed",
-          bottom: -9999,
-          left: -9999,
-          width: 200,
-          height: 60,
-          opacity: 0.01,
+          top: 0,
+          left: 0,
+          width: 4,
+          height: 4,
+          opacity: 0.001,
           pointerEvents: "none",
-          zIndex: -99,
+          zIndex: -100,
         }}
       />
-      {/* Modal Interativo de Corte / Crop de Vídeo */}
+      {/* Modal Interativo de Corte / Crop de Mídia (Vídeo ou Imagem) */}
       <CropVideoModal
         isOpen={showCropModal}
+        mediaType={cropMediaType}
         videoElement={videoPreviewRef.current}
         videoUrl={videoUrl}
-        initialCrop={videoCrop}
+        imageElement={customImageRef.current || articleImageRef.current?.image}
+        imageUrl={customImageUrl || (selectedPost?.image_url ? `/api/admin/feed-image?slug=${encodeURIComponent(selectedPost.slug)}&v=${encodeURIComponent(selectedPost.updated_at || selectedPost.created_at || "")}` : undefined)}
+        initialCrop={cropMediaType === "video" ? videoCrop : imageCrop}
         onApply={handleApplyCrop}
         onClose={() => setShowCropModal(false)}
       />
+
+      {/* Modal de Instruções do Token Vercel Real Oficial */}
+      {showVercelTokenModal && (
+        <div
+          role="dialog"
+          aria-modal="true"
+          style={{
+            position: "fixed",
+            inset: 0,
+            backgroundColor: "rgba(0, 0, 0, 0.75)",
+            backdropFilter: "blur(6px)",
+            WebkitBackdropFilter: "blur(6px)",
+            zIndex: 99999,
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "center",
+            padding: 16,
+          }}
+          onClick={() => setShowVercelTokenModal(false)}
+        >
+          <div
+            onClick={(e) => e.stopPropagation()}
+            style={{
+              background: "#0f172a",
+              border: "1px solid rgba(234, 179, 8, 0.4)",
+              borderRadius: 18,
+              maxWidth: 580,
+              width: "100%",
+              maxHeight: "90vh",
+              overflowY: "auto",
+              boxShadow: "0 20px 60px rgba(0,0,0,0.8), 0 0 30px rgba(234, 179, 8, 0.15)",
+              color: "#f8fafc",
+              padding: "24px 28px",
+            }}
+          >
+            {/* Header */}
+            <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 16 }}>
+              <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+                <span style={{ fontSize: 24 }}>✨</span>
+                <div>
+                  <h3 style={{ margin: 0, fontSize: 18, fontWeight: 800, color: "#f8fafc" }}>
+                    Token do Real Oficial na Vercel
+                  </h3>
+                  <p style={{ margin: "2px 0 0", fontSize: 12, color: "#94a3b8" }}>
+                    Conecte sua conta para sincronizar SFX e assets exclusivos na Mini IA
+                  </p>
+                </div>
+              </div>
+              <button
+                type="button"
+                onClick={() => setShowVercelTokenModal(false)}
+                style={{
+                  background: "rgba(255,255,255,0.06)",
+                  border: "1px solid rgba(255,255,255,0.12)",
+                  color: "#cbd5e1",
+                  borderRadius: 8,
+                  width: 32,
+                  height: 32,
+                  display: "flex",
+                  alignItems: "center",
+                  justifyContent: "center",
+                  cursor: "pointer",
+                  fontSize: 14,
+                }}
+              >
+                ✕
+              </button>
+            </div>
+
+            {/* Status atual */}
+            <div
+              style={{
+                background: realOficialStatus?.configured ? "rgba(34, 197, 94, 0.12)" : "rgba(234, 179, 8, 0.12)",
+                border: `1px solid ${realOficialStatus?.configured ? "rgba(34, 197, 94, 0.3)" : "rgba(234, 179, 8, 0.3)"}`,
+                borderRadius: 12,
+                padding: "12px 16px",
+                marginBottom: 20,
+                display: "flex",
+                alignItems: "center",
+                gap: 12,
+              }}
+            >
+              <span style={{ fontSize: 20 }}>{realOficialStatus?.configured ? "🟢" : "⚡"}</span>
+              <div style={{ flex: 1 }}>
+                <div style={{ fontSize: 13, fontWeight: 700, color: realOficialStatus?.configured ? "#4ade80" : "#facc15" }}>
+                  {realOficialStatus?.configured
+                    ? `Token Ativo: ${realOficialStatus.maskedToken}`
+                    : "Token ainda não detectado na Vercel"}
+                </div>
+                <div style={{ fontSize: 11.5, color: "#94a3b8", marginTop: 2 }}>
+                  {realOficialStatus?.configured
+                    ? "Acesso direto à biblioteca oficial do Real Oficial liberado!"
+                    : "Atualmente a Mini IA está usando o catálogo CDN de alta velocidade com fallback integrado."}
+                </div>
+              </div>
+            </div>
+
+            {/* Nome da variável */}
+            <div style={{ marginBottom: 20 }}>
+              <label style={{ display: "block", fontSize: 12, fontWeight: 700, color: "#cbd5e1", marginBottom: 6 }}>
+                Nome da Variável de Ambiente:
+              </label>
+              <div
+                style={{
+                  display: "flex",
+                  alignItems: "center",
+                  justifyContent: "space-between",
+                  background: "#020617",
+                  border: "1px solid rgba(255, 255, 255, 0.15)",
+                  borderRadius: 10,
+                  padding: "10px 14px",
+                  fontFamily: "monospace",
+                  fontSize: 14,
+                  fontWeight: 700,
+                  color: "#38bdf8",
+                }}
+              >
+                <span>REAL_OFICIAL_TOKEN</span>
+                <button
+                  type="button"
+                  onClick={() => {
+                    navigator.clipboard?.writeText("REAL_OFICIAL_TOKEN");
+                    alert("Copiado: REAL_OFICIAL_TOKEN");
+                  }}
+                  style={{
+                    background: "rgba(56, 189, 248, 0.15)",
+                    border: "1px solid rgba(56, 189, 248, 0.3)",
+                    color: "#38bdf8",
+                    padding: "4px 10px",
+                    borderRadius: 6,
+                    fontSize: 11,
+                    cursor: "pointer",
+                    fontWeight: 700,
+                  }}
+                >
+                  📋 Copiar Nome
+                </button>
+              </div>
+            </div>
+
+            {/* Passo a passo */}
+            <div style={{ marginBottom: 24 }}>
+              <h4 style={{ fontSize: 13, fontWeight: 800, textTransform: "uppercase", letterSpacing: 0.5, color: "#94a3b8", marginBottom: 12 }}>
+                Passo a Passo na Vercel:
+              </h4>
+
+              <ol style={{ margin: 0, paddingLeft: 20, color: "#e2e8f0", fontSize: 12.5, lineHeight: 1.7 }}>
+                <li>
+                  Acesse seu painel na Vercel em <strong style={{ color: "#38bdf8" }}>vercel.com</strong> e abra o projeto do <strong>Viralizou Goiânia</strong>.
+                </li>
+                <li>
+                  Clique na aba superior <strong>Settings</strong> e depois em <strong>Environment Variables</strong> no menu lateral.
+                </li>
+                <li>
+                  No campo <strong>Key</strong>, cole: <code style={{ background: "#020617", padding: "2px 6px", borderRadius: 4, color: "#38bdf8" }}>REAL_OFICIAL_TOKEN</code>
+                </li>
+                <li>
+                  No campo <strong>Value</strong>, cole o seu token do Real Oficial (ex: <code style={{ background: "#020617", padding: "2px 6px", borderRadius: 4, color: "#a5b4fc" }}>ro_live_...</code>).
+                </li>
+                <li>
+                  Garanta que os 3 ambientes estão marcados (<strong>Production</strong>, <strong>Preview</strong>, <strong>Development</strong>) e clique no botão azul <strong>Save</strong>.
+                </li>
+                <li>
+                  Vá na aba <strong>Deployments</strong>, clique nos três pontinhos <strong>...</strong> do último deploy e selecione <strong>Redeploy</strong> para aplicar a nova variável.
+                </li>
+              </ol>
+            </div>
+
+            {/* Ações */}
+            <div style={{ display: "flex", gap: 10, justifyContent: "flex-end" }}>
+              <button
+                type="button"
+                onClick={async () => {
+                  try {
+                    const res = await fetch("/api/admin/real-oficial");
+                    const data = await res.json();
+                    if (data?.tokenStatus) {
+                      setRealOficialStatus(data.tokenStatus);
+                      if (Array.isArray(data.sfxCatalog) && data.sfxCatalog.length > 0) {
+                        setRealOficialSfxList(data.sfxCatalog);
+                      }
+                      alert(data.tokenStatus.configured ? `Token ativo: ${data.tokenStatus.maskedToken}` : "Ainda não detectado na Vercel. Lembre de fazer Redeploy!");
+                    }
+                  } catch (e) {
+                    alert("Erro ao testar status da API.");
+                  }
+                }}
+                style={{
+                  background: "rgba(56, 189, 248, 0.15)",
+                  border: "1px solid rgba(56, 189, 248, 0.3)",
+                  color: "#38bdf8",
+                  padding: "8px 16px",
+                  borderRadius: 10,
+                  fontSize: 12,
+                  fontWeight: 700,
+                  cursor: "pointer",
+                }}
+              >
+                🔄 Verificar Conexão Agora
+              </button>
+              <button
+                type="button"
+                onClick={() => setShowVercelTokenModal(false)}
+                style={{
+                  background: "#2563eb",
+                  border: "none",
+                  color: "#ffffff",
+                  padding: "8px 20px",
+                  borderRadius: 10,
+                  fontSize: 12,
+                  fontWeight: 700,
+                  cursor: "pointer",
+                }}
+              >
+                Entendido
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </section>
   );
 }

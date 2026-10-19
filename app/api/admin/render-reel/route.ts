@@ -25,8 +25,13 @@ export async function POST(request: Request) {
     const videoFile = formData.get("video") as File | null;
     const overlayFile = formData.get("overlay") as File | null;
     const requestedName = (formData.get("filename") as string | null) || `viralizou-reel-${id}.mp4`;
-    const framingMode = ((formData.get("framingMode") as string | null) || "cover") as "cover" | "blur-fit";
+    const framingMode = ((formData.get("framingMode") as string | null) || "cover") as "cover" | "blur-fit" | "horizontal-block" | "split";
     const verticalPos = Number(formData.get("vertical") || 0);
+    const videoBlockPosY = formData.get("videoBlockPosY") ? Number(formData.get("videoBlockPosY")) : undefined;
+    const customSaturation = formData.get("customSaturation") ? Number(formData.get("customSaturation")) : undefined;
+    const customContrast = formData.get("customContrast") ? Number(formData.get("customContrast")) : undefined;
+    const customBrightness = formData.get("customBrightness") ? Number(formData.get("customBrightness")) : undefined;
+    const customSharpness = formData.get("customSharpness") ? Number(formData.get("customSharpness")) : undefined;
     const editLevel = ((formData.get("editLevel") as string | null) || "media") as import("@/lib/mini-ia-editor").MiniIaEditLevel;
     const mirror = String(formData.get("mirror") || "false") === "true";
     const formatType = (formData.get("format") as string | null) || "reel";
@@ -40,6 +45,8 @@ export async function POST(request: Request) {
       : undefined;
     const bgmTrack = (formData.get("bgmTrack") as string | null) || "none";
     const bgmVolume = Number(formData.get("bgmVolume") || 15);
+    const sfxPreset = (formData.get("sfxPreset") as string | null) || "none";
+    const sfxVolume = Number(formData.get("sfxVolume") || 70);
 
     if (!videoFile || !overlayFile) {
       return NextResponse.json({ error: "Vídeo ou imagem de sobreposição ausente." }, { status: 400 });
@@ -48,7 +55,7 @@ export async function POST(request: Request) {
     const videoBuffer = Buffer.from(await videoFile.arrayBuffer());
     const overlayBuffer = Buffer.from(await overlayFile.arrayBuffer());
 
-    console.log(`[render-reel] Recebido vídeo de ${(videoBuffer.length / 1024 / 1024).toFixed(2)} MB e overlay de ${(overlayBuffer.length / 1024).toFixed(1)} KB | Framing: ${framingMode} | PosY: ${verticalPos}% | MiniIA: ${editLevel} | Mirror: ${mirror}`);
+    console.log(`[render-reel] Recebido vídeo de ${(videoBuffer.length / 1024 / 1024).toFixed(2)} MB e overlay de ${(overlayBuffer.length / 1024).toFixed(1)} KB | Framing: ${framingMode} | PosY: ${verticalPos}% | MiniIA: ${editLevel} | Mirror: ${mirror} | SFX: ${sfxPreset} (${sfxVolume}%)`);
 
     await fs.writeFile(videoInputPath, videoBuffer);
     await fs.writeFile(overlayInputPath, overlayBuffer);
@@ -67,12 +74,12 @@ export async function POST(request: Request) {
     const videoInfo = await probeVideoInfo(videoInputPath);
     const hasAudio = videoInfo.hasAudio;
 
-    // Corte inicial anti-detecção (padrão oficial: sempre corta 3 segundos se não especificado)
+    // Corte inicial anti-detecção: se for 0 ou não informado, NUNCA corta
     const trimStartParam = formData.get("trimStart");
     const rawTrimStart = trimStartParam !== null && trimStartParam !== undefined && trimStartParam !== ""
       ? Number(trimStartParam)
-      : 3;
-    const trimStart = isNaN(rawTrimStart) ? 3 : Math.max(0, rawTrimStart);
+      : 0;
+    const trimStart = isNaN(rawTrimStart) ? 0 : Math.max(0, rawTrimStart);
 
     let effectiveTrimStart = trimStart;
     if (videoInfo.duration > 0 && effectiveTrimStart >= videoInfo.duration) {
@@ -118,10 +125,15 @@ export async function POST(request: Request) {
       };
     }
 
-    // Constrói o filtergraph avançado da Mini IA com anti-detecção
+    // Constrói o filtergraph avançado da Mini IA com anti-detecção e color grading personalizado
     const { filterComplex, hasAudioFilter, speed } = buildMiniIaFilterGraph({
       framingMode,
       verticalPos,
+      videoBlockPosY,
+      customSaturation,
+      customContrast,
+      customBrightness,
+      customSharpness,
       editLevel,
       mirror,
       hasAudio,
@@ -185,7 +197,7 @@ export async function POST(request: Request) {
       "-map_metadata", "-1",
       "-metadata", "title=Viralizou Goiania - Conteudo Original",
       "-metadata", "artist=Viralizou Goiania",
-      "-metadata", `comment=Processado com Mini IA (${editLevel.toUpperCase()}) - Velocidade ${speed}x - Corte Inicial ${effectiveTrimStart}s`,
+      "-metadata", `comment=Processado com Mini IA (${editLevel.toUpperCase()}) - Velocidade ${speed}x - SFX: ${sfxPreset} - Corte Inicial ${effectiveTrimStart}s`,
       outputPath
     );
 
