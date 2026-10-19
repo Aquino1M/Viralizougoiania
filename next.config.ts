@@ -55,13 +55,33 @@ const nextConfig: NextConfig = {
   typescript: {
     ignoreBuildErrors: true,
   },
-  eslint: {
-    ignoreDuringBuilds: true,
-  },
   experimental: {
     serverActions: {
       bodySizeLimit: "250mb",
     },
+  },
+  webpack: (config) => {
+    config.resolve = config.resolve || {};
+    config.resolve.symlinks = false;
+    config.plugins = config.plugins || [];
+    config.plugins.push({
+      apply(compiler: any) {
+        compiler.hooks.beforeRun.tap("FixWindowsReadlink", () => {
+          if (compiler.inputFileSystem && compiler.inputFileSystem.readlink) {
+            const orig = compiler.inputFileSystem.readlink.bind(compiler.inputFileSystem);
+            compiler.inputFileSystem.readlink = (p: any, cb: any) => {
+              orig(p, (err: any, res: any) => {
+                if (err && err.code === "EISDIR") {
+                  err.code = "EINVAL";
+                }
+                cb(err, res);
+              });
+            };
+          }
+        });
+      },
+    });
+    return config;
   },
 };
 

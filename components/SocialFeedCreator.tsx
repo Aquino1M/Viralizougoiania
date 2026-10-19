@@ -17,7 +17,6 @@ import {
   type RealOficialConfigStatus,
 } from "@/lib/real-oficial-client";
 import CropVideoModal from "./CropVideoModal";
-import CarouselFeedCreator from "./CarouselFeedCreator";
 
 type Props = {
   posts: Post[];
@@ -3463,7 +3462,7 @@ export default function SocialFeedCreator({ posts, onBack, initialPost, onOpenCo
   const [imageCrop, setImageCrop] = useState<VideoCropRect | null>(null);
   const [cropMediaType, setCropMediaType] = useState<"video" | "image">("video");
   const [showCropModal, setShowCropModal] = useState<boolean>(false);
-  type ControlTab = "media" | "mini-ia" | "title-layout" | "branding-layers" | "carousel";
+  type ControlTab = "media" | "mini-ia" | "design";
   const [activeTab, setActiveTab] = useState<ControlTab>("media");
 
   const effectiveHookText = autoHookText.trim() || (title || selectedPost?.title || "LIVRO CAIU SOZINHO NO CHÃO");
@@ -6413,36 +6412,18 @@ async function fixWebmDuration(blob: Blob, durationSec: number): Promise<Blob> {
 
       {message && <div className={message.startsWith("✅") ? "notice" : "notice error"}>{message}</div>}
 
-      <div className={`adminFeedGrid ${activeTab === "carousel" ? "isCarouselMode" : ""}`}>
+      <div className="adminFeedGrid">
         <div className="adminFeedControls">
           <div className="field">
             <label>📐 Formato da publicação no Instagram</label>
             <div className="adminFeedFormatGrid">
               <button
                 type="button"
-                className={`adminFeedFormatBtn ${format === "feed" ? "active" : ""}`}
+                className={`adminFeedFormatBtn ${format === "feed" || format === "feed-square" || format === "reel-cover" ? "active" : ""}`}
                 onClick={() => setFormat("feed")}
               >
-                <span className="formatRatio">4:5</span>
-                <span className="formatName">Feed (Recomendado)</span>
-                <span className="formatDims">1080 × 1350 px · PNG</span>
-              </button>
-              <button
-                type="button"
-                className={`adminFeedFormatBtn ${format === "feed-square" ? "active" : ""}`}
-                onClick={() => setFormat("feed-square")}
-              >
-                <span className="formatRatio">1:1</span>
-                <span className="formatName">Feed (Quadrado)</span>
-                <span className="formatDims">1080 × 1080 px · PNG</span>
-              </button>
-              <button
-                type="button"
-                className={`adminFeedFormatBtn ${format === "reel-cover" ? "active" : ""}`}
-                onClick={() => setFormat("reel-cover")}
-              >
-                <span className="formatRatio">4:5</span>
-                <span className="formatName">Capa do Reels</span>
+                <span className="formatRatio">4:5 / 1:1</span>
+                <span className="formatName">Feed (Notícia)</span>
                 <span className="formatDims">1080 × 1350 px · PNG</span>
               </button>
               <button
@@ -6463,28 +6444,67 @@ async function fixWebmDuration(blob: Blob, durationSec: number): Promise<Blob> {
                 <span className="formatName">Reels</span>
                 <span className="formatDims">1080 × 1920 px · Vídeo MP4</span>
               </button>
-              <button
-                type="button"
-                className={`adminFeedFormatBtn ${format === "carousel" ? "active" : ""}`}
-                onClick={() => {
-                  setFormat("carousel");
-                  setActiveTab("carousel");
-                }}
-              >
-                <span className="formatRatio">4:5</span>
-                <span className="formatName">Carrossel (Slides)</span>
-                <span className="formatDims">1080 × 1350 px · Sequência</span>
-              </button>
             </div>
+
+            {(format === "feed" || format === "feed-square" || format === "reel-cover") && (
+              <div style={{ display: "flex", gap: 8, marginTop: 8, alignItems: "center", flexWrap: "wrap" }}>
+                <span style={{ fontSize: 11, fontWeight: 700, color: "#64748b" }}>Proporção:</span>
+                <button
+                  type="button"
+                  className="btn secondary"
+                  style={{
+                    padding: "3px 8px",
+                    fontSize: 11,
+                    fontWeight: 700,
+                    background: format === "feed" ? "#ff5a1f" : "#fff",
+                    color: format === "feed" ? "#fff" : "#475569",
+                    borderColor: format === "feed" ? "#ff5a1f" : "#cbd5e1",
+                  }}
+                  onClick={() => setFormat("feed")}
+                >
+                  📐 4:5 Retrato (Padrão)
+                </button>
+                <button
+                  type="button"
+                  className="btn secondary"
+                  style={{
+                    padding: "3px 8px",
+                    fontSize: 11,
+                    fontWeight: 700,
+                    background: format === "feed-square" ? "#ff5a1f" : "#fff",
+                    color: format === "feed-square" ? "#fff" : "#475569",
+                    borderColor: format === "feed-square" ? "#ff5a1f" : "#cbd5e1",
+                  }}
+                  onClick={() => setFormat("feed-square")}
+                >
+                  ⬛ 1:1 Quadrado
+                </button>
+                <button
+                  type="button"
+                  className="btn secondary"
+                  style={{
+                    padding: "3px 8px",
+                    fontSize: 11,
+                    fontWeight: 700,
+                    background: format === "reel-cover" ? "#ff5a1f" : "#fff",
+                    color: format === "reel-cover" ? "#fff" : "#475569",
+                    borderColor: format === "reel-cover" ? "#ff5a1f" : "#cbd5e1",
+                  }}
+                  onClick={() => setFormat("reel-cover")}
+                >
+                  📸 Capa Reels
+                </button>
+              </div>
+            )}
           </div>
 
-          {/* BARRA DE NAVEGAÇÃO DE ABAS / PAINÉIS DO CRIADOR */}
+          {/* BARRA DE NAVEGAÇÃO DE ABAS DO CRIADOR (3 BOTÕES) */}
           <div
             role="tablist"
             style={{
               display: "grid",
-              gridTemplateColumns: "repeat(5, 1fr)",
-              gap: 6,
+              gridTemplateColumns: "repeat(3, 1fr)",
+              gap: 8,
               marginBottom: 16,
               background: "#0f172a",
               padding: "6px",
@@ -6499,12 +6519,12 @@ async function fixWebmDuration(blob: Blob, durationSec: number): Promise<Blob> {
               aria-selected={activeTab === "media"}
               onClick={() => setActiveTab("media")}
               style={{
-                padding: "8px 6px",
+                padding: "10px 8px",
                 borderRadius: 8,
                 border: activeTab === "media" ? "1px solid #38bdf8" : "1px solid transparent",
                 background: activeTab === "media" ? "rgba(56, 189, 248, 0.18)" : "transparent",
                 color: activeTab === "media" ? "#38bdf8" : "#94a3b8",
-                fontSize: 12,
+                fontSize: 13,
                 fontWeight: 700,
                 cursor: "pointer",
                 display: "flex",
@@ -6515,14 +6535,14 @@ async function fixWebmDuration(blob: Blob, durationSec: number): Promise<Blob> {
                 transition: "all 0.15s ease",
               }}
             >
-              <div style={{ display: "flex", alignItems: "center", gap: 5 }}>
-                <span style={{ fontSize: 14 }}>📁</span>
+              <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
+                <span style={{ fontSize: 16 }}>📁</span>
                 <span>Mídia</span>
                 {(videoUrl || customImageUrl || selectedPost?.image_url) && (
                   <span style={{ width: 6, height: 6, borderRadius: "50%", background: "#4ade80", display: "inline-block" }} />
                 )}
               </div>
-              <span style={{ fontSize: 10, opacity: 0.75, fontWeight: 500 }}>Upload & Enquadramento</span>
+              <span style={{ fontSize: 11, opacity: 0.75, fontWeight: 500 }}>Upload & Enquadramento</span>
             </button>
 
             <button
@@ -6531,12 +6551,12 @@ async function fixWebmDuration(blob: Blob, durationSec: number): Promise<Blob> {
               aria-selected={activeTab === "mini-ia"}
               onClick={() => setActiveTab("mini-ia")}
               style={{
-                padding: "8px 6px",
+                padding: "10px 8px",
                 borderRadius: 8,
                 border: activeTab === "mini-ia" ? "1px solid #c084fc" : "1px solid transparent",
                 background: activeTab === "mini-ia" ? "rgba(192, 132, 252, 0.18)" : "transparent",
                 color: activeTab === "mini-ia" ? "#c084fc" : "#94a3b8",
-                fontSize: 12,
+                fontSize: 13,
                 fontWeight: 700,
                 cursor: "pointer",
                 display: "flex",
@@ -6547,8 +6567,8 @@ async function fixWebmDuration(blob: Blob, durationSec: number): Promise<Blob> {
                 transition: "all 0.15s ease",
               }}
             >
-              <div style={{ display: "flex", alignItems: "center", gap: 5 }}>
-                <span style={{ fontSize: 14 }}>⚡</span>
+              <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
+                <span style={{ fontSize: 16 }}>⚡</span>
                 <span>Mini IA</span>
                 {format === "reel" || format === "story" ? (
                   <span style={{ fontSize: 9, background: "#8b5cf6", color: "#fff", padding: "1px 4px", borderRadius: 3, fontWeight: 800 }}>
@@ -6556,21 +6576,21 @@ async function fixWebmDuration(blob: Blob, durationSec: number): Promise<Blob> {
                   </span>
                 ) : null}
               </div>
-              <span style={{ fontSize: 10, opacity: 0.75, fontWeight: 500 }}>Anti-Detecção & SFX</span>
+              <span style={{ fontSize: 11, opacity: 0.75, fontWeight: 500 }}>Anti-Detecção & SFX</span>
             </button>
 
             <button
               type="button"
               role="tab"
-              aria-selected={activeTab === "title-layout"}
-              onClick={() => setActiveTab("title-layout")}
+              aria-selected={activeTab === "design"}
+              onClick={() => setActiveTab("design")}
               style={{
-                padding: "8px 6px",
+                padding: "10px 8px",
                 borderRadius: 8,
-                border: activeTab === "title-layout" ? "1px solid #fbbf24" : "1px solid transparent",
-                background: activeTab === "title-layout" ? "rgba(251, 191, 36, 0.18)" : "transparent",
-                color: activeTab === "title-layout" ? "#fbbf24" : "#94a3b8",
-                fontSize: 12,
+                border: activeTab === "design" ? "1px solid #fbbf24" : "1px solid transparent",
+                background: activeTab === "design" ? "rgba(251, 191, 36, 0.18)" : "transparent",
+                color: activeTab === "design" ? "#fbbf24" : "#94a3b8",
+                fontSize: 13,
                 fontWeight: 700,
                 cursor: "pointer",
                 display: "flex",
@@ -6581,80 +6601,14 @@ async function fixWebmDuration(blob: Blob, durationSec: number): Promise<Blob> {
                 transition: "all 0.15s ease",
               }}
             >
-              <div style={{ display: "flex", alignItems: "center", gap: 5 }}>
-                <span style={{ fontSize: 14 }}>📰</span>
-                <span>Legenda</span>
+              <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
+                <span style={{ fontSize: 16 }}>🎨</span>
+                <span>Arte & Legenda</span>
                 {title && (
                   <span style={{ width: 6, height: 6, borderRadius: "50%", background: "#4ade80", display: "inline-block" }} />
                 )}
               </div>
-              <span style={{ fontSize: 10, opacity: 0.75, fontWeight: 500 }}>Título & Estilo</span>
-            </button>
-
-            <button
-              type="button"
-              role="tab"
-              aria-selected={activeTab === "branding-layers"}
-              onClick={() => setActiveTab("branding-layers")}
-              style={{
-                padding: "8px 6px",
-                borderRadius: 8,
-                border: activeTab === "branding-layers" ? "1px solid #4ade80" : "1px solid transparent",
-                background: activeTab === "branding-layers" ? "rgba(74, 222, 128, 0.18)" : "transparent",
-                color: activeTab === "branding-layers" ? "#4ade80" : "#94a3b8",
-                fontSize: 12,
-                fontWeight: 700,
-                cursor: "pointer",
-                display: "flex",
-                flexDirection: "column",
-                alignItems: "center",
-                justifyContent: "center",
-                gap: 4,
-                transition: "all 0.15s ease",
-              }}
-            >
-              <div style={{ display: "flex", alignItems: "center", gap: 5 }}>
-                <span style={{ fontSize: 14 }}>🏢</span>
-                <span>Marca</span>
-                {logoColorStyle === "gif" && (
-                  <span style={{ fontSize: 9, background: "#16a34a", color: "#fff", padding: "1px 4px", borderRadius: 3, fontWeight: 800 }}>
-                    ALPHA
-                  </span>
-                )}
-              </div>
-              <span style={{ fontSize: 10, opacity: 0.75, fontWeight: 500 }}>Logo, Tag & Camadas</span>
-            </button>
-
-            <button
-              type="button"
-              role="tab"
-              aria-selected={activeTab === "carousel"}
-              onClick={() => {
-                setActiveTab("carousel");
-                setFormat("carousel");
-              }}
-              style={{
-                padding: "8px 6px",
-                borderRadius: 8,
-                border: activeTab === "carousel" ? "1px solid #ef4444" : "1px solid transparent",
-                background: activeTab === "carousel" ? "rgba(239, 68, 68, 0.18)" : "transparent",
-                color: activeTab === "carousel" ? "#f87171" : "#94a3b8",
-                fontSize: 12,
-                fontWeight: 700,
-                cursor: "pointer",
-                display: "flex",
-                flexDirection: "column",
-                alignItems: "center",
-                justifyContent: "center",
-                gap: 4,
-                transition: "all 0.15s ease",
-              }}
-            >
-              <div style={{ display: "flex", alignItems: "center", gap: 5 }}>
-                <span style={{ fontSize: 14 }}>🎠</span>
-                <span>Carrossel</span>
-              </div>
-              <span style={{ fontSize: 10, opacity: 0.75, fontWeight: 500 }}>Multislide 4:5</span>
+              <span style={{ fontSize: 11, opacity: 0.75, fontWeight: 500 }}>Título, Logo & Camadas</span>
             </button>
           </div>
 
@@ -7492,7 +7446,7 @@ async function fixWebmDuration(blob: Blob, durationSec: number): Promise<Blob> {
                 <button
                   type="button"
                   className="btn"
-                  onClick={() => setActiveTab(format === "reel" || format === "story" ? "mini-ia" : "title-layout")}
+                  onClick={() => setActiveTab(format === "reel" || format === "story" ? "mini-ia" : "design")}
                   style={{
                     display: "inline-flex",
                     alignItems: "center",
@@ -7506,7 +7460,7 @@ async function fixWebmDuration(blob: Blob, durationSec: number): Promise<Blob> {
                     cursor: "pointer",
                   }}
                 >
-                  <span>{format === "reel" || format === "story" ? "Avançar para Mini IA Studio ⚡" : "Avançar para Título & Legenda 📰"}</span>
+                  <span>{format === "reel" || format === "story" ? "Avançar para Mini IA Studio ⚡" : "Avançar para Arte & Legenda 🎨"}</span>
                   <span>→</span>
                 </button>
               </div>
@@ -8372,7 +8326,7 @@ async function fixWebmDuration(blob: Blob, durationSec: number): Promise<Blob> {
                 <button
                   type="button"
                   className="btn"
-                  onClick={() => setActiveTab("title-layout")}
+                  onClick={() => setActiveTab("design")}
                   style={{
                     display: "inline-flex",
                     alignItems: "center",
@@ -8386,7 +8340,7 @@ async function fixWebmDuration(blob: Blob, durationSec: number): Promise<Blob> {
                     cursor: "pointer",
                   }}
                 >
-                  <span>Avançar para Título & Legenda 📰</span>
+                  <span>Avançar para Arte & Legenda 🎨</span>
                   <span>→</span>
                 </button>
               </div>
@@ -8394,8 +8348,8 @@ async function fixWebmDuration(blob: Blob, durationSec: number): Promise<Blob> {
           )}
 
 
-          {/* PAINEL 3: TÍTULO & LEGENDA */}
-          {activeTab === "title-layout" && (
+          {/* PAINEL 3: ARTE, LEGENDA & MARCA */}
+          {activeTab === "design" && (
             <div className="adminFeedTabPanel" style={{ display: "flex", flexDirection: "column", gap: 14 }}>
           <div className="field">
             <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 6, flexWrap: "wrap", gap: 6 }}>
@@ -9218,43 +9172,13 @@ async function fixWebmDuration(blob: Blob, durationSec: number): Promise<Blob> {
             )}
           </div>
 
-              <div style={{ marginTop: 8, display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-                <button
-                  type="button"
-                  className="btn secondary"
-                  onClick={() => setActiveTab(format === "reel" || format === "story" ? "mini-ia" : "media")}
-                  style={{ fontSize: 12, padding: "7px 14px", cursor: "pointer" }}
-                >
-                  ← {format === "reel" || format === "story" ? "⚡ Mini IA Studio" : "📁 Mídia & Notícia"}
-                </button>
-                <button
-                  type="button"
-                  className="btn"
-                  onClick={() => setActiveTab("branding-layers")}
-                  style={{
-                    display: "inline-flex",
-                    alignItems: "center",
-                    gap: 6,
-                    background: "#16a34a",
-                    color: "#ffffff",
-                    fontWeight: 700,
-                    fontSize: 12,
-                    padding: "8px 16px",
-                    borderRadius: 8,
-                    cursor: "pointer",
-                  }}
-                >
-                  <span>Avançar para Marca & Camadas 🏢</span>
-                  <span>→</span>
-                </button>
+            {/* SEÇÃO 2 DO PAINEL 3: MARCA, LOGOMARCA & CAMADAS */}
+            <div style={{ marginTop: 10, paddingTop: 14, borderTop: "1px dashed rgba(255, 255, 255, 0.15)" }}>
+              <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 12 }}>
+                <span style={{ fontSize: 18 }}>🏢</span>
+                <span style={{ fontSize: 14, fontWeight: 800, color: "#4ade80", letterSpacing: "0.02em" }}>Identidade Visual & Logomarca</span>
               </div>
             </div>
-          )}
-
-
-          {/* PAINEL 4: MARCA & CAMADAS */}
-          {activeTab === "branding-layers" && (
-            <div className="adminFeedTabPanel" style={{ display: "flex", flexDirection: "column", gap: 14 }}>
           <div className="field">
             <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 6, flexWrap: "wrap", gap: 6 }}>
               <label style={{ margin: 0 }}>🏢 Logo do jornal</label>
@@ -9946,10 +9870,10 @@ async function fixWebmDuration(blob: Blob, durationSec: number): Promise<Blob> {
                 <button
                   type="button"
                   className="btn secondary"
-                  onClick={() => setActiveTab("title-layout")}
+                  onClick={() => setActiveTab(format === "reel" || format === "story" ? "mini-ia" : "media")}
                   style={{ fontSize: 12, padding: "7px 14px", cursor: "pointer" }}
                 >
-                  ← 📰 Título & Legenda
+                  ← {format === "reel" || format === "story" ? "⚡ Mini IA Studio" : "📁 Mídia & Notícia"}
                 </button>
                 <div style={{ display: "flex", alignItems: "center", gap: 6, fontSize: 12, fontWeight: 700, color: "#16a34a" }}>
                   <span>✅ Tudo configurado! Veja a prévia ao lado</span>
@@ -9959,26 +9883,14 @@ async function fixWebmDuration(blob: Blob, durationSec: number): Promise<Blob> {
             </div>
           )}
 
-          {/* PAINEL 5: CARROSSEL MULTISLIDE (4:5) */}
-          {activeTab === "carousel" && (
-            <div className="adminFeedTabPanel" style={{ display: "flex", flexDirection: "column", gap: 14 }}>
-              <CarouselFeedCreator
-                posts={posts}
-                initialPost={selectedPost}
-                onSelectPost={(p) => setSelectedPost(p)}
-              />
-            </div>
-          )}
-
-          {activeTab !== "carousel" && selectedPost && (
+          {selectedPost && (
             <div className="adminFeedSelected">
               <b>{selectedPost.title}</b>
               <span>{selectedPost.category} • {selectedPost.city}</span>
             </div>
           )}
 
-          {activeTab !== "carousel" && (
-            <div className="adminFeedActions">
+          <div className="adminFeedActions">
               {(format === "feed" || format === "feed-square" || format === "reel-cover" || format === "story") && (
                 <button type="button" className="btn secondary" disabled={rendering} onClick={renderCard}>
                   {rendering ? "Gerando..." : "🔄 Atualizar prévia"}
@@ -10007,7 +9919,6 @@ async function fixWebmDuration(blob: Blob, durationSec: number): Promise<Blob> {
                 </button>
               )}
             </div>
-          )}
           {recording && <progress className="adminFeedRecordingProgress" max={100} value={recordingProgress} />}
           {renderLogs.length > 0 && (
             <div
@@ -10049,8 +9960,7 @@ async function fixWebmDuration(blob: Blob, durationSec: number): Promise<Blob> {
           )}
         </div>
 
-        {activeTab !== "carousel" && (
-          <div className="adminFeedPreview">
+        <div className="adminFeedPreview">
             <div className="adminFeedCanvasFrame" data-format={format} style={{ position: "relative" }}>
               {/* Botão de Corte (Crop) Rápido Direto no Preview */}
               {(videoUrl || customImageUrl || selectedPost?.image_url) && (
@@ -10133,7 +10043,6 @@ async function fixWebmDuration(blob: Blob, durationSec: number): Promise<Blob> {
               </div>
             )}
           </div>
-        )}
       </div>
       <video
         ref={videoPreviewRef}

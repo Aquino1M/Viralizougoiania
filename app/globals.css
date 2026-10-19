@@ -414,8 +414,9 @@ main{min-height:65vh}.heroSection{padding:30px 0 25px}.cityEyebrow{font-size:12p
 .adminFeedWarningOption input{width:auto;margin:0}
 .adminFeedCreator input[type="range"]{width:100%}
 
-/* Grid de Formatos do Instagram */
-.adminFeedFormatGrid{display:grid;grid-template-columns:repeat(2,1fr);gap:10px;margin-top:6px}
+/* Grid de Formatos do Instagram (3 botões principais: Feed, Stories, Reels) */
+.adminFeedFormatGrid{display:grid;grid-template-columns:repeat(3,1fr);gap:10px;margin-top:6px}
+@media (max-width: 768px){.adminFeedFormatGrid{grid-template-columns:1fr}}
 .adminFeedFormatBtn{background:#fff;border:1.5px solid #dce2ea;border-radius:12px;padding:12px 14px;display:flex;flex-direction:column;align-items:flex-start;gap:4px;cursor:pointer;transition:all .18s;text-align:left}
 .adminFeedFormatBtn:hover{border-color:#ff5a1f;background:#fff8f5;transform:translateY(-1px)}
 .adminFeedFormatBtn.active{background:#ff5a1f;border-color:#ff5a1f;color:#fff;box-shadow:0 6px 18px rgba(255,90,31,.28)}

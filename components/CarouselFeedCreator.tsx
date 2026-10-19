@@ -236,7 +236,7 @@ export default function CarouselFeedCreator({
   const [activeSlideIndex, setActiveSlideIndex] = useState<number>(0);
   const [showSlideNumber, setShowSlideNumber] = useState<boolean>(true);
   const [fontFamily, setFontFamily] = useState<CarouselFontFamily>("montserrat");
-  const [selectedPost, setSelectedPost] = useState<Post | null>(initialPost || null);
+  const [selectedPost, setSelectedPost] = useState<CompatibleFeedPost | null>(initialPost || null);
   const [coverImageLoaded, setCoverImageLoaded] = useState<HTMLImageElement | null>(null);
   const [slideImages, setSlideImages] = useState<Record<string, HTMLImageElement>>({});
   const [logoImg, setLogoImg] = useState<HTMLImageElement | null>(null);
@@ -263,7 +263,7 @@ export default function CarouselFeedCreator({
       if (selectedPost.image_url) {
         const img = new Image();
         img.crossOrigin = "anonymous";
-        img.src = `/api/admin/feed-image?slug=${encodeURIComponent(selectedPost.slug)}&v=${encodeURIComponent(selectedPost.updated_at || selectedPost.created_at || "")}`;
+        img.src = `/api/admin/feed-image?slug=${encodeURIComponent(selectedPost.slug || "")}&v=${encodeURIComponent(selectedPost.updated_at || selectedPost.created_at || "")}`;
         img.onload = () => setCoverImageLoaded(img);
       }
     }
