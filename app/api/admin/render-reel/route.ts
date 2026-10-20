@@ -49,6 +49,7 @@ export async function POST(request: Request) {
     const bgmVolume = Number(formData.get("bgmVolume") || 15);
     const sfxPreset = (formData.get("sfxPreset") as string | null) || "none";
     const sfxVolume = Number(formData.get("sfxVolume") || 70);
+    const upscale = formData.get("upscale") !== "false";
 
     if (!videoFile || !overlayFile) {
       return NextResponse.json({ error: "Vídeo ou imagem de sobreposição ausente." }, { status: 400 });
@@ -146,6 +147,7 @@ export async function POST(request: Request) {
       animatedLogo: animatedLogoConfig,
       videoFilter,
       crop,
+      upscale,
     });
 
     // Configuração oficial de compatibilidade universal (H.264 / AAC / YUV420P / +faststart)

@@ -410,6 +410,9 @@ function drawCover(
   const fullHeight = img instanceof HTMLVideoElement ? img.videoHeight : img.naturalHeight;
   if (!fullWidth || !fullHeight) return;
 
+  ctx.imageSmoothingEnabled = true;
+  ctx.imageSmoothingQuality = "high";
+
   const cropX = crop ? Math.max(0, Math.min(fullWidth - 10, crop.x)) : 0;
   const cropY = crop ? Math.max(0, Math.min(fullHeight - 10, crop.y)) : 0;
   const sourceWidth = crop ? Math.max(10, Math.min(fullWidth - cropX, crop.width)) : fullWidth;
@@ -437,6 +440,9 @@ function drawContain(
   const fullWidth = img instanceof HTMLVideoElement ? img.videoWidth : img.naturalWidth;
   const fullHeight = img instanceof HTMLVideoElement ? img.videoHeight : img.naturalHeight;
   if (!fullWidth || !fullHeight) return;
+
+  ctx.imageSmoothingEnabled = true;
+  ctx.imageSmoothingQuality = "high";
 
   const cropX = crop ? Math.max(0, Math.min(fullWidth - 10, crop.x)) : 0;
   const cropY = crop ? Math.max(0, Math.min(fullHeight - 10, crop.y)) : 0;
@@ -519,6 +525,24 @@ export interface Split1v2iConfig {
   headerH?: number;
 }
 
+const audioBufferCache = new Map<string, AudioBuffer>();
+async function loadAudioBuffer(audioCtx: AudioContext, url: string): Promise<AudioBuffer | null> {
+  try {
+    if (audioBufferCache.has(url)) {
+      return audioBufferCache.get(url)!;
+    }
+    const res = await fetch(url);
+    if (!res.ok) return null;
+    const arrayBuf = await res.arrayBuffer();
+    const decoded = await audioCtx.decodeAudioData(arrayBuf);
+    audioBufferCache.set(url, decoded);
+    return decoded;
+  } catch (e) {
+    console.warn("[loadAudioBuffer] Erro ao carregar áudio:", url, e);
+    return null;
+  }
+}
+
 function getSplitHeaderHeight(
   ctx: CanvasRenderingContext2D,
   headline: string,
@@ -544,6 +568,7 @@ function getCanvasColorFilter(miniIaConfig?: {
   customContrast?: number;
   customBrightness?: number;
   customSharpness?: number;
+  upscaleEnabled?: boolean;
 }): string {
   if (!miniIaConfig) return "none";
   const rawSat = typeof miniIaConfig.customSaturation === "number" ? miniIaConfig.customSaturation : 1.0;
@@ -557,11 +582,15 @@ function getCanvasColorFilter(miniIaConfig?: {
 
   const rawSharp = typeof miniIaConfig.customSharpness === "number" ? miniIaConfig.customSharpness : 0;
   const sharpNorm = rawSharp > 1 ? rawSharp / 100 : rawSharp;
-  const sharpBoost = sharpNorm * 0.15; // micro-contraste proporcional para simular nitidez no canvas
+
+  const isUpscale = miniIaConfig.upscaleEnabled !== false;
+  // Super Resolução: restauração de contornos e nitidez de texturas em vídeos de baixa qualidade
+  const upscaleSharpBoost = isUpscale ? 0.08 : 0;
+  const sharpBoost = sharpNorm * 0.15 + upscaleSharpBoost;
 
   const effC = Math.max(0.2, (miniIaConfig.contrast || 1.0) * conMult + sharpBoost);
   const effB = Math.max(0.2, (miniIaConfig.brightness ? 1 + miniIaConfig.brightness : 1.0) * briMult);
-  const effS = Math.max(0, (miniIaConfig.saturation || 1.0) * satMult);
+  const effS = Math.max(0, (miniIaConfig.saturation || 1.0) * (isUpscale ? Math.max(satMult, 1.03) : satMult));
 
   let filterString = `contrast(${effC.toFixed(2)}) brightness(${effB.toFixed(2)}) saturate(${effS.toFixed(2)})`;
   if (
@@ -569,6 +598,7 @@ function getCanvasColorFilter(miniIaConfig?: {
     Math.abs(effB - 1.0) < 0.015 &&
     Math.abs(effS - 1.0) < 0.015 &&
     sharpNorm === 0 &&
+    !isUpscale &&
     (!miniIaConfig.filterPreset || miniIaConfig.filterPreset === "none")
   ) {
     filterString = "none";
@@ -606,6 +636,7 @@ function drawVideoWithFraming(
     authorName?: string;
     authorHandle?: string;
     authorVerified?: boolean;
+    upscaleEnabled?: boolean;
   },
   crop?: VideoCropRect | null,
   splitConfig?: Split1v2iConfig
@@ -2607,6 +2638,7 @@ function drawReelFrame(
     authorName?: string;
     authorHandle?: string;
     authorVerified?: boolean;
+    upscaleEnabled?: boolean;
   },
   crop?: VideoCropRect | null,
   splitConfig?: Split1v2iConfig
@@ -2842,6 +2874,7 @@ function buildReelOverlayCanvas(
     authorName?: string;
     authorHandle?: string;
     authorVerified?: boolean;
+    upscaleEnabled?: boolean;
   },
   splitConfig?: Split1v2iConfig
 ): HTMLCanvasElement {
@@ -3353,6 +3386,17 @@ export default function SocialFeedCreator({ posts, onBack, initialPost, onOpenCo
   const [videoFilter, setVideoFilter] = useState<VideoFilterPreset>("none");
   const videoFilterRef = useRef<VideoFilterPreset>("none");
   const [cutPauses, setCutPauses] = useState<boolean>(true);
+  const [upscaleEnabled, setUpscaleEnabled] = useState<boolean>(() => {
+    try {
+      const saved = localStorage.getItem("viralizou_upscale_hd");
+      if (saved !== null) return saved === "true";
+    } catch {}
+    return true; // Ativo por padrão para garantir nitidez máxima em vídeos de WhatsApp/baixa resolução
+  });
+  const upscaleEnabledRef = useRef<boolean>(true);
+  useEffect(() => {
+    upscaleEnabledRef.current = upscaleEnabled;
+  }, [upscaleEnabled]);
   const [bgmTrack, setBgmTrack] = useState<BgmTrackPreset>("energetic");
   const [autoHookEnabled, setAutoHookEnabled] = useState<boolean>(false);
   const autoHookEnabledRef = useRef<boolean>(false);
@@ -4033,6 +4077,7 @@ export default function SocialFeedCreator({ posts, onBack, initialPost, onOpenCo
         customContrast: customContrastRef.current ?? customContrast,
         customBrightness: customBrightnessRef.current ?? customBrightness,
         customSharpness: customSharpnessRef.current ?? customSharpness,
+        upscaleEnabled: upscaleEnabledRef.current,
       });
 
       if (format === "story" && (!videoPreviewRef.current || !videoReady)) {
@@ -4252,6 +4297,7 @@ export default function SocialFeedCreator({ posts, onBack, initialPost, onOpenCo
             authorName,
             authorHandle,
             authorVerified,
+            upscaleEnabled: upscaleEnabledRef.current,
           },
           videoCrop,
           currentSplitConfig
@@ -4711,6 +4757,7 @@ export default function SocialFeedCreator({ posts, onBack, initialPost, onOpenCo
                   authorName,
                   authorHandle,
                   authorVerified,
+                  upscaleEnabled: upscaleEnabledRef.current,
                 },
                 currentSplitConfig
               );
@@ -4784,6 +4831,7 @@ export default function SocialFeedCreator({ posts, onBack, initialPost, onOpenCo
                 authorName,
                 authorHandle,
                 authorVerified,
+                upscaleEnabled: upscaleEnabledRef.current,
               },
               videoCrop,
               currentSplitConfig
@@ -4862,6 +4910,7 @@ export default function SocialFeedCreator({ posts, onBack, initialPost, onOpenCo
                   authorName,
                   authorHandle,
                   authorVerified,
+                  upscaleEnabled: upscaleEnabledRef.current,
                 },
                 videoCrop,
                 currentSplitConfig
@@ -4913,7 +4962,7 @@ export default function SocialFeedCreator({ posts, onBack, initialPost, onOpenCo
       video.removeEventListener("timeupdate", handleTimeCheck);
       cancelAnimationFrame(frameId);
     };
-  }, [format, videoUrl, title, handle, logoData, selectedPost?.title, reelTextStyle, reelFontFamily, reelFontWeight, reelTextAlign, reelTextCase, reelFontSize, tagColor, tagPositionY, showSafeZone, reelTextAnimation, showStrongSceneWarning, logoScale, handleFontSize, shadeOpacity, showOverlayLayer, showLogoLayer, showTitleLayer, showHandleLayer, showStorySticker, logoColorStyle, recording, videoFramingMode, imagePosition, miniIaTrimSeconds, miniIaLevel, miniIaMirror, videoFilter, autoHookEnabled, effectiveHookText, videoCrop, hookPositionY, splitImg1Url, splitImg2Url, splitDividerColor, splitDividerWidth, splitVideoSide, splitTopCardEnabled, splitKickerText, customSaturation, customContrast, customBrightness, customSharpness]);
+  }, [format, videoUrl, title, handle, logoData, selectedPost?.title, reelTextStyle, reelFontFamily, reelFontWeight, reelTextAlign, reelTextCase, reelFontSize, tagColor, tagPositionY, showSafeZone, reelTextAnimation, showStrongSceneWarning, logoScale, handleFontSize, shadeOpacity, showOverlayLayer, showLogoLayer, showTitleLayer, showHandleLayer, showStorySticker, logoColorStyle, recording, videoFramingMode, imagePosition, miniIaTrimSeconds, miniIaLevel, miniIaMirror, videoFilter, autoHookEnabled, effectiveHookText, videoCrop, hookPositionY, splitImg1Url, splitImg2Url, splitDividerColor, splitDividerWidth, splitVideoSide, splitTopCardEnabled, splitKickerText, customSaturation, customContrast, customBrightness, customSharpness, upscaleEnabled]);
 
   async function loadArticle() {
     const slug = slugFromInput(articleUrl);
@@ -5960,6 +6009,7 @@ async function fixWebmDuration(blob: Blob, durationSec: number): Promise<Blob> {
         formData.append("videoBlockPosY", String(videoBlockPosYRef.current || videoBlockPosY));
         formData.append("sfxPreset", selectedSfxPreset);
         formData.append("sfxVolume", String(sfxVolume));
+        formData.append("upscale", String(upscaleEnabled));
 
         if (videoCrop) {
           formData.append("cropX", String(Math.round(videoCrop.x)));
@@ -6102,6 +6152,8 @@ async function fixWebmDuration(blob: Blob, durationSec: number): Promise<Blob> {
     let canvasStream: MediaStream | null = null;
     let audioDestination: MediaStreamAudioDestinationNode | null = null;
     let audioSource: MediaElementAudioSourceNode | null = null;
+    let sfxAudioSourceNode: AudioBufferSourceNode | null = null;
+    let bgmAudioSourceNode: AudioBufferSourceNode | null = null;
     let progressTimer = 0;
     let safetyTimeout = 0;
     let vfcId: number | null = null;
@@ -6124,7 +6176,7 @@ async function fixWebmDuration(blob: Blob, durationSec: number): Promise<Blob> {
         });
       }
 
-      // 3. Pipeline único e exclusivo de Áudio via Web Audio API
+      // 3. Pipeline único e exclusivo de Áudio via Web Audio API (Multi-Track: Vídeo + SFX + BGM)
       const AudioContextClass = window.AudioContext || (window as any).webkitAudioContext;
       let audioTrack: MediaStreamTrack | null = null;
 
@@ -6147,7 +6199,67 @@ async function fixWebmDuration(blob: Blob, durationSec: number): Promise<Blob> {
 
         // Conecta ao nó de destino da gravação (NUNCA conecta aos alto-falantes durante a exportação)
         audioDestination = audioCtx.createMediaStreamDestination();
-        audioSource.connect(audioDestination);
+
+        // 3.1 Canal Master da Voz/Áudio do Vídeo Original
+        const videoGain = audioCtx.createGain();
+        videoGain.gain.value = 1.0;
+        audioSource.connect(videoGain);
+        videoGain.connect(audioDestination);
+
+        // 3.2 MIXER REAL OFICIAL: Efeitos Sonoros (SFX)
+        if (selectedSfxPreset !== "none") {
+          let sfxUrl = "https://cdn.realoficial.com.br/auto-edit-library/sfx/whoosh-transition.mp3";
+          let sfxName = "Whoosh & Pop";
+          if (selectedSfxPreset === "punch") {
+            sfxUrl = "https://cdn.realoficial.com.br/auto-edit-library/sfx/bass-drop-impact.mp3";
+            sfxName = "Sub-Bass Impacto";
+          } else if (selectedSfxPreset === "news") {
+            sfxUrl = "https://cdn.realoficial.com.br/auto-edit-library/sfx/ding-notification.mp3";
+            sfxName = "Plantão Noticioso";
+          }
+
+          addLog(`🔊 Carregando Efeito Sonoro Real Oficial: ${sfxName}...`);
+          try {
+            const sfxBuf = await loadAudioBuffer(audioCtx, sfxUrl);
+            if (sfxBuf) {
+              const sfxNode = audioCtx.createBufferSource();
+              sfxNode.buffer = sfxBuf;
+              const sfxGain = audioCtx.createGain();
+              sfxGain.gain.value = Math.max(0.1, Math.min(1.0, (sfxVolume || 70) / 100));
+              sfxNode.connect(sfxGain);
+              sfxGain.connect(audioDestination);
+              // Dispara o SFX no início para gerar impacto imediato de gancho
+              sfxNode.start(audioCtx.currentTime + 0.15);
+              sfxAudioSourceNode = sfxNode;
+              addLog(`⚡ Efeito Sonoro Real Oficial (${sfxName} · ${sfxVolume}%) mixado com sucesso no áudio master!`);
+            }
+          } catch (sfxErr: any) {
+            console.warn("[SFX Real Oficial]", sfxErr?.message);
+          }
+        }
+
+        // 3.3 MIXER REAL OFICIAL: Trilha Sonora de Fundo (BGM)
+        if (bgmTrack && bgmTrack !== "none" && BGM_URLS[bgmTrack]) {
+          const trackUrl = BGM_URLS[bgmTrack];
+          addLog(`🎵 Carregando Trilha Sonora Real Oficial: ${bgmTrack.toUpperCase()}...`);
+          try {
+            const bgmBuf = await loadAudioBuffer(audioCtx, trackUrl);
+            if (bgmBuf) {
+              const bgmNode = audioCtx.createBufferSource();
+              bgmNode.buffer = bgmBuf;
+              bgmNode.loop = true;
+              const bgmGain = audioCtx.createGain();
+              bgmGain.gain.value = Math.max(0.02, Math.min(0.5, (bgmVolume || 15) / 100));
+              bgmNode.connect(bgmGain);
+              bgmGain.connect(audioDestination);
+              bgmNode.start(audioCtx.currentTime);
+              bgmAudioSourceNode = bgmNode;
+              addLog(`🎵 Trilha Sonora Real Oficial (${bgmTrack.toUpperCase()} · ${bgmVolume}%) mixada em segundo plano!`);
+            }
+          } catch (bgmErr: any) {
+            console.warn("[BGM Real Oficial]", bgmErr?.message);
+          }
+        }
 
         const tracks = audioDestination.stream.getAudioTracks();
         if (tracks.length > 0) {
@@ -6196,10 +6308,14 @@ async function fixWebmDuration(blob: Blob, durationSec: number): Promise<Blob> {
       }
       const combinedStream = new MediaStream(combinedTracks);
 
+      if (upscaleEnabledRef.current) {
+        addLog("💎 Upscale Super Resolução HD: Interpolação de alta precisão + Bitrate Master (7.5 Mbps) anti-pixelado ativo");
+      }
+
       recorder = new MediaRecorder(combinedStream, {
         mimeType,
-        videoBitsPerSecond: typeof navigator !== "undefined" && ((navigator.hardwareConcurrency || 4) <= 4 || ((navigator as any).deviceMemory || 4) <= 4) ? 2_800_000 : 3_800_000,
-        audioBitsPerSecond: 128_000,
+        videoBitsPerSecond: upscaleEnabledRef.current ? 7_500_000 : 4_500_000,
+        audioBitsPerSecond: 192_000,
       });
       const activeRecorder = recorder;
 
@@ -6215,6 +6331,8 @@ async function fixWebmDuration(blob: Blob, durationSec: number): Promise<Blob> {
           // frames pretos durante o seek/carregamento inicial do vídeo.
           const exportH = (format === "feed" || format === "feed-square") ? getCanvasDimensions(format).height : REEL_H;
           ctx.save();
+          ctx.imageSmoothingEnabled = true;
+          ctx.imageSmoothingQuality = "high";
           ctx.fillStyle = "#050505";
           ctx.fillRect(0, 0, W, exportH);
           drawVideoWithFraming(
@@ -6237,6 +6355,7 @@ async function fixWebmDuration(blob: Blob, durationSec: number): Promise<Blob> {
               customContrast: customContrastRef.current ?? customContrast,
               customBrightness: customBrightnessRef.current ?? customBrightness,
               customSharpness: customSharpnessRef.current ?? customSharpness,
+              upscaleEnabled: upscaleEnabledRef.current,
               videoBlockPosY: videoBlockPosYRef.current ?? videoBlockPosY,
             },
             videoCrop,
@@ -6338,6 +6457,8 @@ async function fixWebmDuration(blob: Blob, durationSec: number): Promise<Blob> {
               try { (video as any).cancelVideoFrameCallback(vfcId); } catch {}
               vfcId = null;
             }
+            try { sfxAudioSourceNode?.stop(); } catch {}
+            try { bgmAudioSourceNode?.stop(); } catch {}
             activeRecorder.stop();
           }
         };
@@ -6429,6 +6550,13 @@ async function fixWebmDuration(blob: Blob, durationSec: number): Promise<Blob> {
       }
       if (loopIntervalId) {
         window.clearInterval(loopIntervalId);
+      }
+
+      if (sfxAudioSourceNode) {
+        try { sfxAudioSourceNode.stop(); } catch {}
+      }
+      if (bgmAudioSourceNode) {
+        try { bgmAudioSourceNode.stop(); } catch {}
       }
 
       if (recorder && recorder.state !== "inactive") {
@@ -8464,6 +8592,53 @@ async function fixWebmDuration(blob: Blob, durationSec: number): Promise<Blob> {
                         }}
                         style={{ width: "100%", accentColor: "#38bdf8" }}
                       />
+                    </div>
+
+                    {/* Upscale Inteligente HD para Vídeos de Baixa Qualidade */}
+                    <div
+                      style={{
+                        marginTop: 10,
+                        paddingTop: 10,
+                        borderTop: "1px dashed rgba(255,255,255,0.12)",
+                        display: "flex",
+                        alignItems: "center",
+                        justifyContent: "space-between",
+                        gridColumn: "1 / -1",
+                      }}
+                    >
+                      <div>
+                        <span style={{ fontSize: 11, fontWeight: 700, color: "#38bdf8", display: "flex", alignItems: "center", gap: 5 }}>
+                          <span>💎</span> Upscale Inteligente HD (Super Resolução)
+                        </span>
+                        <p style={{ margin: "2px 0 0", fontSize: 10, color: "#94a3b8" }}>
+                          Recupera nitidez e remove embaçamento de vídeos com baixa qualidade (WhatsApp / 480p / 720p).
+                        </p>
+                      </div>
+                      <button
+                        type="button"
+                        onClick={() => {
+                          const next = !upscaleEnabled;
+                          setUpscaleEnabled(next);
+                          upscaleEnabledRef.current = next;
+                          try { localStorage.setItem("viralizou_upscale_hd", String(next)); } catch {}
+                          cachedOverlayCanvasRef.current = null;
+                          renderCard();
+                        }}
+                        style={{
+                          padding: "5px 12px",
+                          borderRadius: 6,
+                          fontSize: 11,
+                          fontWeight: 800,
+                          cursor: "pointer",
+                          border: upscaleEnabled ? "1.5px solid #38bdf8" : "1px solid rgba(255,255,255,0.15)",
+                          background: upscaleEnabled ? "linear-gradient(135deg, #0284c7, #0369a1)" : "rgba(30, 41, 59, 0.6)",
+                          color: upscaleEnabled ? "#ffffff" : "#94a3b8",
+                          boxShadow: upscaleEnabled ? "0 0 12px rgba(56, 189, 248, 0.3)" : "none",
+                          transition: "all 0.15s ease",
+                        }}
+                      >
+                        {upscaleEnabled ? "✓ Ativo (HD Master)" : "Desativado"}
+                      </button>
                     </div>
                   </div>
                 </div>

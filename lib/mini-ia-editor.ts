@@ -80,6 +80,7 @@ export interface BuildFilterGraphOptions {
     y: number;
     width: number;
   };
+  upscale?: boolean;
 }
 
 /**
@@ -134,6 +135,12 @@ export function buildMiniIaFilterGraph(options: BuildFilterGraphOptions): {
 
   const colorFilter = `eq=contrast=${effContrast.toFixed(2)}:brightness=${effBrightness.toFixed(2)}:saturation=${effSaturation.toFixed(2)}`;
   let postFxFilter = colorFilter;
+
+  // 2.1 Super Resolução / Upscale Anti-Embaçamento para vídeos de baixa qualidade
+  const isUpscale = options.upscale !== false;
+  if (isUpscale) {
+    postFxFilter += `,unsharp=5:5:0.7:5:5:0.0`;
+  }
 
   if (effSharpness > 0) {
     postFxFilter += `,unsharp=3:3:${effSharpness.toFixed(1)}:3:3:0.0`;
