@@ -535,6 +535,52 @@ function getSplitHeaderHeight(
   return Math.max(280, Math.min(460, baseH));
 }
 
+function getCanvasColorFilter(miniIaConfig?: {
+  contrast?: number;
+  brightness?: number;
+  saturation?: number;
+  filterPreset?: VideoFilterPreset;
+  customSaturation?: number;
+  customContrast?: number;
+  customBrightness?: number;
+  customSharpness?: number;
+}): string {
+  if (!miniIaConfig) return "none";
+  const rawSat = typeof miniIaConfig.customSaturation === "number" ? miniIaConfig.customSaturation : 1.0;
+  const satMult = rawSat > 3 ? rawSat / 100 : rawSat;
+
+  const rawCon = typeof miniIaConfig.customContrast === "number" ? miniIaConfig.customContrast : 1.0;
+  const conMult = rawCon > 3 ? rawCon / 100 : rawCon;
+
+  const rawBri = typeof miniIaConfig.customBrightness === "number" ? miniIaConfig.customBrightness : 1.0;
+  const briMult = rawBri > 3 ? rawBri / 100 : rawBri;
+
+  const rawSharp = typeof miniIaConfig.customSharpness === "number" ? miniIaConfig.customSharpness : 0;
+  const sharpNorm = rawSharp > 1 ? rawSharp / 100 : rawSharp;
+  const sharpBoost = sharpNorm * 0.15; // micro-contraste proporcional para simular nitidez no canvas
+
+  const effC = Math.max(0.2, (miniIaConfig.contrast || 1.0) * conMult + sharpBoost);
+  const effB = Math.max(0.2, (miniIaConfig.brightness ? 1 + miniIaConfig.brightness : 1.0) * briMult);
+  const effS = Math.max(0, (miniIaConfig.saturation || 1.0) * satMult);
+
+  let filterString = `contrast(${effC.toFixed(2)}) brightness(${effB.toFixed(2)}) saturate(${effS.toFixed(2)})`;
+  if (
+    Math.abs(effC - 1.0) < 0.015 &&
+    Math.abs(effB - 1.0) < 0.015 &&
+    Math.abs(effS - 1.0) < 0.015 &&
+    sharpNorm === 0 &&
+    (!miniIaConfig.filterPreset || miniIaConfig.filterPreset === "none")
+  ) {
+    filterString = "none";
+  } else if (miniIaConfig.filterPreset && miniIaConfig.filterPreset !== "none") {
+    const extra = VIDEO_FILTERS[miniIaConfig.filterPreset]?.canvasFilter;
+    if (extra && extra !== "none") {
+      filterString = `${filterString} ${extra}`;
+    }
+  }
+  return filterString;
+}
+
 function drawVideoWithFraming(
   ctx: CanvasRenderingContext2D,
   video: HTMLVideoElement,
@@ -579,30 +625,9 @@ function drawVideoWithFraming(
     ctx.translate(-w / 2, -h / 2);
   }
 
-  // Aplica Grade de Cores e Contraste Personalizável (Saturação, Contraste, Brilho e Filtro)
+  // Aplica Grade de Cores e Contraste Personalizável (Saturação, Contraste, Brilho, Nitidez e Filtro)
   if (miniIaConfig) {
-    const rawSat = typeof miniIaConfig.customSaturation === "number" ? miniIaConfig.customSaturation : 1.0;
-    const satMult = rawSat > 3 ? rawSat / 100 : rawSat;
-
-    const rawCon = typeof miniIaConfig.customContrast === "number" ? miniIaConfig.customContrast : 1.0;
-    const conMult = rawCon > 3 ? rawCon / 100 : rawCon;
-
-    const rawBri = typeof miniIaConfig.customBrightness === "number" ? miniIaConfig.customBrightness : 1.0;
-    const briMult = rawBri > 3 ? rawBri / 100 : rawBri;
-
-    const effC = Math.max(0.2, (miniIaConfig.contrast || 1.0) * conMult);
-    const effB = Math.max(0.2, (miniIaConfig.brightness ? 1 + miniIaConfig.brightness : 1.0) * briMult);
-    const effS = Math.max(0, (miniIaConfig.saturation || 1.0) * satMult);
-
-    let filterString = `contrast(${effC.toFixed(2)}) brightness(${effB.toFixed(2)}) saturate(${effS.toFixed(2)})`;
-    if (Math.abs(effC - 1.0) < 0.02 && Math.abs(effB - 1.0) < 0.02 && Math.abs(effS - 1.0) < 0.02 && (!miniIaConfig.filterPreset || miniIaConfig.filterPreset === "none")) {
-      filterString = "none";
-    } else if (miniIaConfig.filterPreset && miniIaConfig.filterPreset !== "none") {
-      const extra = VIDEO_FILTERS[miniIaConfig.filterPreset]?.canvasFilter;
-      if (extra && extra !== "none") {
-        filterString = `${filterString} ${extra}`;
-      }
-    }
+    const filterString = getCanvasColorFilter(miniIaConfig);
     try {
       ctx.filter = filterString;
     } catch {}
@@ -3277,6 +3302,24 @@ export default function SocialFeedCreator({ posts, onBack, initialPost, onOpenCo
     return 0;
   });
 
+  const customSaturationRef = useRef(customSaturation);
+  const customContrastRef = useRef(customContrast);
+  const customBrightnessRef = useRef(customBrightness);
+  const customSharpnessRef = useRef(customSharpness);
+
+  useEffect(() => {
+    customSaturationRef.current = customSaturation;
+  }, [customSaturation]);
+  useEffect(() => {
+    customContrastRef.current = customContrast;
+  }, [customContrast]);
+  useEffect(() => {
+    customBrightnessRef.current = customBrightness;
+  }, [customBrightness]);
+  useEffect(() => {
+    customSharpnessRef.current = customSharpness;
+  }, [customSharpness]);
+
   // Metadados do Layout Debate Político
   const [topHeadline, setTopHeadline] = useState<string>("QUE LAPADA!");
   const [authorName, setAuthorName] = useState<string>("GUSTAVO GAYER");
@@ -3509,10 +3552,22 @@ export default function SocialFeedCreator({ posts, onBack, initialPost, onOpenCo
     if (typeof d.authorName === "string") setAuthorName(d.authorName);
     if (typeof d.authorHandle === "string") setAuthorHandle(d.authorHandle);
     if (typeof d.authorVerified === "boolean") setAuthorVerified(d.authorVerified);
-    if (typeof d.customSaturation === "number") setCustomSaturation(d.customSaturation);
-    if (typeof d.customContrast === "number") setCustomContrast(d.customContrast);
-    if (typeof d.customBrightness === "number") setCustomBrightness(d.customBrightness);
-    if (typeof d.customSharpness === "number") setCustomSharpness(d.customSharpness);
+    if (typeof d.customSaturation === "number") {
+      setCustomSaturation(d.customSaturation);
+      customSaturationRef.current = d.customSaturation;
+    }
+    if (typeof d.customContrast === "number") {
+      setCustomContrast(d.customContrast);
+      customContrastRef.current = d.customContrast;
+    }
+    if (typeof d.customBrightness === "number") {
+      setCustomBrightness(d.customBrightness);
+      customBrightnessRef.current = d.customBrightness;
+    }
+    if (typeof d.customSharpness === "number") {
+      setCustomSharpness(d.customSharpness);
+      customSharpnessRef.current = d.customSharpness;
+    }
 
     setActiveSlotId(slot.id);
     setSlotFeedback(`⚡ ${slot.name} carregado no preview!`);
@@ -3969,6 +4024,17 @@ export default function SocialFeedCreator({ posts, onBack, initialPost, onOpenCo
       canvas.width = currentW;
       canvas.height = currentH;
 
+      const cardColorFilter = getCanvasColorFilter({
+        contrast: (MINI_IA_LEVELS[miniIaLevel] || MINI_IA_LEVELS.media).contrast,
+        brightness: (MINI_IA_LEVELS[miniIaLevel] || MINI_IA_LEVELS.media).brightness,
+        saturation: (MINI_IA_LEVELS[miniIaLevel] || MINI_IA_LEVELS.media).saturation,
+        filterPreset: videoFilter,
+        customSaturation: customSaturationRef.current ?? customSaturation,
+        customContrast: customContrastRef.current ?? customContrast,
+        customBrightness: customBrightnessRef.current ?? customBrightness,
+        customSharpness: customSharpnessRef.current ?? customSharpness,
+      });
+
       if (format === "story" && (!videoPreviewRef.current || !videoReady)) {
         await document.fonts?.ready;
         ctx.save();
@@ -3989,6 +4055,9 @@ export default function SocialFeedCreator({ posts, onBack, initialPost, onOpenCo
                 ctx.translate(currentW, 0);
                 ctx.scale(-1, 1);
               }
+              if (cardColorFilter && cardColorFilter !== "none") {
+                try { ctx.filter = cardColorFilter; } catch {}
+              }
               drawCover(ctx, customImageRef.current, 0, 0, currentW, currentH, imagePosition, imageCrop);
               ctx.restore();
               mediaDrawn = true;
@@ -4007,6 +4076,9 @@ export default function SocialFeedCreator({ posts, onBack, initialPost, onOpenCo
             if (miniIaMirror) {
               ctx.translate(currentW, 0);
               ctx.scale(-1, 1);
+            }
+            if (cardColorFilter && cardColorFilter !== "none") {
+              try { ctx.filter = cardColorFilter; } catch {}
             }
             drawCover(ctx, img, 0, 0, currentW, currentH, imagePosition, imageCrop);
             ctx.restore();
@@ -4171,6 +4243,15 @@ export default function SocialFeedCreator({ posts, onBack, initialPost, onOpenCo
             autoHookEnabled: autoHookEnabledRef.current,
             autoHookText: effectiveHookText,
             hookPositionY: hookPositionYRef.current || hookPositionY,
+            customSaturation: customSaturationRef.current ?? customSaturation,
+            customContrast: customContrastRef.current ?? customContrast,
+            customBrightness: customBrightnessRef.current ?? customBrightness,
+            customSharpness: customSharpnessRef.current ?? customSharpness,
+            videoBlockPosY: videoBlockPosYRef.current ?? videoBlockPosY,
+            topHeadline,
+            authorName,
+            authorHandle,
+            authorVerified,
           },
           videoCrop,
           currentSplitConfig
@@ -4335,6 +4416,9 @@ export default function SocialFeedCreator({ posts, onBack, initialPost, onOpenCo
               ctx.translate(currentW, 0);
               ctx.scale(-1, 1);
             }
+            if (cardColorFilter && cardColorFilter !== "none") {
+              try { ctx.filter = cardColorFilter; } catch {}
+            }
             drawCover(ctx, customImageRef.current, 0, 0, currentW, coverH, imagePosition, imageCrop);
             ctx.restore();
             mediaDrawn = true;
@@ -4351,6 +4435,9 @@ export default function SocialFeedCreator({ posts, onBack, initialPost, onOpenCo
           ctx.translate(currentW, 0);
           ctx.scale(-1, 1);
         }
+        if (cardColorFilter && cardColorFilter !== "none") {
+          try { ctx.filter = cardColorFilter; } catch {}
+        }
         drawCover(ctx, videoPreviewRef.current, 0, 0, currentW, coverH, imagePosition, videoCrop);
         ctx.restore();
         mediaDrawn = true;
@@ -4366,6 +4453,9 @@ export default function SocialFeedCreator({ posts, onBack, initialPost, onOpenCo
           if (miniIaMirror) {
             ctx.translate(currentW, 0);
             ctx.scale(-1, 1);
+          }
+          if (cardColorFilter && cardColorFilter !== "none") {
+            try { ctx.filter = cardColorFilter; } catch {}
           }
           drawCover(ctx, img, 0, 0, currentW, coverH, imagePosition, imageCrop);
           ctx.restore();
@@ -4685,10 +4775,10 @@ export default function SocialFeedCreator({ posts, onBack, initialPost, onOpenCo
                 zoomMax: miniIaCfg.zoomMax,
                 zoomPeriod: miniIaCfg.zoomPeriod,
                 filterPreset: videoFilterRef.current || videoFilter,
-                customSaturation,
-                customContrast,
-                customBrightness,
-                customSharpness,
+                customSaturation: customSaturationRef.current,
+                customContrast: customContrastRef.current,
+                customBrightness: customBrightnessRef.current,
+                customSharpness: customSharpnessRef.current,
                 videoBlockPosY: videoBlockPosYRef.current ?? videoBlockPosY,
                 topHeadline,
                 authorName,
@@ -4763,10 +4853,10 @@ export default function SocialFeedCreator({ posts, onBack, initialPost, onOpenCo
                   autoHookEnabled: autoHookEnabledRef.current && autoHookEnabled,
                   autoHookText: effectiveHookText,
                   hookPositionY: hookPositionYRef.current || hookPositionY,
-                  customSaturation,
-                  customContrast,
-                  customBrightness,
-                  customSharpness,
+                  customSaturation: customSaturationRef.current,
+                  customContrast: customContrastRef.current,
+                  customBrightness: customBrightnessRef.current,
+                  customSharpness: customSharpnessRef.current,
                   videoBlockPosY: videoBlockPosYRef.current ?? videoBlockPosY,
                   topHeadline,
                   authorName,
@@ -4823,7 +4913,7 @@ export default function SocialFeedCreator({ posts, onBack, initialPost, onOpenCo
       video.removeEventListener("timeupdate", handleTimeCheck);
       cancelAnimationFrame(frameId);
     };
-  }, [format, videoUrl, title, handle, logoData, selectedPost?.title, reelTextStyle, reelFontFamily, reelFontWeight, reelTextAlign, reelTextCase, reelFontSize, tagColor, tagPositionY, showSafeZone, reelTextAnimation, showStrongSceneWarning, logoScale, handleFontSize, shadeOpacity, showOverlayLayer, showLogoLayer, showTitleLayer, showHandleLayer, showStorySticker, logoColorStyle, recording, videoFramingMode, imagePosition, miniIaTrimSeconds, miniIaLevel, miniIaMirror, videoFilter, autoHookEnabled, effectiveHookText, videoCrop, hookPositionY, splitImg1Url, splitImg2Url, splitDividerColor, splitDividerWidth, splitVideoSide, splitTopCardEnabled, splitKickerText]);
+  }, [format, videoUrl, title, handle, logoData, selectedPost?.title, reelTextStyle, reelFontFamily, reelFontWeight, reelTextAlign, reelTextCase, reelFontSize, tagColor, tagPositionY, showSafeZone, reelTextAnimation, showStrongSceneWarning, logoScale, handleFontSize, shadeOpacity, showOverlayLayer, showLogoLayer, showTitleLayer, showHandleLayer, showStorySticker, logoColorStyle, recording, videoFramingMode, imagePosition, miniIaTrimSeconds, miniIaLevel, miniIaMirror, videoFilter, autoHookEnabled, effectiveHookText, videoCrop, hookPositionY, splitImg1Url, splitImg2Url, splitDividerColor, splitDividerWidth, splitVideoSide, splitTopCardEnabled, splitKickerText, customSaturation, customContrast, customBrightness, customSharpness]);
 
   async function loadArticle() {
     const slug = slugFromInput(articleUrl);
@@ -6143,6 +6233,11 @@ async function fixWebmDuration(blob: Blob, durationSec: number): Promise<Blob> {
               zoomMax: miniIaCfg.zoomMax,
               zoomPeriod: miniIaCfg.zoomPeriod,
               filterPreset: videoFilter,
+              customSaturation: customSaturationRef.current ?? customSaturation,
+              customContrast: customContrastRef.current ?? customContrast,
+              customBrightness: customBrightnessRef.current ?? customBrightness,
+              customSharpness: customSharpnessRef.current ?? customSharpness,
+              videoBlockPosY: videoBlockPosYRef.current ?? videoBlockPosY,
             },
             videoCrop,
             currentSplitConfig
@@ -8247,6 +8342,10 @@ async function fixWebmDuration(blob: Blob, durationSec: number): Promise<Blob> {
                         setCustomContrast(1.0);
                         setCustomBrightness(1.0);
                         setCustomSharpness(0);
+                        customSaturationRef.current = 1.0;
+                        customContrastRef.current = 1.0;
+                        customBrightnessRef.current = 1.0;
+                        customSharpnessRef.current = 0;
                         try {
                           localStorage.setItem("viralizou_custom_saturation", "1.0");
                           localStorage.setItem("viralizou_custom_contrast", "1.0");
@@ -8286,8 +8385,10 @@ async function fixWebmDuration(blob: Blob, durationSec: number): Promise<Blob> {
                         onChange={(e) => {
                           const val = Number(e.target.value);
                           setCustomSaturation(val);
+                          customSaturationRef.current = val;
                           try { localStorage.setItem("viralizou_custom_saturation", String(val)); } catch {}
                           cachedOverlayCanvasRef.current = null;
+                          renderCard();
                         }}
                         style={{ width: "100%", accentColor: "#38bdf8" }}
                       />
@@ -8308,8 +8409,10 @@ async function fixWebmDuration(blob: Blob, durationSec: number): Promise<Blob> {
                         onChange={(e) => {
                           const val = Number(e.target.value);
                           setCustomContrast(val);
+                          customContrastRef.current = val;
                           try { localStorage.setItem("viralizou_custom_contrast", String(val)); } catch {}
                           cachedOverlayCanvasRef.current = null;
+                          renderCard();
                         }}
                         style={{ width: "100%", accentColor: "#38bdf8" }}
                       />
@@ -8330,8 +8433,10 @@ async function fixWebmDuration(blob: Blob, durationSec: number): Promise<Blob> {
                         onChange={(e) => {
                           const val = Number(e.target.value);
                           setCustomBrightness(val);
+                          customBrightnessRef.current = val;
                           try { localStorage.setItem("viralizou_custom_brightness", String(val)); } catch {}
                           cachedOverlayCanvasRef.current = null;
+                          renderCard();
                         }}
                         style={{ width: "100%", accentColor: "#38bdf8" }}
                       />
@@ -8352,8 +8457,10 @@ async function fixWebmDuration(blob: Blob, durationSec: number): Promise<Blob> {
                         onChange={(e) => {
                           const val = Number(e.target.value);
                           setCustomSharpness(val);
+                          customSharpnessRef.current = val;
                           try { localStorage.setItem("viralizou_custom_sharpness", String(val)); } catch {}
                           cachedOverlayCanvasRef.current = null;
+                          renderCard();
                         }}
                         style={{ width: "100%", accentColor: "#38bdf8" }}
                       />

@@ -119,10 +119,18 @@ export function buildMiniIaFilterGraph(options: BuildFilterGraphOptions): {
   const speedFilter = `setpts=PTS/${speed}`;
 
   // 2. Look e color grading da Mini IA (com personalização de saturação, contraste, brilho e nitidez)
-  const effContrast = typeof customContrast === "number" ? customContrast : cfg.contrast;
-  const effBrightness = typeof customBrightness === "number" ? customBrightness : cfg.brightness;
-  const effSaturation = typeof customSaturation === "number" ? customSaturation : cfg.saturation;
-  const effSharpness = typeof customSharpness === "number" ? customSharpness : cfg.sharpness;
+  const conMult = typeof customContrast === "number" ? (customContrast > 3 ? customContrast / 100 : customContrast) : 1.0;
+  const effContrast = Math.max(0.2, (cfg.contrast || 1.0) * conMult);
+
+  const satMult = typeof customSaturation === "number" ? (customSaturation > 3 ? customSaturation / 100 : customSaturation) : 1.0;
+  const effSaturation = Math.max(0, (cfg.saturation || 1.0) * satMult);
+
+  const rawBri = typeof customBrightness === "number" ? customBrightness : 1.0;
+  const briOffset = (rawBri > 3 ? rawBri / 100 : rawBri) - 1.0;
+  const effBrightness = Math.max(-0.8, Math.min(0.8, (cfg.brightness || 0.0) + briOffset));
+
+  const rawSharp = typeof customSharpness === "number" ? customSharpness : cfg.sharpness;
+  const effSharpness = rawSharp > 3 ? (rawSharp / 100) * 1.5 : rawSharp;
 
   const colorFilter = `eq=contrast=${effContrast.toFixed(2)}:brightness=${effBrightness.toFixed(2)}:saturation=${effSaturation.toFixed(2)}`;
   let postFxFilter = colorFilter;
