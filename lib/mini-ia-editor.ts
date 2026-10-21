@@ -81,6 +81,7 @@ export interface BuildFilterGraphOptions {
     width: number;
   };
   upscale?: boolean;
+  audioSyncLock?: boolean;
 }
 
 /**
@@ -110,7 +111,7 @@ export function buildMiniIaFilterGraph(options: BuildFilterGraphOptions): {
   } = options;
 
   const cfg = MINI_IA_LEVELS[editLevel] || MINI_IA_LEVELS.media;
-  const speed = cfg.speed;
+  const speed = options.audioSyncLock ? 1.0 : cfg.speed;
 
   // 1. Filtros de base no vídeo original (Crop personalizado, espelhamento e velocidade)
   const cropFilter = crop && crop.width > 0 && crop.height > 0
@@ -237,11 +238,15 @@ export function buildMiniIaFilterGraph(options: BuildFilterGraphOptions): {
     filterComplex += `[${baseLayerTag}][1:v]overlay=x=0:y=0:shortest=1[outv]`;
   }
 
-  // 4. Áudio com alteração de tempo (atempo) e normalização Loudnorm
+  // 4. Áudio com sincronismo amostra-a-amostra (aresample), alteração de tempo (atempo) e normalização Loudnorm
   let hasAudioFilter = false;
   if (hasAudio) {
     hasAudioFilter = true;
-    let audioFilters = `[0:a]atempo=${speed},loudnorm=I=${cfg.loudnessTarget}:TP=-1.5:LRA=11`;
+    let audioFilters = `[0:a]aresample=async=1:first_pts=0`;
+    if (speed !== 1.0) {
+      audioFilters += `,atempo=${speed}`;
+    }
+    audioFilters += `,loudnorm=I=${cfg.loudnessTarget}:TP=-1.5:LRA=11`;
     if (editLevel !== "leve") {
       audioFilters += `,alimiter=limit=0.95`;
     }

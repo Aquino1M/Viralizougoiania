@@ -611,6 +611,17 @@ function getCanvasColorFilter(miniIaConfig?: {
   return filterString;
 }
 
+let sharedBlurCanvas: HTMLCanvasElement | null = null;
+function getSharedBlurCanvas(): HTMLCanvasElement | null {
+  if (typeof document === "undefined") return null;
+  if (!sharedBlurCanvas) {
+    sharedBlurCanvas = document.createElement("canvas");
+    sharedBlurCanvas.width = 135;
+    sharedBlurCanvas.height = 240;
+  }
+  return sharedBlurCanvas;
+}
+
 function drawVideoWithFraming(
   ctx: CanvasRenderingContext2D,
   video: HTMLVideoElement,
@@ -673,11 +684,9 @@ function drawVideoWithFraming(
     const normY = typeof miniIaConfig?.videoBlockPosY === "number" ? miniIaConfig.videoBlockPosY : 0.44;
     const blockY = Math.max(0, Math.min(h - blockH, Math.round(normY * h - blockH / 2)));
 
-    // Fundo desfocado agradável atrás do bloco
-    if (typeof document !== "undefined") {
-      const blurCanvas = document.createElement("canvas");
-      blurCanvas.width = 135;
-      blurCanvas.height = 240;
+    // Fundo desfocado de alta performance (reutiliza canvas estático para zero alocação de memória / sem travamento GC)
+    const blurCanvas = getSharedBlurCanvas();
+    if (blurCanvas) {
       const bCtx = blurCanvas.getContext("2d");
       if (bCtx) {
         bCtx.filter = "blur(7px) brightness(0.32)";
@@ -824,11 +833,9 @@ function drawVideoWithFraming(
       ctx.fillRect(0, mediaY - Math.floor(divW / 2), w, Math.max(2, Math.min(divW, 4)));
     }
   } else if (framingMode === "blur-fit") {
-    // Desfoque em canvas reduzido (135x240): executa em < 0.5ms em vez de travar a CPU por 300ms a 1080x1920
-    if (typeof document !== "undefined") {
-      const blurCanvas = document.createElement("canvas");
-      blurCanvas.width = 135;
-      blurCanvas.height = 240;
+    // Desfoque em canvas reduzido (135x240): executa em < 0.5ms sem alocação contínua de memória
+    const blurCanvas = getSharedBlurCanvas();
+    if (blurCanvas) {
       const bCtx = blurCanvas.getContext("2d");
       if (bCtx) {
         bCtx.filter = "blur(6px) brightness(0.42)";
@@ -3397,6 +3404,17 @@ export default function SocialFeedCreator({ posts, onBack, initialPost, onOpenCo
   useEffect(() => {
     upscaleEnabledRef.current = upscaleEnabled;
   }, [upscaleEnabled]);
+  const [audioSyncLock, setAudioSyncLock] = useState<boolean>(() => {
+    try {
+      const saved = localStorage.getItem("viralizou_audio_sync_lock");
+      if (saved !== null) return saved === "true";
+    } catch {}
+    return false;
+  });
+  const audioSyncLockRef = useRef<boolean>(audioSyncLock);
+  useEffect(() => {
+    audioSyncLockRef.current = audioSyncLock;
+  }, [audioSyncLock]);
   const [bgmTrack, setBgmTrack] = useState<BgmTrackPreset>("energetic");
   const [autoHookEnabled, setAutoHookEnabled] = useState<boolean>(false);
   const autoHookEnabledRef = useRef<boolean>(false);
@@ -4962,7 +4980,7 @@ export default function SocialFeedCreator({ posts, onBack, initialPost, onOpenCo
       video.removeEventListener("timeupdate", handleTimeCheck);
       cancelAnimationFrame(frameId);
     };
-  }, [format, videoUrl, title, handle, logoData, selectedPost?.title, reelTextStyle, reelFontFamily, reelFontWeight, reelTextAlign, reelTextCase, reelFontSize, tagColor, tagPositionY, showSafeZone, reelTextAnimation, showStrongSceneWarning, logoScale, handleFontSize, shadeOpacity, showOverlayLayer, showLogoLayer, showTitleLayer, showHandleLayer, showStorySticker, logoColorStyle, recording, videoFramingMode, imagePosition, miniIaTrimSeconds, miniIaLevel, miniIaMirror, videoFilter, autoHookEnabled, effectiveHookText, videoCrop, hookPositionY, splitImg1Url, splitImg2Url, splitDividerColor, splitDividerWidth, splitVideoSide, splitTopCardEnabled, splitKickerText, customSaturation, customContrast, customBrightness, customSharpness, upscaleEnabled]);
+  }, [format, videoUrl, title, handle, logoData, selectedPost?.title, reelTextStyle, reelFontFamily, reelFontWeight, reelTextAlign, reelTextCase, reelFontSize, tagColor, tagPositionY, showSafeZone, reelTextAnimation, showStrongSceneWarning, logoScale, handleFontSize, shadeOpacity, showOverlayLayer, showLogoLayer, showTitleLayer, showHandleLayer, showStorySticker, logoColorStyle, recording, videoFramingMode, imagePosition, miniIaTrimSeconds, miniIaLevel, miniIaMirror, videoFilter, autoHookEnabled, effectiveHookText, videoCrop, hookPositionY, splitImg1Url, splitImg2Url, splitDividerColor, splitDividerWidth, splitVideoSide, splitTopCardEnabled, splitKickerText, customSaturation, customContrast, customBrightness, customSharpness, upscaleEnabled, audioSyncLock]);
 
   async function loadArticle() {
     const slug = slugFromInput(articleUrl);
@@ -6010,6 +6028,7 @@ async function fixWebmDuration(blob: Blob, durationSec: number): Promise<Blob> {
         formData.append("sfxPreset", selectedSfxPreset);
         formData.append("sfxVolume", String(sfxVolume));
         formData.append("upscale", String(upscaleEnabled));
+        formData.append("audioSyncLock", String(audioSyncLock));
 
         if (videoCrop) {
           formData.append("cropX", String(Math.round(videoCrop.x)));
@@ -6152,8 +6171,8 @@ async function fixWebmDuration(blob: Blob, durationSec: number): Promise<Blob> {
     let canvasStream: MediaStream | null = null;
     let audioDestination: MediaStreamAudioDestinationNode | null = null;
     let audioSource: MediaElementAudioSourceNode | null = null;
-    let sfxAudioSourceNode: AudioBufferSourceNode | null = null;
-    let bgmAudioSourceNode: AudioBufferSourceNode | null = null;
+    let sfxAudioSourceNode: any = null;
+    let bgmAudioSourceNode: any = null;
     let progressTimer = 0;
     let safetyTimeout = 0;
     let vfcId: number | null = null;
@@ -6168,23 +6187,32 @@ async function fixWebmDuration(blob: Blob, durationSec: number): Promise<Blob> {
 
       // 2. Garante posicionamento no início exato considerando o corte inicial
       const startT = Math.min(miniIaTrimSeconds, Math.max(0, video.duration - 1));
-      if (Math.abs(video.currentTime - startT) > 0.05) {
-        await new Promise<void>((resolve, reject) => {
-          const timeout = window.setTimeout(() => reject(new Error("Não consegui reiniciar o vídeo para gravar.")), 8000);
+      if (Math.abs(video.currentTime - startT) > 0.005) {
+        await new Promise<void>((resolve) => {
+          const timeout = window.setTimeout(() => resolve(), 4000);
           video.addEventListener("seeked", () => { window.clearTimeout(timeout); resolve(); }, { once: true });
           video.currentTime = startT;
+        });
+      }
+      if (video.readyState < 2) {
+        await new Promise<void>((resolve) => {
+          const timeout = window.setTimeout(() => resolve(), 3000);
+          video.addEventListener("loadeddata", () => { window.clearTimeout(timeout); resolve(); }, { once: true });
         });
       }
 
       // 3. Pipeline único e exclusivo de Áudio via Web Audio API (Multi-Track: Vídeo + SFX + BGM)
       const AudioContextClass = window.AudioContext || (window as any).webkitAudioContext;
       let audioTrack: MediaStreamTrack | null = null;
+      let audioCtx: AudioContext | null = null;
+      let sfxBufferReady: AudioBuffer | null = null;
+      let bgmBufferReady: AudioBuffer | null = null;
 
       if (AudioContextClass) {
         if (!audioContextRef.current) {
           audioContextRef.current = new AudioContextClass();
         }
-        const audioCtx = audioContextRef.current;
+        audioCtx = audioContextRef.current;
         if (audioCtx.state === "suspended") {
           await audioCtx.resume();
         }
@@ -6222,16 +6250,8 @@ async function fixWebmDuration(blob: Blob, durationSec: number): Promise<Blob> {
           try {
             const sfxBuf = await loadAudioBuffer(audioCtx, sfxUrl);
             if (sfxBuf) {
-              const sfxNode = audioCtx.createBufferSource();
-              sfxNode.buffer = sfxBuf;
-              const sfxGain = audioCtx.createGain();
-              sfxGain.gain.value = Math.max(0.1, Math.min(1.0, (sfxVolume || 70) / 100));
-              sfxNode.connect(sfxGain);
-              sfxGain.connect(audioDestination);
-              // Dispara o SFX no início para gerar impacto imediato de gancho
-              sfxNode.start(audioCtx.currentTime + 0.15);
-              sfxAudioSourceNode = sfxNode;
-              addLog(`⚡ Efeito Sonoro Real Oficial (${sfxName} · ${sfxVolume}%) mixado com sucesso no áudio master!`);
+              sfxBufferReady = sfxBuf;
+              addLog(`⚡ Efeito Sonoro Real Oficial (${sfxName} · ${sfxVolume}%) pronto para mixagem sincronizada!`);
             }
           } catch (sfxErr: any) {
             console.warn("[SFX Real Oficial]", sfxErr?.message);
@@ -6245,16 +6265,8 @@ async function fixWebmDuration(blob: Blob, durationSec: number): Promise<Blob> {
           try {
             const bgmBuf = await loadAudioBuffer(audioCtx, trackUrl);
             if (bgmBuf) {
-              const bgmNode = audioCtx.createBufferSource();
-              bgmNode.buffer = bgmBuf;
-              bgmNode.loop = true;
-              const bgmGain = audioCtx.createGain();
-              bgmGain.gain.value = Math.max(0.02, Math.min(0.5, (bgmVolume || 15) / 100));
-              bgmNode.connect(bgmGain);
-              bgmGain.connect(audioDestination);
-              bgmNode.start(audioCtx.currentTime);
-              bgmAudioSourceNode = bgmNode;
-              addLog(`🎵 Trilha Sonora Real Oficial (${bgmTrack.toUpperCase()} · ${bgmVolume}%) mixada em segundo plano!`);
+              bgmBufferReady = bgmBuf;
+              addLog(`🎵 Trilha Sonora Real Oficial (${bgmTrack.toUpperCase()} · ${bgmVolume}%) pronta para mixagem sincronizada!`);
             }
           } catch (bgmErr: any) {
             console.warn("[BGM Real Oficial]", bgmErr?.message);
@@ -6271,11 +6283,16 @@ async function fixWebmDuration(blob: Blob, durationSec: number): Promise<Blob> {
       video.muted = false;
       video.volume = 1;
       const miniIaCfg = MINI_IA_LEVELS[miniIaLevel] || MINI_IA_LEVELS.media;
-      const speedMultiplier = miniIaCfg.speed || 1;
+      const isLockedSync = audioSyncLockRef.current;
+      const speedMultiplier = isLockedSync ? 1.0 : (miniIaCfg.speed || 1);
       video.playbackRate = speedMultiplier;
 
       addLog(`🤖 Mini IA Ativada: Nível ${miniIaLevel.toUpperCase()} (${miniIaCfg.name}) · Escudo Anti-Diretrizes Ativo`);
-      addLog(`⚡ Aceleração de Ritmo: ${speedMultiplier}x (+${((speedMultiplier - 1) * 100).toFixed(1)}%) com áudio sincronizado`);
+      if (isLockedSync) {
+        addLog(`🔒 Sincronismo Labial Absoluto: Velocidade travada em 1.00x natural (zero time-stretch / zero atraso de som)`);
+      } else {
+        addLog(`⚡ Aceleração de Ritmo: ${speedMultiplier}x (+${((speedMultiplier - 1) * 100).toFixed(1)}%) com áudio sincronizado`);
+      }
       addLog(`🎨 Grade de Cores: Contraste ${(miniIaCfg.contrast * 100).toFixed(0)}%, Saturação ${(miniIaCfg.saturation * 100).toFixed(0)}%, Brilho +${(miniIaCfg.brightness * 100).toFixed(1)}%`);
       if (miniIaCfg.punchZoom) {
         addLog(`🔍 Punch Zoom Dinâmico: pulsos a cada ${miniIaCfg.zoomPeriod}s (+${(miniIaCfg.zoomMax * 100).toFixed(0)}%) anti-pHash`);
@@ -6321,9 +6338,9 @@ async function fixWebmDuration(blob: Blob, durationSec: number): Promise<Blob> {
 
       let renderedFramesCount = 0;
       let lastFrameTime = 0;
-      const drawFrameSync = (time = performance.now()) => {
-        if (!isRecordingRef.current) return;
-        if (time - lastFrameTime < 30) return;
+      const drawFrameSync = (time = performance.now(), force = false) => {
+        if (!isRecordingRef.current && !force) return;
+        if (!force && time - lastFrameTime < 14) return;
         lastFrameTime = time;
         const ctx = canvas.getContext("2d");
         if (ctx && video.readyState >= 2 && video.videoWidth > 0 && video.videoHeight > 0) {
@@ -6386,7 +6403,7 @@ async function fixWebmDuration(blob: Blob, durationSec: number): Promise<Blob> {
 
       const syncWithVideoDecoder = (now: DOMHighResTimeStamp) => {
         if (!isRecordingRef.current) return;
-        drawFrameSync(now);
+        drawFrameSync(now, true);
         if ("requestVideoFrameCallback" in video) {
           vfcId = (video as any).requestVideoFrameCallback(syncWithVideoDecoder);
         }
@@ -6396,7 +6413,7 @@ async function fixWebmDuration(blob: Blob, durationSec: number): Promise<Blob> {
         vfcId = (video as any).requestVideoFrameCallback(syncWithVideoDecoder);
         addLog("⚡ Sincronismo nativo GPU (requestVideoFrameCallback) ativado!");
       } else {
-        loopIntervalId = window.setInterval(() => drawFrameSync(), 1000 / 30);
+        loopIntervalId = window.setInterval(() => drawFrameSync(performance.now(), false), 1000 / 30);
         addLog("🖥️ Sincronismo direto por temporizador a 30 FPS ativado.");
       }
       addLog("🛡️ Motor GPU + Canvas ativo: cadência cravada em 30 FPS estáveis.");
@@ -6466,23 +6483,73 @@ async function fixWebmDuration(blob: Blob, durationSec: number): Promise<Blob> {
         // Encerramento exato no evento 'ended' do vídeo
         video.addEventListener("ended", stopRecordingGracefully, { once: true });
 
-        // Timer de segurança
-        safetyTimeout = window.setTimeout(stopRecordingGracefully, (duration + 1.2) * 1000);
+        // Timer de segurança ajustado à velocidade efetiva de reprodução
+        const effectiveDuration = duration / (speedMultiplier || 1);
+        safetyTimeout = window.setTimeout(stopRecordingGracefully, (effectiveDuration + 2.5) * 1000);
 
-        activeRecorder.start(250);
-        drawFrameSync();
+        // 1. Desenha o frame 0 no canvas imediatamente para garantir imagem pronta
+        drawFrameSync(performance.now(), true);
 
-        video.play().catch(reject);
+        // 2. Trava de Sincronismo Perfeito:
+        // Aguardamos o vídeo de fato começar a rodar (evento 'playing') antes de dar activeRecorder.start().
+        // Isso elimina atrasos de decodificação inicial e impede silêncio inicial descompassado!
+        let recordingSessionStarted = false;
+        const beginRecordingSession = () => {
+          if (recordingSessionStarted || activeRecorder.state !== "inactive") return;
+          recordingSessionStarted = true;
+
+          // Inicia gravação contínua sem timeslice curto (elimina bug de chunk timestamp do Chromium)
+          activeRecorder.start();
+
+          // Dispara SFX e BGM rigorosamente sincronizados com o primeiro frame de áudio
+          if (sfxBufferReady && audioCtx && audioDestination) {
+            try {
+              const sfxNode = audioCtx.createBufferSource();
+              sfxNode.buffer = sfxBufferReady;
+              const sfxGain = audioCtx.createGain();
+              sfxGain.gain.value = Math.max(0.1, Math.min(1.0, (sfxVolume || 70) / 100));
+              sfxNode.connect(sfxGain);
+              sfxGain.connect(audioDestination);
+              sfxNode.start(audioCtx.currentTime + 0.15);
+              sfxAudioSourceNode = sfxNode;
+              addLog(`⚡ Efeito Sonoro Real Oficial mixado com precisão de milissegundo no áudio master!`);
+            } catch (err: any) {
+              console.warn("[SFX start err]", err);
+            }
+          }
+
+          if (bgmBufferReady && audioCtx && audioDestination) {
+            try {
+              const bgmNode = audioCtx.createBufferSource();
+              bgmNode.buffer = bgmBufferReady;
+              bgmNode.loop = true;
+              const bgmGain = audioCtx.createGain();
+              bgmGain.gain.value = Math.max(0.02, Math.min(0.5, (bgmVolume || 15) / 100));
+              bgmNode.connect(bgmGain);
+              bgmGain.connect(audioDestination);
+              bgmNode.start(audioCtx.currentTime);
+              bgmAudioSourceNode = bgmNode;
+              addLog(`🎵 Trilha Sonora Real Oficial mixada com sincronismo perfeito em segundo plano!`);
+            } catch (err: any) {
+              console.warn("[BGM start err]", err);
+            }
+          }
+        };
+
+        video.addEventListener("playing", beginRecordingSession, { once: true });
+        video.play().then(() => {
+          beginRecordingSession();
+        }).catch(reject);
 
         progressTimer = window.setInterval(() => {
           if (duration > startT) {
             const currentProgress = Math.min(100, Math.max(0, Math.floor(((video.currentTime - startT) / Math.max(0.1, duration - startT)) * 100)));
             setRecordingProgress(currentProgress);
-            if (video.currentTime >= duration && activeRecorder.state !== "inactive") {
+            if ((video.currentTime >= duration - 0.05 || video.ended) && activeRecorder.state !== "inactive") {
               stopRecordingGracefully();
             }
           }
-        }, 150);
+        }, 100);
       });
 
       let finalBlob = blob;
@@ -6553,10 +6620,10 @@ async function fixWebmDuration(blob: Blob, durationSec: number): Promise<Blob> {
       }
 
       if (sfxAudioSourceNode) {
-        try { sfxAudioSourceNode.stop(); } catch {}
+        try { (sfxAudioSourceNode as any).stop(); } catch {}
       }
       if (bgmAudioSourceNode) {
-        try { bgmAudioSourceNode.stop(); } catch {}
+        try { (bgmAudioSourceNode as any).stop(); } catch {}
       }
 
       if (recorder && recorder.state !== "inactive") {
@@ -8640,6 +8707,53 @@ async function fixWebmDuration(blob: Blob, durationSec: number): Promise<Blob> {
                         {upscaleEnabled ? "✓ Ativo (HD Master)" : "Desativado"}
                       </button>
                     </div>
+
+                    {/* Trava de Sincronismo Labial Perfeito (1.00x) */}
+                    <div
+                      style={{
+                        marginTop: 10,
+                        paddingTop: 10,
+                        borderTop: "1px dashed rgba(255,255,255,0.12)",
+                        display: "flex",
+                        alignItems: "center",
+                        justifyContent: "space-between",
+                        gridColumn: "1 / -1",
+                      }}
+                    >
+                      <div>
+                        <span style={{ fontSize: 11, fontWeight: 700, color: "#38bdf8", display: "flex", alignItems: "center", gap: 5 }}>
+                          <span>🔒</span> Trava de Sincronismo Labial (1.00x Natural)
+                        </span>
+                        <p style={{ margin: "2px 0 0", fontSize: 10, color: "#94a3b8" }}>
+                          Mantém a velocidade exata original do áudio em 1.00x sem acelerar a voz, garantindo 100% de sincronia labial.
+                        </p>
+                      </div>
+                      <button
+                        type="button"
+                        onClick={() => {
+                          const next = !audioSyncLock;
+                          setAudioSyncLock(next);
+                          audioSyncLockRef.current = next;
+                          try { localStorage.setItem("viralizou_audio_sync_lock", String(next)); } catch {}
+                          cachedOverlayCanvasRef.current = null;
+                          renderCard();
+                        }}
+                        style={{
+                          padding: "5px 12px",
+                          borderRadius: 6,
+                          fontSize: 11,
+                          fontWeight: 800,
+                          cursor: "pointer",
+                          border: audioSyncLock ? "1.5px solid #38bdf8" : "1px solid rgba(255,255,255,0.15)",
+                          background: audioSyncLock ? "linear-gradient(135deg, #0284c7, #0369a1)" : "rgba(30, 41, 59, 0.6)",
+                          color: audioSyncLock ? "#ffffff" : "#94a3b8",
+                          boxShadow: audioSyncLock ? "0 0 12px rgba(56, 189, 248, 0.3)" : "none",
+                          transition: "all 0.15s ease",
+                        }}
+                      >
+                        {audioSyncLock ? "✓ 1.00x Travado" : "Velocidade IA"}
+                      </button>
+                    </div>
                   </div>
                 </div>
               </div>
@@ -8647,7 +8761,7 @@ async function fixWebmDuration(blob: Blob, durationSec: number): Promise<Blob> {
               <div className="miniIaDetailCard">
                 <div className="miniIaDetailHeader">
                   <span>Modo Ativo: <b style={{ textTransform: "uppercase" }}>{MINI_IA_LEVELS[miniIaLevel].name}</b></span>
-                  <span>Velocidade: <b>{MINI_IA_LEVELS[miniIaLevel].speed}x</b> · Áudio: <b>{MINI_IA_LEVELS[miniIaLevel].loudnessTarget} LUFS</b></span>
+                  <span>Velocidade: <b>{audioSyncLock ? "1.00x (Lip-Sync Travado)" : `${MINI_IA_LEVELS[miniIaLevel].speed}x`}</b> · Áudio: <b>{MINI_IA_LEVELS[miniIaLevel].loudnessTarget} LUFS</b></span>
                   <span>Corte Inicial: <b>{miniIaTrimSeconds}s {miniIaTrimSeconds === 3 ? "(Padrão ⭐)" : ""}</b></span>
                   <span>Filtro: <b>{VIDEO_FILTERS[videoFilter]?.name || "Original"}</b></span>
                 </div>

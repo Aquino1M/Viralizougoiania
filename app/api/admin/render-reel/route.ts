@@ -50,6 +50,7 @@ export async function POST(request: Request) {
     const sfxPreset = (formData.get("sfxPreset") as string | null) || "none";
     const sfxVolume = Number(formData.get("sfxVolume") || 70);
     const upscale = formData.get("upscale") !== "false";
+    const audioSyncLock = formData.get("audioSyncLock") === "true";
 
     if (!videoFile || !overlayFile) {
       return NextResponse.json({ error: "Vídeo ou imagem de sobreposição ausente." }, { status: 400 });
@@ -148,6 +149,7 @@ export async function POST(request: Request) {
       videoFilter,
       crop,
       upscale,
+      audioSyncLock,
     });
 
     // Configuração oficial de compatibilidade universal (H.264 / AAC / YUV420P / +faststart)
@@ -159,7 +161,7 @@ export async function POST(request: Request) {
 
     // Aplica corte inicial nos primeiros segundos para quebrar fingerprint/hash e remover vinhetas
     if (effectiveTrimStart > 0) {
-      ffmpegArgs.push("-ss", effectiveTrimStart.toFixed(2));
+      ffmpegArgs.push("-accurate_seek", "-ss", effectiveTrimStart.toFixed(2));
     }
 
     ffmpegArgs.push(
