@@ -55,6 +55,28 @@ function getCanvasDimensions(fmt: PublicationFormat) {
   }
 }
 
+async function assertReelDimensions(blob: Blob, format: PublicationFormat) {
+  if (format !== "reel") return;
+
+  const url = URL.createObjectURL(blob);
+  const video = document.createElement("video");
+  video.preload = "metadata";
+  try {
+    await new Promise<void>((resolve, reject) => {
+      video.onloadedmetadata = () => resolve();
+      video.onerror = () => reject(new Error("Não consegui validar as dimensões do Reel exportado."));
+      video.src = url;
+    });
+    if (video.videoWidth !== 1080 || video.videoHeight !== 1920) {
+      throw new Error(`Reel bloqueado: o arquivo saiu em ${video.videoWidth}×${video.videoHeight}; o formato obrigatório é 1080×1920 (9:16).`);
+    }
+  } finally {
+    video.removeAttribute("src");
+    video.load();
+    URL.revokeObjectURL(url);
+  }
+}
+
 export function getEffectiveTagY(fmt: PublicationFormat, pos: number): number {
   const { height } = getCanvasDimensions(fmt);
   if (pos > 0 && pos < height) {
@@ -6139,6 +6161,7 @@ async function fixWebmDuration(blob: Blob, durationSec: number): Promise<Blob> {
         if (!mp4Blob || mp4Blob.size < 1000 || !mp4Blob.type.toLowerCase().includes("video/mp4")) {
           throw new Error("O arquivo retornado pelo servidor é inválido ou vazio.");
         }
+        await assertReelDimensions(mp4Blob, format);
 
         addLog(`🎉 Sucesso total! MP4 final gerado via FFmpeg (${(mp4Blob.size / 1024 / 1024).toFixed(2)} MB).`);
         setVideoExport({
@@ -6650,6 +6673,7 @@ async function fixWebmDuration(blob: Blob, durationSec: number): Promise<Blob> {
       const actualIsMp4 = finalBlob.type.toLowerCase().includes("mp4");
       const exportType = actualIsMp4 ? "video/mp4" : (finalBlob.type || "video/webm");
       const exportExt = actualIsMp4 ? "mp4" : "webm";
+      await assertReelDimensions(finalBlob, format);
 
       setVideoExport({
         url: URL.createObjectURL(finalBlob),
