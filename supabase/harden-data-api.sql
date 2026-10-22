@@ -27,6 +27,14 @@ drop policy if exists "Permitir escrita de admins" on public.admins;
 revoke all on public.admins from anon, authenticated;
 update public.admins set active = false where password = 'admin123';
 
+create table if not exists public.football_data (
+  id text primary key default 'brasileirao',
+  standings jsonb not null default '[]'::jsonb,
+  fixtures jsonb not null default '[]'::jsonb,
+  current_round integer not null default 1,
+  updated_at timestamptz not null default now()
+);
+
 alter table public.football_data enable row level security;
 drop policy if exists "Permitir leitura publica de futebol" on public.football_data;
 create policy "Permitir leitura publica de futebol" on public.football_data for select using (true);
