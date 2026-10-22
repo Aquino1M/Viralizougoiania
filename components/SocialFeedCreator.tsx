@@ -3195,7 +3195,7 @@ export default function SocialFeedCreator({ posts, onBack, initialPost, onOpenCo
   const audioSourceRef = useRef<MediaElementAudioSourceNode | null>(null);
   const isRecordingRef = useRef<boolean>(false);
 
-  const [format, setFormat] = useState<PublicationFormat>("feed");
+  const [format, setFormat] = useState<PublicationFormat>("reel");
   const [importVideoUrl, setImportVideoUrl] = useState("");
   const [importingVideo, setImportingVideo] = useState(false);
   const [videoUrl, setVideoUrl] = useState("");
