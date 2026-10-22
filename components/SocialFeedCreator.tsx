@@ -5018,7 +5018,7 @@ export default function SocialFeedCreator({ posts, onBack, initialPost, onOpenCo
 
     const handleTimeCheck = () => {
       if (!Number.isFinite(video.duration) || video.duration <= 0) return;
-      const previewStart = Math.min(Math.max(clipStartSeconds, miniIaTrimSeconds), Math.max(0, video.duration - 1));
+      const previewStart = Math.min(clipStartSeconds, Math.max(0, video.duration - 1));
       const previewEnd = Math.min(clipEndSeconds || video.duration, video.duration);
       if (video.currentTime < previewStart || video.currentTime >= previewEnd - 0.1) {
         video.currentTime = previewStart;
@@ -7145,13 +7145,13 @@ async function fixWebmDuration(blob: Blob, durationSec: number): Promise<Blob> {
                   </div>
                   <input ref={videoInputRef} type="file" accept="video/*" onChange={onVideoChange} />
                   {videoReady && videoDuration > 0 && (
-                    <div style={{ marginTop: 10, padding: "10px 12px", borderRadius: 8, border: "1px solid #c7d2fe", background: "#eef2ff" }}>
-                      <div style={{ display: "flex", justifyContent: "space-between", gap: 10, flexWrap: "wrap", color: "#312e81", fontSize: 12, fontWeight: 800 }}>
-                        <span>⏱️ Escolher trecho do vídeo</span>
-                        <span>{formatClipTime(clipStartSeconds)} – {formatClipTime(Math.min(clipEndSeconds, clipStartSeconds + 179.5))} · {Math.max(1, Math.min(179.5, clipEndSeconds - clipStartSeconds)).toFixed(0)}s</span>
+                    <div style={{ marginTop: 10, padding: "10px 12px", borderRadius: 8, border: "1px solid #c3c9f8", background: "#f1f2ff" }}>
+                      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: 8, flexWrap: "wrap", color: "#252461", fontSize: 12, fontWeight: 800 }}>
+                        <span>⏱️ Escolha trecho do vídeo</span>
+                        <span style={{ fontVariantNumeric: "tabular-nums" }}>{formatClipTime(clipStartSeconds)} – {formatClipTime(Math.min(clipEndSeconds, clipStartSeconds + 179.5))} · {Math.max(1, Math.min(179.5, clipEndSeconds - clipStartSeconds)).toFixed(0)}s</span>
                       </div>
-                      <label style={{ display: "block", marginTop: 8, color: "#475569", fontSize: 11 }}>
-                        Início · {formatClipTime(clipStartSeconds)}
+                      <label style={{ display: "block", marginTop: 8, color: "#3f4265", fontSize: 10, fontWeight: 800, letterSpacing: "0.35px" }}>
+                        INÍCIO - {formatClipTime(clipStartSeconds)}
                         <input
                           aria-label="Início do trecho do vídeo"
                           type="range"
@@ -7166,11 +7166,11 @@ async function fixWebmDuration(blob: Blob, durationSec: number): Promise<Blob> {
                             setClipEndSeconds(Math.min(videoDuration, nextStart + selectedLength));
                             if (videoPreviewRef.current) videoPreviewRef.current.currentTime = nextStart;
                           }}
-                          style={{ display: "block", width: "100%", accentColor: "#4f46e5" }}
+                          style={{ display: "block", width: "100%", marginTop: 7, accentColor: "#5746e8", cursor: "ew-resize" }}
                         />
                       </label>
-                      <label style={{ display: "block", marginTop: 5, color: "#475569", fontSize: 11 }}>
-                        Fim · {formatClipTime(Math.min(clipEndSeconds, clipStartSeconds + 179.5))}
+                      <label style={{ display: "block", marginTop: 8, color: "#3f4265", fontSize: 10, fontWeight: 800, letterSpacing: "0.35px" }}>
+                        FIM - {formatClipTime(Math.min(clipEndSeconds, clipStartSeconds + 179.5))}
                         <input
                           aria-label="Fim do trecho do vídeo"
                           type="range"
@@ -7178,11 +7178,15 @@ async function fixWebmDuration(blob: Blob, durationSec: number): Promise<Blob> {
                           max={Math.max(Math.min(videoDuration, clipStartSeconds + 1), Math.min(videoDuration, clipStartSeconds + 179.5))}
                           step={0.25}
                           value={Math.min(clipEndSeconds, clipStartSeconds + 179.5)}
-                          onChange={(e) => setClipEndSeconds(Math.max(clipStartSeconds + 1, Math.min(Number(e.target.value), clipStartSeconds + 179.5, videoDuration)))}
-                          style={{ display: "block", width: "100%", accentColor: "#4f46e5" }}
+                          onChange={(e) => {
+                            const nextEnd = Math.max(clipStartSeconds + 1, Math.min(Number(e.target.value), clipStartSeconds + 179.5, videoDuration));
+                            setClipEndSeconds(nextEnd);
+                            if (videoPreviewRef.current) videoPreviewRef.current.currentTime = Math.max(clipStartSeconds + 0.1, nextEnd - 0.5);
+                          }}
+                          style={{ display: "block", width: "100%", marginTop: 7, accentColor: "#5746e8", cursor: "ew-resize" }}
                         />
                       </label>
-                      <small style={{ display: "block", marginTop: 6, color: "#475569", fontSize: 10.5 }}>
+                      <small style={{ display: "block", marginTop: 7, color: "#53556f", fontSize: 10.5 }}>
                         🗜️ Compressor automático ligado ao gerar: ajusta a qualidade para mirar até 70 MiB e não libera arquivo acima de 95 MiB.
                       </small>
                     </div>
