@@ -6248,7 +6248,7 @@ async function fixWebmDuration(blob: Blob, durationSec: number): Promise<Blob> {
     let loopIntervalId = 0;
 
     try {
-      const duration = Math.min(video.duration, 180);
+      const duration = Math.min(video.duration, 179.5);
 
       // 1. Pausa e desativa loop para evitar repetição de áudio no final
       video.pause();
@@ -6403,13 +6403,13 @@ async function fixWebmDuration(blob: Blob, durationSec: number): Promise<Blob> {
       const combinedStream = new MediaStream(combinedTracks);
 
       if (upscaleEnabledRef.current) {
-        addLog("💎 Upscale Super Resolução HD: Interpolação de alta precisão + Bitrate Master (7.5 Mbps) anti-pixelado ativo");
+        addLog("💎 Upscale Super Resolução HD: Interpolação de alta precisão + Bitrate compatível (4 Mbps)");
       }
 
       recorder = new MediaRecorder(combinedStream, {
         mimeType,
-        videoBitsPerSecond: upscaleEnabledRef.current ? 7_500_000 : 4_500_000,
-        audioBitsPerSecond: 192_000,
+        videoBitsPerSecond: upscaleEnabledRef.current ? 4_000_000 : 3_500_000,
+        audioBitsPerSecond: 128_000,
       });
       const activeRecorder = recorder;
 
