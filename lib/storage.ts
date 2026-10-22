@@ -58,7 +58,9 @@ function getSupabaseUrl() {
 }
 
 function getSupabaseKey() {
-  return (process.env.SUPABASE_SECRET_KEY || process.env.SUPABASE_SERVICE_ROLE_KEY || "").trim();
+  const secretKey = (process.env.SUPABASE_SECRET_KEY || "").trim();
+  if (secretKey.startsWith("sb_secret_")) return secretKey;
+  return (process.env.SUPABASE_SERVICE_ROLE_KEY || "").trim();
 }
 
 export function hasSupabaseConfig() {
