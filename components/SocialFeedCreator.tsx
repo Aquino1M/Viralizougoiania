@@ -5943,9 +5943,9 @@ async function fixWebmDuration(blob: Blob, durationSec: number): Promise<Blob> {
 
   // GRAVAÇÃO E EXPORTAÇÃO DEFINITIVA DO REEL COM ÁUDIO SINCRONIZADO
   async function createReel() {
-    const canvas = canvasRef.current;
+    const previewCanvas = canvasRef.current;
     const video = videoPreviewRef.current;
-    if (!videoUrl || !videoFileName || !videoReady || !canvas || !video) {
+    if (!videoUrl || !videoFileName || !videoReady || !previewCanvas || !video) {
       setMessage("Carregue um vídeo e aguarde a prévia ficar pronta.");
       return;
     }
@@ -5953,6 +5953,8 @@ async function fixWebmDuration(blob: Blob, durationSec: number): Promise<Blob> {
 
     // GARANTE PROPORÇÃO ADEQUADA AO FORMATO ESCOLHIDO (1080x1920 para Reels/Stories ou 1080x1350 para Feed 4:5)
     const exportH = getCanvasDimensions(format).height;
+    // Mantém a captura isolada do canvas do preview, que pode ser redesenhado pela interface.
+    const canvas = document.createElement("canvas");
     canvas.width = 1080;
     canvas.height = exportH;
 
@@ -6364,6 +6366,13 @@ async function fixWebmDuration(blob: Blob, durationSec: number): Promise<Blob> {
       // Captura a 30 FPS contínuos sincronizados diretamente com o relógio do hardware/navegador.
       // captureStream(30) elimina descompasso de timestamps com o áudio e previne engasgos/congelamentos.
       canvasStream = canvas.captureStream(30);
+      const capturedVideoSettings = canvasStream.getVideoTracks()[0]?.getSettings();
+      if (
+        capturedVideoSettings?.width && capturedVideoSettings?.height &&
+        (capturedVideoSettings.width !== 1080 || capturedVideoSettings.height !== exportH)
+      ) {
+        throw new Error(`A captura saiu em ${capturedVideoSettings.width}×${capturedVideoSettings.height}, mas o formato exige 1080×${exportH}. Tente exportar novamente.`);
+      }
       const combinedTracks: MediaStreamTrack[] = [...canvasStream.getVideoTracks()];
       if (audioTrack) {
         combinedTracks.push(audioTrack);
