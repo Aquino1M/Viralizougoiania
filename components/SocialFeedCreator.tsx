@@ -3223,6 +3223,8 @@ export default function SocialFeedCreator({ posts, onBack, initialPost, onOpenCo
   const [videoUrl, setVideoUrl] = useState("");
   const [videoFileName, setVideoFileName] = useState("");
   const [videoReady, setVideoReady] = useState(false);
+  const [clipStartSeconds, setClipStartSeconds] = useState(0);
+  const [clipEndSeconds, setClipEndSeconds] = useState(0);
   const [recording, setRecording] = useState(false);
   const [recordingProgress, setRecordingProgress] = useState(0);
   const [videoExport, setVideoExport] = useState<{ url: string; filename: string; type: string } | null>(null);
@@ -3894,6 +3896,14 @@ export default function SocialFeedCreator({ posts, onBack, initialPost, onOpenCo
       videoPreviewRef.current.currentTime = 0;
     }
     try { localStorage.setItem("viralizou_mini_ia_trim_seconds", String(val)); } catch {}
+  }
+
+  function formatClipTime(seconds: number) {
+    const safeSeconds = Math.max(0, Math.floor(seconds));
+    const hours = Math.floor(safeSeconds / 3600);
+    const minutes = Math.floor((safeSeconds % 3600) / 60);
+    const remainder = safeSeconds % 60;
+    return [hours, minutes, remainder].map((part) => String(part).padStart(2, "0")).join(":");
   }
 
   async function handleCorrectTitle() {
@@ -5007,18 +5017,15 @@ export default function SocialFeedCreator({ posts, onBack, initialPost, onOpenCo
     };
 
     const handleTimeCheck = () => {
-      if (miniIaTrimSeconds > 0 && Number.isFinite(video.duration) && video.duration > miniIaTrimSeconds + 1) {
-        if (video.currentTime < miniIaTrimSeconds) {
-          video.currentTime = miniIaTrimSeconds;
-        }
+      if (!Number.isFinite(video.duration) || video.duration <= 0) return;
+      const previewStart = Math.min(Math.max(clipStartSeconds, miniIaTrimSeconds), Math.max(0, video.duration - 1));
+      const previewEnd = Math.min(clipEndSeconds || video.duration, video.duration);
+      if (video.currentTime < previewStart || video.currentTime >= previewEnd - 0.1) {
+        video.currentTime = previewStart;
       }
     };
     video.addEventListener("timeupdate", handleTimeCheck);
-    if (miniIaTrimSeconds > 0 && Number.isFinite(video.duration) && video.duration > miniIaTrimSeconds + 1) {
-      if (video.currentTime < miniIaTrimSeconds) {
-        video.currentTime = miniIaTrimSeconds;
-      }
-    }
+    handleTimeCheck();
 
     video.loop = true;
     video.muted = true;
@@ -5028,7 +5035,7 @@ export default function SocialFeedCreator({ posts, onBack, initialPost, onOpenCo
       video.removeEventListener("timeupdate", handleTimeCheck);
       cancelAnimationFrame(frameId);
     };
-  }, [format, videoUrl, title, handle, logoData, selectedPost?.title, reelTextStyle, reelFontFamily, reelFontWeight, reelTextAlign, reelTextCase, reelFontSize, tagColor, tagPositionY, showSafeZone, reelTextAnimation, showStrongSceneWarning, logoScale, handleFontSize, shadeOpacity, showOverlayLayer, showLogoLayer, showTitleLayer, showHandleLayer, showStorySticker, logoColorStyle, recording, videoFramingMode, imagePosition, miniIaTrimSeconds, miniIaLevel, miniIaMirror, videoFilter, autoHookEnabled, effectiveHookText, videoCrop, hookPositionY, splitImg1Url, splitImg2Url, splitDividerColor, splitDividerWidth, splitVideoSide, splitTopCardEnabled, splitKickerText, customSaturation, customContrast, customBrightness, customSharpness, upscaleEnabled, audioSyncLock]);
+  }, [format, videoUrl, title, handle, logoData, selectedPost?.title, reelTextStyle, reelFontFamily, reelFontWeight, reelTextAlign, reelTextCase, reelFontSize, tagColor, tagPositionY, showSafeZone, reelTextAnimation, showStrongSceneWarning, logoScale, handleFontSize, shadeOpacity, showOverlayLayer, showLogoLayer, showTitleLayer, showHandleLayer, showStorySticker, logoColorStyle, recording, videoFramingMode, imagePosition, miniIaTrimSeconds, clipStartSeconds, clipEndSeconds, miniIaLevel, miniIaMirror, videoFilter, autoHookEnabled, effectiveHookText, videoCrop, hookPositionY, splitImg1Url, splitImg2Url, splitDividerColor, splitDividerWidth, splitVideoSide, splitTopCardEnabled, splitKickerText, customSaturation, customContrast, customBrightness, customSharpness, upscaleEnabled, audioSyncLock]);
 
   async function loadArticle() {
     const slug = slugFromInput(articleUrl);
@@ -5154,6 +5161,9 @@ export default function SocialFeedCreator({ posts, onBack, initialPost, onOpenCo
     setVideoUrl("");
     setVideoFileName("");
     setVideoReady(false);
+    setVideoDuration(0);
+    setClipStartSeconds(0);
+    setClipEndSeconds(0);
     setVideoExport(null);
     setVideoCrop(null);
     try { localStorage.removeItem("viralizou_video_crop"); } catch {}
@@ -5972,6 +5982,17 @@ async function fixWebmDuration(blob: Blob, durationSec: number): Promise<Blob> {
       return;
     }
     if (isRecordingRef.current) return;
+    if (!Number.isFinite(video.duration) || video.duration <= 0) {
+      setMessage("Não consegui identificar a duração desse vídeo.");
+      return;
+    }
+    const startT = Math.min(Math.max(clipStartSeconds, miniIaTrimSeconds), Math.max(0, video.duration - 1));
+    const duration = Math.min(video.duration, clipEndSeconds || video.duration, startT + 179.5);
+    if (duration <= startT) {
+      setMessage("Escolha um trecho do vídeo com pelo menos 1 segundo.");
+      return;
+    }
+    const clipDuration = duration - startT;
 
     // GARANTE PROPORÇÃO ADEQUADA AO FORMATO ESCOLHIDO (1080x1920 para Reels/Stories ou 1080x1350 para Feed 4:5)
     const exportH = getCanvasDimensions(format).height;
@@ -6083,7 +6104,8 @@ async function fixWebmDuration(blob: Blob, durationSec: number): Promise<Blob> {
         formData.append("vertical", String(imagePosition));
         formData.append("editLevel", miniIaLevel);
         formData.append("mirror", String(miniIaMirror));
-        formData.append("trimStart", String(miniIaTrimSeconds));
+        formData.append("trimStart", String(startT));
+        formData.append("trimDuration", String(clipDuration));
         formData.append("format", format);
         formData.append("videoFilter", videoFilter);
         formData.append("bgmTrack", bgmTrack);
@@ -6161,6 +6183,9 @@ async function fixWebmDuration(blob: Blob, durationSec: number): Promise<Blob> {
         if (!mp4Blob || mp4Blob.size < 1000 || !mp4Blob.type.toLowerCase().includes("video/mp4")) {
           throw new Error("O arquivo retornado pelo servidor é inválido ou vazio.");
         }
+        if (mp4Blob.size > 95 * 1024 * 1024) {
+          throw new Error("A exportação ultrapassou o limite seguro de 95 MiB. Reduza o trecho selecionado.");
+        }
         await assertReelDimensions(mp4Blob, format);
 
         addLog(`🎉 Sucesso total! MP4 final gerado via FFmpeg (${(mp4Blob.size / 1024 / 1024).toFixed(2)} MB).`);
@@ -6196,16 +6221,7 @@ async function fixWebmDuration(blob: Blob, durationSec: number): Promise<Blob> {
       setRecording(false);
       return;
     }
-    if (!Number.isFinite(video.duration) || video.duration <= 0) {
-      addLog("❌ Duração do vídeo inválida.");
-      setMessage("Não consegui identificar a duração desse vídeo.");
-      isRecordingRef.current = false;
-      setRecording(false);
-      return;
-    }
-
-    const duration = Math.min(video.duration, 180);
-    addLog(`⏱️ Duração do vídeo: ${duration.toFixed(1)} segundos.`);
+    addLog(`⏱️ Trecho selecionado: ${formatClipTime(startT)}–${formatClipTime(duration)} (${clipDuration.toFixed(1)} segundos).`);
 
     // Prioriza gravação direta em MP4 se suportado (Chrome 106+, Edge, Safari)
     const mp4MimeType = [
@@ -6248,14 +6264,17 @@ async function fixWebmDuration(blob: Blob, durationSec: number): Promise<Blob> {
     let loopIntervalId = 0;
 
     try {
-      const duration = Math.min(video.duration, 179.5);
+      const compressionTargetBytes = 70 * 1024 * 1024;
+      const targetVideoBitrate = Math.min(
+        upscaleEnabledRef.current ? 4_000_000 : 3_500_000,
+        Math.max(1_500_000, Math.floor((compressionTargetBytes * 8) / clipDuration - 128_000))
+      );
 
       // 1. Pausa e desativa loop para evitar repetição de áudio no final
       video.pause();
       video.loop = false;
 
       // 2. Garante posicionamento no início exato considerando o corte inicial
-      const startT = Math.min(miniIaTrimSeconds, Math.max(0, video.duration - 1));
       if (Math.abs(video.currentTime - startT) > 0.005) {
         await new Promise<void>((resolve) => {
           const timeout = window.setTimeout(() => resolve(), 4000);
@@ -6402,13 +6421,11 @@ async function fixWebmDuration(blob: Blob, durationSec: number): Promise<Blob> {
       }
       const combinedStream = new MediaStream(combinedTracks);
 
-      if (upscaleEnabledRef.current) {
-        addLog("💎 Upscale Super Resolução HD: Interpolação de alta precisão + Bitrate compatível (4 Mbps)");
-      }
+      addLog(`🗜️ Compressão automática ativada: ${(targetVideoBitrate / 1_000_000).toFixed(2)} Mbps, meta de até 70 MiB para o trecho selecionado.`);
 
       recorder = new MediaRecorder(combinedStream, {
         mimeType,
-        videoBitsPerSecond: upscaleEnabledRef.current ? 4_000_000 : 3_500_000,
+        videoBitsPerSecond: targetVideoBitrate,
         audioBitsPerSecond: 128_000,
       });
       const activeRecorder = recorder;
@@ -6561,7 +6578,7 @@ async function fixWebmDuration(blob: Blob, durationSec: number): Promise<Blob> {
         video.addEventListener("ended", stopRecordingGracefully, { once: true });
 
         // Timer de segurança ajustado à velocidade efetiva de reprodução
-        const effectiveDuration = duration / (speedMultiplier || 1);
+        const effectiveDuration = clipDuration / (speedMultiplier || 1);
         safetyTimeout = window.setTimeout(stopRecordingGracefully, (effectiveDuration + 2.5) * 1000);
 
         // 1. Desenha o frame 0 no canvas imediatamente para garantir imagem pronta
@@ -6671,6 +6688,9 @@ async function fixWebmDuration(blob: Blob, durationSec: number): Promise<Blob> {
       }
 
       const actualIsMp4 = finalBlob.type.toLowerCase().includes("mp4");
+      if (finalBlob.size > 95 * 1024 * 1024) {
+        throw new Error("O vídeo passou do limite seguro de 95 MiB. Escolha um trecho menor e gere novamente; nenhum arquivo grande foi liberado.");
+      }
       const exportType = actualIsMp4 ? "video/mp4" : (finalBlob.type || "video/webm");
       const exportExt = actualIsMp4 ? "mp4" : "webm";
       await assertReelDimensions(finalBlob, format);
@@ -7124,6 +7144,49 @@ async function fixWebmDuration(blob: Blob, durationSec: number): Promise<Blob> {
                     </div>
                   </div>
                   <input ref={videoInputRef} type="file" accept="video/*" onChange={onVideoChange} />
+                  {videoReady && videoDuration > 0 && (
+                    <div style={{ marginTop: 10, padding: "10px 12px", borderRadius: 8, border: "1px solid #c7d2fe", background: "#eef2ff" }}>
+                      <div style={{ display: "flex", justifyContent: "space-between", gap: 10, flexWrap: "wrap", color: "#312e81", fontSize: 12, fontWeight: 800 }}>
+                        <span>⏱️ Escolher trecho do vídeo</span>
+                        <span>{formatClipTime(clipStartSeconds)} – {formatClipTime(Math.min(clipEndSeconds, clipStartSeconds + 179.5))} · {Math.max(1, Math.min(179.5, clipEndSeconds - clipStartSeconds)).toFixed(0)}s</span>
+                      </div>
+                      <label style={{ display: "block", marginTop: 8, color: "#475569", fontSize: 11 }}>
+                        Início · {formatClipTime(clipStartSeconds)}
+                        <input
+                          aria-label="Início do trecho do vídeo"
+                          type="range"
+                          min={0}
+                          max={Math.max(0, videoDuration - 1)}
+                          step={0.25}
+                          value={clipStartSeconds}
+                          onChange={(e) => {
+                            const nextStart = Math.min(Number(e.target.value), Math.max(0, videoDuration - 1));
+                            const selectedLength = Math.min(179.5, Math.max(1, clipEndSeconds - clipStartSeconds));
+                            setClipStartSeconds(nextStart);
+                            setClipEndSeconds(Math.min(videoDuration, nextStart + selectedLength));
+                            if (videoPreviewRef.current) videoPreviewRef.current.currentTime = nextStart;
+                          }}
+                          style={{ display: "block", width: "100%", accentColor: "#4f46e5" }}
+                        />
+                      </label>
+                      <label style={{ display: "block", marginTop: 5, color: "#475569", fontSize: 11 }}>
+                        Fim · {formatClipTime(Math.min(clipEndSeconds, clipStartSeconds + 179.5))}
+                        <input
+                          aria-label="Fim do trecho do vídeo"
+                          type="range"
+                          min={Math.min(videoDuration, clipStartSeconds + 1)}
+                          max={Math.max(Math.min(videoDuration, clipStartSeconds + 1), Math.min(videoDuration, clipStartSeconds + 179.5))}
+                          step={0.25}
+                          value={Math.min(clipEndSeconds, clipStartSeconds + 179.5)}
+                          onChange={(e) => setClipEndSeconds(Math.max(clipStartSeconds + 1, Math.min(Number(e.target.value), clipStartSeconds + 179.5, videoDuration)))}
+                          style={{ display: "block", width: "100%", accentColor: "#4f46e5" }}
+                        />
+                      </label>
+                      <small style={{ display: "block", marginTop: 6, color: "#475569", fontSize: 10.5 }}>
+                        🗜️ Compressor automático ligado ao gerar: ajusta a qualidade para mirar até 70 MiB e não libera arquivo acima de 95 MiB.
+                      </small>
+                    </div>
+                  )}
                   <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginTop: 3 }}>
                     <small style={{ color: "#64748b" }}>
                       {videoFileName ? `${videoFileName}${videoReady ? " · pronto para prévia" : " · carregando..."}` : "Vídeo de até 250 MB para Reels (9:16), Stories ou Feed Noticioso (4:5)."}
@@ -10801,7 +10864,11 @@ async function fixWebmDuration(blob: Blob, durationSec: number): Promise<Blob> {
         onLoadedMetadata={(e) => {
           setVideoReady(true);
           const dur = (e.target as HTMLVideoElement).duration;
-          if (Number.isFinite(dur) && dur > 0) setVideoDuration(dur);
+          if (Number.isFinite(dur) && dur > 0) {
+            setVideoDuration(dur);
+            setClipStartSeconds(0);
+            setClipEndSeconds(Math.min(dur, 179.5));
+          }
         }}
         onLoadedData={() => { setVideoReady(true); renderCard(); }}
         onError={() => { setVideoReady(false); setMessage("Não foi possível abrir esse arquivo de vídeo."); }}

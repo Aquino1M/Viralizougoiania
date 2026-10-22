@@ -91,6 +91,16 @@ export async function POST(request: Request) {
       console.log(`[render-reel] Ajustando corte inicial de ${trimStart}s para ${effectiveTrimStart}s (duração total: ${videoInfo.duration.toFixed(1)}s)`);
     }
 
+    const requestedClipDuration = Number(formData.get("trimDuration"));
+    const clipDuration = Math.min(
+      Number.isFinite(requestedClipDuration) && requestedClipDuration > 0 ? requestedClipDuration : 179.5,
+      179.5,
+      Math.max(0, videoInfo.duration - effectiveTrimStart)
+    );
+    if (clipDuration < 1) {
+      return NextResponse.json({ error: "O trecho selecionado precisa ter pelo menos 1 segundo." }, { status: 400 });
+    }
+
     console.log(`[render-reel] Vídeo analisado: duração=${videoInfo.duration.toFixed(1)}s | áudio=${hasAudio ? "SIM" : "NÃO"} | corte inicial=${effectiveTrimStart}s`);
 
     // Suporte para logo animada transparente (WebM VP9 com Alpha, MOV ProRes ou GIF)
@@ -151,6 +161,7 @@ export async function POST(request: Request) {
       upscale,
       audioSyncLock,
     });
+    const targetVideoBitrate = Math.min(4_000_000, Math.max(1_500_000, Math.floor((70 * 1024 * 1024 * 8) / (clipDuration / Math.max(speed, 0.1)) - 128_000)));
 
     // Configuração oficial de compatibilidade universal (H.264 / AAC / YUV420P / +faststart)
     // 100% aceito no WhatsApp, Instagram Reels, TikTok, Windows Media Player e iOS
@@ -196,6 +207,8 @@ export async function POST(request: Request) {
       "-level", "4.0",
       "-preset", "veryfast",
       "-crf", "20",
+      "-maxrate", String(targetVideoBitrate),
+      "-bufsize", String(targetVideoBitrate * 2),
       "-r", "30",
       "-c:a", "aac",
       "-b:a", "128k",
@@ -206,6 +219,7 @@ export async function POST(request: Request) {
       "-metadata", "title=Viralizou Goiania - Conteudo Original",
       "-metadata", "artist=Viralizou Goiania",
       "-metadata", `comment=Processado com Mini IA (${editLevel.toUpperCase()}) - Velocidade ${speed}x - SFX: ${sfxPreset} - Corte Inicial ${effectiveTrimStart}s`,
+      "-t", (clipDuration / Math.max(speed, 0.1)).toFixed(2),
       outputPath
     );
 
@@ -219,6 +233,9 @@ export async function POST(request: Request) {
     }
 
     const outputBuffer = await fs.readFile(outputPath);
+    if (outputBuffer.length > 95 * 1024 * 1024) {
+      return NextResponse.json({ error: "A exportação ultrapassou o limite seguro de 95 MiB. Reduza o trecho selecionado." }, { status: 413 });
+    }
     const safeFilename = requestedName.replace(/[^a-zA-Z0-9_.-]/g, "_").replace(/\.[^.]+$/, ".mp4");
 
     return new NextResponse(outputBuffer, {
