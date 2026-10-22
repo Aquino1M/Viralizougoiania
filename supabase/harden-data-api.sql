@@ -25,7 +25,6 @@ alter table public.admins alter column password drop default;
 drop policy if exists "Permitir leitura de admins" on public.admins;
 drop policy if exists "Permitir escrita de admins" on public.admins;
 revoke all on public.admins from anon, authenticated;
-update public.admins set active = false where password = 'admin123';
 
 create table if not exists public.football_data (
   id text primary key default 'brasileirao',
