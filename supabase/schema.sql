@@ -50,13 +50,11 @@ create index if not exists posts_category_idx on public.posts(category);
 -- Permissões de RLS para leitura e escrita de posts
 alter table public.posts enable row level security;
 drop policy if exists "Permitir leitura publica de posts" on public.posts;
-create policy "Permitir leitura publica de posts" on public.posts for select using (true);
+create policy "Permitir leitura publica de posts" on public.posts for select using (status = 'published');
 drop policy if exists "Permitir insercao de posts" on public.posts;
-create policy "Permitir insercao de posts" on public.posts for insert with check (true);
 drop policy if exists "Permitir atualizacao de posts" on public.posts;
-create policy "Permitir atualizacao de posts" on public.posts for update using (true);
 drop policy if exists "Permitir exclusao de posts" on public.posts;
-create policy "Permitir exclusao de posts" on public.posts for delete using (true);
+revoke insert, update, delete on public.posts from anon, authenticated;
 
 -- 2. Tabela de Abas / Editorias (categories)
 create table if not exists public.categories (
@@ -73,13 +71,11 @@ create index if not exists categories_active_order_idx on public.categories(acti
 
 alter table public.categories enable row level security;
 drop policy if exists "Permitir leitura publica de categorias" on public.categories;
-create policy "Permitir leitura publica de categorias" on public.categories for select using (true);
+create policy "Permitir leitura publica de categorias" on public.categories for select using (active = true);
 drop policy if exists "Permitir insercao de categorias" on public.categories;
-create policy "Permitir insercao de categorias" on public.categories for insert with check (true);
 drop policy if exists "Permitir atualizacao de categorias" on public.categories;
-create policy "Permitir atualizacao de categorias" on public.categories for update using (true);
 drop policy if exists "Permitir exclusao de categorias" on public.categories;
-create policy "Permitir exclusao de categorias" on public.categories for delete using (true);
+revoke insert, update, delete on public.categories from anon, authenticated;
 
 -- 3. Tabela de Configurações e Redes Sociais (settings)
 create table if not exists public.settings (
@@ -90,16 +86,15 @@ create table if not exists public.settings (
 
 alter table public.settings enable row level security;
 drop policy if exists "Permitir leitura publica de settings" on public.settings;
-create policy "Permitir leitura publica de settings" on public.settings for select using (true);
 drop policy if exists "Permitir escrita de settings" on public.settings;
-create policy "Permitir escrita de settings" on public.settings for all using (true);
+revoke all on public.settings from anon, authenticated;
 
 -- 4. Tabela de Administradores / Logins dos Funcionários (admins)
 create table if not exists public.admins (
   id uuid primary key default gen_random_uuid(),
   email text unique not null,
   name text not null default 'Equipe Viralizougoiania',
-  password text not null default 'admin123',
+  password text not null,
   role text not null default 'admin',
   active boolean not null default true,
   created_at timestamptz not null default now(),
@@ -107,17 +102,10 @@ create table if not exists public.admins (
 );
 
 alter table public.admins enable row level security;
+alter table public.admins alter column password drop default;
 drop policy if exists "Permitir leitura de admins" on public.admins;
-create policy "Permitir leitura de admins" on public.admins for select using (true);
 drop policy if exists "Permitir escrita de admins" on public.admins;
-create policy "Permitir escrita de admins" on public.admins for all using (true);
-
--- Inserir Logins padrão no Supabase
-insert into public.admins (email, name, password, role, active) values
-  ('admin@viralizougoiania.com.br', 'Administrador Geral', 'admin123', 'admin', true),
-  ('redacao@viralizougoiania.com.br', 'Redação Viralizougoiania', 'admin123', 'editor', true),
-  ('aquino@viralizougoiania.com.br', 'Aquino', 'admin123', 'admin', true)
-on conflict (email) do update set password = excluded.password, name = excluded.name, active = excluded.active;
+revoke all on public.admins from anon, authenticated;
 
 -- 5. Inserção de Categorias Padrão
 insert into public.categories (name, slug, active, sort_order) values
@@ -223,6 +211,10 @@ A fonte original pode ser registrada no próprio editor do painel administrativo
 on conflict (slug) do nothing;
 
 -- O Postgres libera automaticamente as matérias agendadas a cada minuto.
+select cron.unschedule(jobid)
+from cron.job
+where jobname in ('publicar-fila-viralizougoiania', 'arquivar-noticias-antigas-viralizougoiania');
+
 select cron.schedule(
   'publicar-fila-viralizougoiania',
   '* * * * *',
@@ -230,6 +222,17 @@ select cron.schedule(
     update public.posts
     set status = 'published', updated_at = now()
     where status = 'scheduled' and published_at <= now();
+  $$
+);
+
+select cron.schedule(
+  'arquivar-noticias-antigas-viralizougoiania',
+  '* * * * *',
+  $$
+    update public.posts
+    set status = 'archived', updated_at = now()
+    where status = 'published'
+      and coalesce(published_at, created_at) < now() - interval '3 days';
   $$
 );
 
@@ -248,4 +251,4 @@ alter table public.football_data enable row level security;
 drop policy if exists "Permitir leitura publica de futebol" on public.football_data;
 create policy "Permitir leitura publica de futebol" on public.football_data for select using (true);
 drop policy if exists "Permitir gravacao de futebol" on public.football_data;
-create policy "Permitir gravacao de futebol" on public.football_data for all using (true);
+revoke insert, update, delete on public.football_data from anon, authenticated;

@@ -44,7 +44,9 @@ export async function POST(req: Request) {
 
     const result = await archiveOldExternalPosts(days, { nonGoiasOnly, allOlderThanDays });
     const stats = await getPostStats();
-    const msg = `Sucesso! ${result.archived} matérias fora de Goiás foram arquivadas no Supabase. Notícias de Goiás e Goiânia foram 100% preservadas no site.`;
+    const msg = allOlderThanDays
+      ? `Sucesso! ${result.archived} matérias com mais de ${days} dias foram arquivadas.`
+      : `Sucesso! ${result.archived} matérias fora de Goiás foram arquivadas.`;
     return NextResponse.json({
       ok: true,
       result,

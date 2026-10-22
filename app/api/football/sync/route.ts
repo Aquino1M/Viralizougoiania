@@ -1,4 +1,5 @@
 import { NextResponse } from "next/server";
+import { isAdmin } from "@/lib/session";
 import { syncBrasileiraoData, getLiveFootballData } from "@/lib/football-sync";
 
 export const dynamic = "force-dynamic";
@@ -7,6 +8,7 @@ export async function GET(req: Request) {
   try {
     const { searchParams } = new URL(req.url);
     const force = searchParams.get("force") === "true";
+    if (force && !(await isAdmin())) return NextResponse.json({ error: "Não autorizado" }, { status: 401 });
     const data = force ? await syncBrasileiraoData() : await getLiveFootballData();
 
     return NextResponse.json({
@@ -26,6 +28,7 @@ export async function GET(req: Request) {
 }
 
 export async function POST(req: Request) {
+  if (!(await isAdmin())) return NextResponse.json({ error: "Não autorizado" }, { status: 401 });
   try {
     const data = await syncBrasileiraoData();
     return NextResponse.json({

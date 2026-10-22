@@ -5,7 +5,10 @@ const COOKIE_NAME = "viralizougoiania_admin";
 const MAX_AGE = 60 * 60 * 12;
 
 function secret() {
-  return process.env.SESSION_SECRET || "dev-only-change-me";
+  const value = process.env.SESSION_SECRET;
+  if (value) return value;
+  if (process.env.NODE_ENV === "production") throw new Error("SESSION_SECRET precisa ser configurado em produção.");
+  return "dev-only-change-me";
 }
 
 function sign(payload: string) {
@@ -16,7 +19,7 @@ export async function createAdminSession(user?: { email?: string; role?: string 
   const store = await cookies();
   const expires = Math.floor(Date.now() / 1000) + MAX_AGE;
   const identifier = (user?.email || "admin").replace(/:/g, "_");
-  const payload = `${identifier}:${expires}`;
+  const payload = `${identifier}:${user?.role || "admin"}:${expires}`;
   store.set(COOKIE_NAME, `${payload}.${sign(payload)}`, {
     httpOnly: true,
     sameSite: "lax",
@@ -45,9 +48,13 @@ export async function getAdminUser() {
   const parts = payload.split(":");
   const expiresRaw = parts[parts.length - 1];
   if (Number(expiresRaw) <= Math.floor(Date.now() / 1000)) return null;
-  return { email: parts[0] || "admin" };
+  return { email: parts[0] || "admin", role: parts.length > 2 ? parts[parts.length - 2] : "editor" };
 }
 
 export async function isAdmin() {
   return (await getAdminUser()) !== null;
+}
+
+export async function isAdministrator() {
+  return (await getAdminUser())?.role === "admin";
 }

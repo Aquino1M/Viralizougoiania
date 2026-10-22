@@ -94,6 +94,8 @@ Valores de exemplo como `SEU-PROJETO` são ignorados automaticamente. Sem Supaba
 5. Copie a `service_role key` para `SUPABASE_SERVICE_ROLE_KEY`.
 6. Cadastre as mesmas variáveis na Vercel.
 
+Para atualizar um banco que já existe, configure `ADMIN_PASSWORD` na Vercel e execute `supabase/harden-data-api.sql` no SQL Editor. Ele restringe o acesso público, desativa contas que ainda usam a senha padrão `admin123` e atualiza os agendamentos de publicação e arquivamento.
+
 A `service_role key` deve existir somente no servidor. Nunca coloque essa chave em código de navegador ou variável `NEXT_PUBLIC_*`.
 
 ## GitHub
@@ -116,9 +118,9 @@ git push -u origin main
 3. Cadastre `ADMIN_PASSWORD`, `SESSION_SECRET`, `SUPABASE_URL` e `SUPABASE_SERVICE_ROLE_KEY`.
 4. Faça o deploy.
 
-## Agendamento
+## Agendamento e arquivamento
 
-Uma matéria com status `scheduled` e data futura não aparece no portal. Quando o horário chega, o backend a libera na próxima consulta ao site/API e atualiza o status para `published`.
+Uma matéria com status `scheduled` e data futura não aparece no portal. O `pg_cron` libera matérias vencidas a cada minuto e arquiva automaticamente matérias publicadas há mais de 3 dias, contando desde `published_at` ou, quando vazio, desde `created_at`. Para ativar ou atualizar os dois agendamentos em um banco já criado, execute `supabase/enable-publication-cron.sql` no SQL Editor.
 
 ## Importação de notícias
 
@@ -139,7 +141,7 @@ Estilo visual: portal moderno, rápido, forte em manchetes e leitura móvel.
 
 ## Rotina diária manual
 
-Não há execução automática pelo GitHub Actions ou pelo `pg_cron`. No painel **Radar**, clique em **Rodar rotina do dia** para executar uma vez:
+Não há execução automática pelo GitHub Actions. No painel **Radar**, clique em **Rodar rotina do dia** para executar uma vez:
 
 - atualizar notícias de Goiás, Brasil, Futebol e Fofocas;
 - evitar matérias repetidas e colocar novidades na fila;

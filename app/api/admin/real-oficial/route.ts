@@ -1,4 +1,5 @@
 import { NextResponse } from "next/server";
+import { isAdmin } from "@/lib/session";
 import {
   getRealOficialStatus,
   fetchRealOficialSfxCatalog,
@@ -10,6 +11,7 @@ import {
 export const dynamic = "force-dynamic";
 
 export async function GET(req: Request) {
+  if (!(await isAdmin())) return NextResponse.json({ error: "Não autorizado" }, { status: 401 });
   try {
     const url = new URL(req.url);
     const queryToken = url.searchParams.get("token") || req.headers.get("x-real-oficial-token");
@@ -51,6 +53,7 @@ export async function GET(req: Request) {
 }
 
 export async function POST(req: Request) {
+  if (!(await isAdmin())) return NextResponse.json({ error: "Não autorizado" }, { status: 401 });
   try {
     const body = await req.json().catch(() => ({}));
     const action = body.action || "test";

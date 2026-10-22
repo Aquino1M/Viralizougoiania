@@ -17,11 +17,7 @@ function getSupabaseUrl() {
 }
 
 function getSupabaseKey() {
-  return (
-    process.env.SUPABASE_SERVICE_ROLE_KEY ||
-    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY ||
-    ""
-  ).trim();
+  return (process.env.SUPABASE_SERVICE_ROLE_KEY || "").trim();
 }
 
 function normalizeRecentForm(raw: unknown): ("W" | "D" | "L")[] {

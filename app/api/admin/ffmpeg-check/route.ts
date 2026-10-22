@@ -1,4 +1,5 @@
 import { NextResponse } from "next/server";
+import { isAdmin } from "@/lib/session";
 import { exec } from "node:child_process";
 import fs from "node:fs";
 import path from "node:path";
@@ -6,6 +7,7 @@ import path from "node:path";
 export const dynamic = "force-dynamic";
 
 export async function GET() {
+  if (!(await isAdmin())) return NextResponse.json({ error: "Não autorizado" }, { status: 401 });
   const commonPaths = [
     "ffmpeg",
     "ffmpeg.exe",

@@ -1,11 +1,11 @@
 import { NextResponse } from "next/server";
 import { deleteAdmin, updateAdmin } from "@/lib/storage";
-import { isAdmin } from "@/lib/session";
+import { isAdministrator } from "@/lib/session";
 
 export const dynamic = "force-dynamic";
 
 export async function PATCH(req: Request, { params }: { params: Promise<{ id: string }> }) {
-  if (!(await isAdmin())) return NextResponse.json({ error: "Não autorizado" }, { status: 401 });
+  if (!(await isAdministrator())) return NextResponse.json({ error: "Não autorizado" }, { status: 401 });
   try {
     const { id } = await params;
     const body = await req.json();
@@ -17,7 +17,7 @@ export async function PATCH(req: Request, { params }: { params: Promise<{ id: st
 }
 
 export async function DELETE(_: Request, { params }: { params: Promise<{ id: string }> }) {
-  if (!(await isAdmin())) return NextResponse.json({ error: "Não autorizado" }, { status: 401 });
+  if (!(await isAdministrator())) return NextResponse.json({ error: "Não autorizado" }, { status: 401 });
   try {
     const { id } = await params;
     await deleteAdmin(id);

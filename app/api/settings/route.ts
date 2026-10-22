@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-import { isAdmin } from "@/lib/session";
+import { isAdmin, isAdministrator } from "@/lib/session";
 import { getSettings, updateSettings } from "@/lib/storage";
 import fsSync from "node:fs";
 import path from "node:path";
@@ -31,7 +31,7 @@ export async function GET() {
 }
 
 export async function POST(req: Request) {
-  if (!(await isAdmin())) {
+  if (!(await isAdministrator())) {
     return NextResponse.json({ error: "Não autorizado" }, { status: 401 });
   }
   try {

@@ -5,6 +5,7 @@ import { automationConfigured, getAutomationState, saveAutomationState } from "@
 export const dynamic = "force-dynamic";
 
 export async function GET() {
+  if (!(await isAdmin())) return NextResponse.json({ error: "Não autorizado" }, { status: 401 });
   const state = await getAutomationState();
   return NextResponse.json({
     configured: automationConfigured(),

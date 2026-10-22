@@ -46,6 +46,7 @@ import { slugify } from "@/lib/slug";
 import { classifyEditorial, inferLocation, isGoiasOrigin, normalizePostCategory } from "@/lib/category-classifier";
 import { buildEditorialExcerpt, formatViralizouArticle, needsEditorialRepair } from "@/lib/rewrite";
 import { unstable_cache } from "next/cache";
+import { isPastArchiveCutoff } from "@/lib/archive-policy";
 
 const localFile = path.join(process.cwd(), "data", "posts.json");
 const localCategoriesFile = path.join(process.cwd(), "data", "categories.json");
@@ -57,11 +58,7 @@ function getSupabaseUrl() {
 }
 
 function getSupabaseKey() {
-  return (
-    process.env.SUPABASE_SERVICE_ROLE_KEY ||
-    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY ||
-    ""
-  ).trim();
+  return (process.env.SUPABASE_SERVICE_ROLE_KEY || "").trim();
 }
 
 export function hasSupabaseConfig() {
@@ -716,6 +713,7 @@ export async function archiveOldExternalPosts(
       const pageSize = 1000;
       const idsToArchive: string[] = [];
       const isCleanNonGoias = days <= 0 || options.nonGoiasOnly !== false;
+      const archiveAllOlder = days > 0 && options.allOlderThanDays === true;
 
       for (let offset = 0; offset < 50000; offset += pageSize) {
         let query = `posts?select=id,title,excerpt,city,category,source_name,source_url,author,published_at,created_at&status=eq.published&order=published_at.asc.nullsfirst,created_at.asc&limit=${pageSize}&offset=${offset}`;
@@ -728,8 +726,7 @@ export async function archiveOldExternalPosts(
         checkedCount += rows.length;
 
         for (const post of rows as Post[]) {
-          // REGRA DE SEGURANÇA MÁXIMA: NUNCA arquivar notícias de Goiás ou Goiânia!
-          if (isProtectedGoiasPost(post)) {
+          if (!archiveAllOlder && isProtectedGoiasPost(post)) {
             continue;
           }
 
@@ -737,8 +734,7 @@ export async function archiveOldExternalPosts(
           if (isCleanNonGoias) {
             idsToArchive.push(post.id);
           } else if (days > 0) {
-            const pTime = new Date(post.published_at || post.created_at || 0).getTime();
-            if (pTime < cutoffMs) {
+            if (isPastArchiveCutoff(post.published_at, post.created_at, cutoffMs)) {
               idsToArchive.push(post.id);
             }
           }
@@ -773,22 +769,27 @@ export async function archiveOldExternalPosts(
               archivedCount += chunk.length;
             } catch (err: any) {
               console.warn("Erro ao salvar lote arquivado no Supabase:", err.message);
+              throw err;
             }
           })
         );
       }
     } catch (err: any) {
       console.warn("Erro no processo de arquivamento no Supabase:", err.message);
+      throw err;
     }
   }
 
   try {
     const local = await readLocal();
     let localChanged = false;
+    const archiveAllOlder = days > 0 && options.allOlderThanDays === true;
     for (const post of local) {
       if (post.status === "published") {
-        const postDate = new Date(post.published_at || post.created_at).getTime();
-        if (postDate < cutoffMs && !isGoiasOrigin(post)) {
+        if (
+          isPastArchiveCutoff(post.published_at, post.created_at, cutoffMs) &&
+          (archiveAllOlder || !isGoiasOrigin(post))
+        ) {
           post.status = "archived";
           post.updated_at = new Date().toISOString();
           localChanged = true;
@@ -801,7 +802,9 @@ export async function archiveOldExternalPosts(
     if (localChanged) {
       await writeLocal(local);
     }
-  } catch {}
+  } catch (error) {
+    if (!hasSupabaseConfig()) throw error;
+  }
 
   const stats = await getPostStats().catch(() => null);
 
@@ -1106,7 +1109,7 @@ export async function verifyAdminCredentials(
   }
 
   // 2. Chave de acesso / senha mestre configurada no ambiente
-  const expected = process.env.ADMIN_PASSWORD || "admin123";
+  const expected = process.env.ADMIN_PASSWORD || (process.env.NODE_ENV === "production" ? "" : "admin123");
   if (cleanPass === expected) {
     return {
       ok: true,

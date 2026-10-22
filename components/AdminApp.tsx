@@ -368,7 +368,7 @@ export default function AdminApp() {
     const isNonGoias = Boolean(options.nonGoiasOnly);
     const confirmMsg = isNonGoias
       ? "Deseja arquivar agora todas as matérias que NÃO são de Goiânia ou Goiás?\n\nElas sairão do portal para deixar o site 100% focado no estado de Goiás, e continuarão acessíveis na busca."
-      : "Deseja arquivar agora todas as matérias com mais de 7 dias?\n\nElas sairão da página inicial para deixar o portal leve e rápido.";
+      : "Deseja arquivar agora todas as matérias publicadas há mais de 3 dias?\n\nElas sairão do portal e continuarão acessíveis pela busca.";
     if (!confirm(confirmMsg)) return;
     setArchiving(true);
     setMessage("");
@@ -377,7 +377,7 @@ export default function AdminApp() {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          days: options.days ?? (isNonGoias ? 0 : 7),
+          days: options.days ?? (isNonGoias ? 0 : 3),
           nonGoiasOnly: isNonGoias,
           allOlderThanDays: options.allOlderThanDays ?? !isNonGoias,
         }),
@@ -1793,7 +1793,7 @@ export default function AdminApp() {
             <div className="stats" style={{ gridTemplateColumns: "repeat(auto-fit, minmax(150px, 1fr))" }}>
               <div className="stat" onClick={() => setStatusFilter("all")} style={{ cursor: "pointer", borderColor: statusFilter === "all" ? "#ff5a1f" : undefined, background: statusFilter === "all" ? "#fff8f5" : undefined }} title="Ver todas as matérias"><b>{totalPosts.toLocaleString("pt-BR")}</b><span>Total</span></div>
               <div className="stat" onClick={() => setStatusFilter("published")} style={{ cursor: "pointer", borderColor: statusFilter === "published" ? "#059669" : undefined, background: statusFilter === "published" ? "#f0fdf4" : undefined }} title="Ver matérias públicas no portal"><b style={{ color: "#059669" }}>{published.toLocaleString("pt-BR")}</b><span>🟢 Públicas (Site)</span></div>
-              <div className="stat" onClick={() => setStatusFilter("archived")} style={{ cursor: "pointer", borderColor: statusFilter === "archived" ? "#d97706" : undefined, background: statusFilter === "archived" ? "#fefce8" : undefined }} title="Ver matérias arquivadas (+7 dias fora de GO)"><b style={{ color: "#d97706" }}>{archived.toLocaleString("pt-BR")}</b><span>📦 Arquivadas (Busca)</span></div>
+              <div className="stat" onClick={() => setStatusFilter("archived")} style={{ cursor: "pointer", borderColor: statusFilter === "archived" ? "#d97706" : undefined, background: statusFilter === "archived" ? "#fefce8" : undefined }} title="Ver matérias arquivadas após 3 dias"><b style={{ color: "#d97706" }}>{archived.toLocaleString("pt-BR")}</b><span>📦 Arquivadas (Busca)</span></div>
               <div className="stat" onClick={() => setStatusFilter("scheduled")} style={{ cursor: "pointer", borderColor: statusFilter === "scheduled" ? "#2563eb" : undefined, background: statusFilter === "scheduled" ? "#eff6ff" : undefined }} title="Ver matérias agendadas na fila"><b style={{ color: "#2563eb" }}>{scheduled.toLocaleString("pt-BR")}</b><span>🕒 Agendadas</span></div>
               <div className="stat"><b>{admins.length}</b><span>Equipe / Logins</span></div>
             </div>
@@ -2050,7 +2050,7 @@ export default function AdminApp() {
                     type="button"
                     className="btn secondary"
                     disabled={archiving}
-                    onClick={() => triggerArchiveOldPosts({ allOlderThanDays: true, days: 7 })}
+                    onClick={() => triggerArchiveOldPosts({ allOlderThanDays: true, days: 3 })}
                     style={{
                       padding: "8px 14px",
                       fontSize: 11,
@@ -2061,9 +2061,9 @@ export default function AdminApp() {
                       borderRadius: 9,
                       cursor: "pointer",
                     }}
-                    title="Arquiva matérias antigas com mais de 7 dias (fora de Goiás)"
+                    title="Arquiva todas as notícias publicadas há mais de 3 dias"
                   >
-                    ⏳ Arquivar (+7 dias)
+                    ⏳ Arquivar (+3 dias)
                   </button>
                 </div>
                 {loading ? (
