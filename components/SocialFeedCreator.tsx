@@ -718,34 +718,27 @@ function drawVideoWithFraming(
     ctx.fillRect(0, blockY, w, 2);
     ctx.fillRect(0, blockY + blockH - 2, w, 2);
   } else if (framingMode === "split") {
-    // Split 50/50: Superior focado/aproximado + Inferior contextual aberto
+    // Split 50/50: Superior focado/zoom (Cover) + Inferior amplo de contexto com desfoque de fundo
     const halfH = Math.floor(h / 2);
-    // Superior
+    // 1. Superior (Focado/Cover)
     drawCover(ctx, video, 0, 0, w, halfH, vertical, crop);
-    // Selo "Antes" / Destaque
-    ctx.save();
-    ctx.fillStyle = "rgba(0, 0, 0, 0.65)";
-    if (typeof ctx.roundRect === "function") {
-      ctx.beginPath();
-      ctx.roundRect(w - 170, halfH - 65, 140, 48, 8);
-      ctx.fill();
-    } else {
-      ctx.fillRect(w - 170, halfH - 65, 140, 48);
-    }
-    ctx.fillStyle = "#ffffff";
-    ctx.font = '900 28px "Montserrat", sans-serif';
-    ctx.textAlign = "center";
-    ctx.textBaseline = "middle";
-    ctx.fillText("Antes", w - 100, halfH - 41);
-    ctx.restore();
 
-    // Divisória no centro
+    // 2. Divisória moderna e nítida no centro
     ctx.fillStyle = "#000000";
     ctx.fillRect(0, halfH - 2, w, 4);
-    ctx.fillStyle = "rgba(255, 255, 255, 0.7)";
+    ctx.fillStyle = "rgba(255, 255, 255, 0.85)";
     ctx.fillRect(0, halfH - 1, w, 2);
 
-    // Inferior
+    // 3. Inferior: Vídeo contextual aberto com fundo desfocado suave (zero barras pretas vazias)
+    const blurCanvas = getSharedBlurCanvas();
+    if (blurCanvas) {
+      const bCtx = blurCanvas.getContext("2d");
+      if (bCtx) {
+        bCtx.filter = "blur(7px) brightness(0.35)";
+        drawCover(bCtx, video, 0, 0, 135, 120, 0, crop);
+        ctx.drawImage(blurCanvas, 0, halfH, w, halfH);
+      }
+    }
     drawContain(ctx, video, 0, halfH, w, halfH, 0, crop);
   } else if (framingMode === "split-1v2i") {
     // 1 Vídeo com 2 Imagens Divididas Lateralmente (Estilo Copaíba Notícias)
@@ -2666,12 +2659,21 @@ function drawReelFrame(
 
   const maxAlpha = shadeOpacity / 100;
   if (!isSplit1v2iWithCard && shadeOpacity > 0 && textStyle !== "red-bottom" && textStyle !== "bacci-red") {
-    const shade = ctx.createLinearGradient(0, Math.max(300, currentCanvasH - 1270), 0, currentCanvasH);
-    shade.addColorStop(0, `rgba(0,0,0,${(0.05 * maxAlpha).toFixed(2)})`);
-    shade.addColorStop(0.42, `rgba(0,0,0,${(0.68 * maxAlpha).toFixed(2)})`);
-    shade.addColorStop(1, `rgba(0,0,0,${(0.96 * maxAlpha).toFixed(2)})`);
-    ctx.fillStyle = shade;
-    ctx.fillRect(0, Math.max(300, currentCanvasH - 1320), W, currentCanvasH);
+    if (framingMode === "split") {
+      const shade = ctx.createLinearGradient(0, currentCanvasH - 380, 0, currentCanvasH);
+      shade.addColorStop(0, "rgba(0,0,0,0)");
+      shade.addColorStop(0.5, `rgba(0,0,0,${(0.55 * maxAlpha).toFixed(2)})`);
+      shade.addColorStop(1, `rgba(0,0,0,${(0.92 * maxAlpha).toFixed(2)})`);
+      ctx.fillStyle = shade;
+      ctx.fillRect(0, currentCanvasH - 380, W, 380);
+    } else {
+      const shade = ctx.createLinearGradient(0, Math.max(300, currentCanvasH - 1270), 0, currentCanvasH);
+      shade.addColorStop(0, `rgba(0,0,0,${(0.05 * maxAlpha).toFixed(2)})`);
+      shade.addColorStop(0.42, `rgba(0,0,0,${(0.68 * maxAlpha).toFixed(2)})`);
+      shade.addColorStop(1, `rgba(0,0,0,${(0.96 * maxAlpha).toFixed(2)})`);
+      ctx.fillStyle = shade;
+      ctx.fillRect(0, Math.max(300, currentCanvasH - 1320), W, currentCanvasH);
+    }
   }
 
   if (showStrongSceneWarning) {
@@ -3063,12 +3065,21 @@ function buildReelOverlayCanvas(
   // 1. Gradiente inferior de contraste (shade)
   const maxAlpha = (showOverlayLayer ? shadeOpacity : 0) / 100;
   if (maxAlpha > 0 && textStyle !== "red-bottom" && textStyle !== "bacci-red") {
-    const shade = ctx.createLinearGradient(0, 650, 0, REEL_H);
-    shade.addColorStop(0, `rgba(0,0,0,${(0.05 * maxAlpha).toFixed(2)})`);
-    shade.addColorStop(0.42, `rgba(0,0,0,${(0.68 * maxAlpha).toFixed(2)})`);
-    shade.addColorStop(1, `rgba(0,0,0,${(0.96 * maxAlpha).toFixed(2)})`);
-    ctx.fillStyle = shade;
-    ctx.fillRect(0, 600, W, REEL_H - 600);
+    if (splitConfig?.framingMode === "split") {
+      const shade = ctx.createLinearGradient(0, REEL_H - 380, 0, REEL_H);
+      shade.addColorStop(0, "rgba(0,0,0,0)");
+      shade.addColorStop(0.5, `rgba(0,0,0,${(0.55 * maxAlpha).toFixed(2)})`);
+      shade.addColorStop(1, `rgba(0,0,0,${(0.92 * maxAlpha).toFixed(2)})`);
+      ctx.fillStyle = shade;
+      ctx.fillRect(0, REEL_H - 380, W, 380);
+    } else {
+      const shade = ctx.createLinearGradient(0, 650, 0, REEL_H);
+      shade.addColorStop(0, `rgba(0,0,0,${(0.05 * maxAlpha).toFixed(2)})`);
+      shade.addColorStop(0.42, `rgba(0,0,0,${(0.68 * maxAlpha).toFixed(2)})`);
+      shade.addColorStop(1, `rgba(0,0,0,${(0.96 * maxAlpha).toFixed(2)})`);
+      ctx.fillStyle = shade;
+      ctx.fillRect(0, 600, W, REEL_H - 600);
+    }
   }
 
   // 2. Alerta de cenas fortes
@@ -3238,7 +3249,16 @@ export default function SocialFeedCreator({ posts, onBack, initialPost, onOpenCo
   const [showTitleLayer, setShowTitleLayer] = useState<boolean>(true);
   const [showHandleLayer, setShowHandleLayer] = useState<boolean>(true);
   const [showStorySticker, setShowStorySticker] = useState<boolean>(false);
-  const [videoFramingMode, setVideoFramingMode] = useState<"cover" | "blur-fit" | "horizontal-block" | "split" | "split-1v2i">("cover");
+  const [videoFramingMode, setVideoFramingMode] = useState<"cover" | "blur-fit" | "horizontal-block" | "split" | "split-1v2i">(() => {
+    try {
+      const saved = typeof window !== "undefined" ? localStorage.getItem("viralizou_video_framing_mode") : null;
+      if (saved && ["cover", "blur-fit", "horizontal-block", "split", "split-1v2i"].includes(saved)) {
+        return saved as any;
+      }
+    } catch {}
+    return "cover";
+  });
+  const videoFramingModeRef = useRef<"cover" | "blur-fit" | "horizontal-block" | "split" | "split-1v2i">("cover");
   const [videoBlockPosY, setVideoBlockPosY] = useState<number>(() => {
     try {
       const saved = localStorage.getItem("viralizou_video_block_pos_y");
@@ -3248,6 +3268,10 @@ export default function SocialFeedCreator({ posts, onBack, initialPost, onOpenCo
   });
   const videoBlockPosYRef = useRef<number>(0.44);
   const videoDragRef = useRef<{ pointerId: number; offsetY: number } | null>(null);
+
+  useEffect(() => {
+    videoFramingModeRef.current = videoFramingMode;
+  }, [videoFramingMode]);
 
   // Estados para o Estilo Copaíba Notícias (1 Vídeo + 2 Imagens Divididas Lateralmente)
   const [splitImg1Url, setSplitImg1Url] = useState<string>(() => {
@@ -4251,10 +4275,11 @@ export default function SocialFeedCreator({ posts, onBack, initialPost, onOpenCo
         } else {
           logoImageRef.current = null;
         }
+        const activeFramingMode = videoFramingModeRef.current || videoFramingMode;
         const effectiveImg1 = splitImg1Ref.current || customImageRef.current || articleImageRef.current?.image || null;
         const effectiveImg2 = splitImg2Ref.current;
         const currentSplitConfig: Split1v2iConfig = {
-          framingMode: videoFramingMode,
+          framingMode: activeFramingMode,
           img1: effectiveImg1,
           img2: effectiveImg2,
           dividerColor: splitDividerColor,
@@ -4292,7 +4317,7 @@ export default function SocialFeedCreator({ posts, onBack, initialPost, onOpenCo
           showHandleLayer,
           showStorySticker && !skipGuides,
           format,
-          videoFramingMode,
+          activeFramingMode,
           imagePosition,
           miniIaMirror,
           {
@@ -4812,10 +4837,11 @@ export default function SocialFeedCreator({ posts, onBack, initialPost, onOpenCo
             ctx.fillStyle = "#050505";
             ctx.fillRect(0, 0, W, currentLoopH);
             const miniIaCfg = MINI_IA_LEVELS[miniIaLevel] || MINI_IA_LEVELS.media;
+            const activeFramingMode = videoFramingModeRef.current || videoFramingMode;
             const effectiveImg1 = splitImg1Ref.current || customImageRef.current || articleImageRef.current?.image || null;
             const effectiveImg2 = splitImg2Ref.current;
             const currentSplitConfig: Split1v2iConfig = {
-              framingMode: videoFramingMode,
+              framingMode: activeFramingMode,
               img1: effectiveImg1,
               img2: effectiveImg2,
               dividerColor: splitDividerColor,
@@ -4829,7 +4855,7 @@ export default function SocialFeedCreator({ posts, onBack, initialPost, onOpenCo
               video,
               W,
               currentLoopH,
-              videoFramingMode,
+              activeFramingMode,
               imagePosition,
               miniIaMirror,
               {
@@ -5107,6 +5133,8 @@ export default function SocialFeedCreator({ posts, onBack, initialPost, onOpenCo
     setVideoFileName("");
     setVideoReady(false);
     setVideoExport(null);
+    setVideoCrop(null);
+    try { localStorage.removeItem("viralizou_video_crop"); } catch {}
     if (videoInputRef.current) videoInputRef.current.value = "";
     setMessage("Vídeo removido.");
   }
@@ -5131,6 +5159,8 @@ export default function SocialFeedCreator({ posts, onBack, initialPost, onOpenCo
     }
     setVideoUrl(URL.createObjectURL(file));
     setVideoExport(null);
+    setVideoCrop(null);
+    try { localStorage.removeItem("viralizou_video_crop"); } catch {}
     if (format !== "story" && format !== "feed" && format !== "feed-square" && format !== "reel-cover") {
       setFormat("reel");
     }
@@ -5271,9 +5301,22 @@ export default function SocialFeedCreator({ posts, onBack, initialPost, onOpenCo
     try { localStorage.setItem("viralizou_reel_handle_size", String(value)); } catch {}
   }
 
+  function chooseVideoFramingMode(mode: "cover" | "blur-fit" | "horizontal-block" | "split" | "split-1v2i") {
+    setVideoFramingMode(mode);
+    videoFramingModeRef.current = mode;
+    try { localStorage.setItem("viralizou_video_framing_mode", mode); } catch {}
+    cachedOverlayCanvasRef.current = null;
+    renderCard();
+  }
+
   function chooseReelTextStyle(style: ReelTextStyle) {
     setReelTextStyle(style);
     try { localStorage.setItem("viralizou_reel_text_style", style); } catch {}
+    if (style === "split-compare") {
+      chooseVideoFramingMode("split");
+    } else if (videoFramingModeRef.current === "split") {
+      chooseVideoFramingMode("cover");
+    }
     if (style === "bacci-red") {
       if (!titlePositionRef.current?.y || titlePositionRef.current.y > 0.72 || titlePositionRef.current.y < 0.30) {
         const pos = { x: 0.5, y: 0.58 };
@@ -5918,10 +5961,11 @@ async function fixWebmDuration(blob: Blob, durationSec: number): Promise<Blob> {
       .replace(/[^a-zA-Z0-9_-]/g, "-") || `viralizou-${formatLabel}`;
     const outFilename = `${basename}-${formatLabel}.mp4`;
 
+    const effectiveFramingMode = videoFramingModeRef.current || videoFramingMode;
     const effectiveImg1 = splitImg1Ref.current || customImageRef.current || articleImageRef.current?.image || null;
     const effectiveImg2 = splitImg2Ref.current;
     const currentSplitConfig: Split1v2iConfig = {
-      framingMode: videoFramingMode,
+      framingMode: effectiveFramingMode,
       img1: effectiveImg1,
       img2: effectiveImg2,
       dividerColor: splitDividerColor,
@@ -6004,8 +6048,8 @@ async function fixWebmDuration(blob: Blob, durationSec: number): Promise<Blob> {
         formData.append("video", sourceFile, videoFileName || "video.mp4");
         formData.append("overlay", overlayBlob, "overlay.png");
         formData.append("filename", outFilename);
-        formData.append("framingMode", videoFramingMode);
-        if (videoFramingMode === "split-1v2i") {
+        formData.append("framingMode", effectiveFramingMode);
+        if (effectiveFramingMode === "split-1v2i") {
           const headerH = splitTopCardEnabled
             ? getSplitHeaderHeight(overlayCanvas.getContext("2d")!, title || selectedPost?.title || "TÍTULO DA SUA NOTÍCIA", reelFontFamily, reelTextCase, reelFontSize, 1080)
             : 0;
@@ -6287,6 +6331,7 @@ async function fixWebmDuration(blob: Blob, durationSec: number): Promise<Blob> {
       const speedMultiplier = isLockedSync ? 1.0 : (miniIaCfg.speed || 1);
       video.playbackRate = speedMultiplier;
 
+      addLog(`📐 Enquadramento Ativo: ${effectiveFramingMode === "cover" ? "Preencher (9:16)" : effectiveFramingMode === "blur-fit" ? "Fundo Desfocado" : effectiveFramingMode === "horizontal-block" ? "Bloco Horizontal 16:9" : effectiveFramingMode === "split" ? "Split 50/50" : "1 Vídeo + 2 Imagens"}`);
       addLog(`🤖 Mini IA Ativada: Nível ${miniIaLevel.toUpperCase()} (${miniIaCfg.name}) · Escudo Anti-Diretrizes Ativo`);
       if (isLockedSync) {
         addLog(`🔒 Sincronismo Labial Absoluto: Velocidade travada em 1.00x natural (zero time-stretch / zero atraso de som)`);
@@ -6357,7 +6402,7 @@ async function fixWebmDuration(blob: Blob, durationSec: number): Promise<Blob> {
             video,
             W,
             exportH,
-            videoFramingMode,
+            effectiveFramingMode,
             imagePosition,
             miniIaMirror,
             {
@@ -7123,7 +7168,7 @@ async function fixWebmDuration(blob: Blob, durationSec: number): Promise<Blob> {
                       <button
                         type="button"
                         className={`btn secondary ${videoFramingMode === "cover" ? "active" : ""}`}
-                        onClick={() => setVideoFramingMode("cover")}
+                        onClick={() => chooseVideoFramingMode("cover")}
                         style={{
                           fontSize: 11,
                           padding: "6px 8px",
@@ -7138,7 +7183,7 @@ async function fixWebmDuration(blob: Blob, durationSec: number): Promise<Blob> {
                       <button
                         type="button"
                         className={`btn secondary ${videoFramingMode === "blur-fit" ? "active" : ""}`}
-                        onClick={() => setVideoFramingMode("blur-fit")}
+                        onClick={() => chooseVideoFramingMode("blur-fit")}
                         style={{
                           fontSize: 11,
                           padding: "6px 8px",
@@ -7153,7 +7198,7 @@ async function fixWebmDuration(blob: Blob, durationSec: number): Promise<Blob> {
                       <button
                         type="button"
                         className={`btn secondary ${videoFramingMode === "horizontal-block" ? "active" : ""}`}
-                        onClick={() => setVideoFramingMode("horizontal-block")}
+                        onClick={() => chooseVideoFramingMode("horizontal-block")}
                         style={{
                           fontSize: 11,
                           padding: "6px 8px",
@@ -7169,7 +7214,7 @@ async function fixWebmDuration(blob: Blob, durationSec: number): Promise<Blob> {
                       <button
                         type="button"
                         className={`btn secondary ${videoFramingMode === "split" ? "active" : ""}`}
-                        onClick={() => setVideoFramingMode("split")}
+                        onClick={() => chooseVideoFramingMode("split")}
                         style={{
                           fontSize: 11,
                           padding: "6px 8px",
@@ -7186,10 +7231,8 @@ async function fixWebmDuration(blob: Blob, durationSec: number): Promise<Blob> {
                         type="button"
                         className={`btn secondary ${videoFramingMode === "split-1v2i" && (format === "reel" || format === "story") ? "active" : ""}`}
                         onClick={() => {
-                          setVideoFramingMode("split-1v2i");
+                          chooseVideoFramingMode("split-1v2i");
                           setFormat("reel");
-                          cachedOverlayCanvasRef.current = null;
-                          renderCard();
                         }}
                         style={{
                           fontSize: 11,
@@ -7207,10 +7250,8 @@ async function fixWebmDuration(blob: Blob, durationSec: number): Promise<Blob> {
                         type="button"
                         className={`btn secondary ${videoFramingMode === "split-1v2i" && format === "feed" ? "active" : ""}`}
                         onClick={() => {
-                          setVideoFramingMode("split-1v2i");
+                          chooseVideoFramingMode("split-1v2i");
                           setFormat("feed");
-                          cachedOverlayCanvasRef.current = null;
-                          renderCard();
                         }}
                         style={{
                           fontSize: 11,
@@ -7818,6 +7859,38 @@ async function fixWebmDuration(blob: Blob, durationSec: number): Promise<Blob> {
                       Transforma ritmo, cortes, pHash e metadados para o Instagram classificar seu conteúdo como 100% Original e manter as recomendações livres de punições.
                     </p>
                   </div>
+                </div>
+              </div>
+
+              {/* SELETOR DE ENQUADRAMENTO DIRETO NA MINI IA */}
+              <div style={{ background: "rgba(15, 23, 42, 0.75)", border: "1px solid rgba(139, 92, 246, 0.28)", borderRadius: 8, padding: "8px 12px", display: "flex", alignItems: "center", justifyContent: "space-between", flexWrap: "wrap", gap: 8 }}>
+                <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
+                  <span style={{ fontSize: 13 }}>📐</span>
+                  <span style={{ fontSize: 11.5, fontWeight: 800, color: "#f8fafc" }}>Enquadramento Reel:</span>
+                  <span style={{ fontSize: 10.5, fontWeight: 800, color: "#38bdf8", background: "rgba(56, 189, 248, 0.15)", border: "1px solid rgba(56, 189, 248, 0.35)", padding: "2px 8px", borderRadius: 6 }}>
+                    {videoFramingMode === "cover" ? "🔍 Preencher (9:16)" : videoFramingMode === "blur-fit" ? "📰 Fundo Desfocado" : videoFramingMode === "horizontal-block" ? "📺 Bloco Horizontal" : videoFramingMode === "split" ? "👥 Split 50/50" : "🎬 1 Vídeo + 2 Imagens"}
+                  </span>
+                </div>
+                <div style={{ display: "flex", gap: 5, flexWrap: "wrap" }}>
+                  {(["cover", "blur-fit", "horizontal-block", "split"] as const).map((m) => (
+                    <button
+                      key={m}
+                      type="button"
+                      onClick={() => chooseVideoFramingMode(m)}
+                      style={{
+                        fontSize: 10.5,
+                        padding: "3px 8px",
+                        borderRadius: 5,
+                        border: videoFramingMode === m ? "1.5px solid #0284c7" : "1px solid rgba(255,255,255,0.12)",
+                        background: videoFramingMode === m ? "#0284c7" : "rgba(30,41,59,0.7)",
+                        color: videoFramingMode === m ? "#ffffff" : "#cbd5e1",
+                        fontWeight: videoFramingMode === m ? 800 : 500,
+                        cursor: "pointer",
+                      }}
+                    >
+                      {m === "cover" ? "Preencher" : m === "blur-fit" ? "Desfocado" : m === "horizontal-block" ? "Bloco 16:9" : "Split 50/50"}
+                    </button>
+                  ))}
                 </div>
               </div>
 
@@ -10701,17 +10774,14 @@ async function fixWebmDuration(blob: Blob, durationSec: number): Promise<Blob> {
         onError={() => { setVideoReady(false); setMessage("Não foi possível abrir esse arquivo de vídeo."); }}
         style={{
           position: "fixed",
-          bottom: 12,
-          right: 12,
-          width: recording ? 240 : 120,
-          height: recording ? 426 : 213,
-          opacity: recording ? 0.98 : 0.02,
+          bottom: 0,
+          right: 0,
+          width: 2,
+          height: 2,
+          opacity: 0.01,
           pointerEvents: "none",
-          zIndex: recording ? 99999 : -1,
-          boxShadow: recording ? "0 10px 40px rgba(0,0,0,0.85), 0 0 0 2px #ff3b30" : "none",
-          borderRadius: 12,
+          zIndex: -9999,
           transform: miniIaMirror ? "scaleX(-1)" : "none",
-          transition: "transform 0.2s ease",
         }}
       />
       {/* Player contínuo da Logo Oficial Animada Transparente (WebM VP9 com Alpha / GIF fallback) */}
