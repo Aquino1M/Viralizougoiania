@@ -58,7 +58,7 @@ function getSupabaseUrl() {
 }
 
 function getSupabaseKey() {
-  return (process.env.SUPABASE_SERVICE_ROLE_KEY || "").trim();
+  return (process.env.SUPABASE_SECRET_KEY || process.env.SUPABASE_SERVICE_ROLE_KEY || "").trim();
 }
 
 export function hasSupabaseConfig() {
@@ -93,7 +93,7 @@ function headers(extra: Record<string, string> = {}) {
   const key = getSupabaseKey();
   return {
     apikey: key,
-    Authorization: `Bearer ${key}`,
+    ...(key.startsWith("eyJ") ? { Authorization: `Bearer ${key}` } : {}),
     "Content-Type": "application/json",
     ...extra,
   };
@@ -1077,6 +1077,7 @@ export async function verifyAdminCredentials(
   }
 
   // 1. Tenta validar na tabela 'admins' do Supabase
+  let supabaseAuthUnavailable = false;
   if (hasSupabaseConfig()) {
     try {
       let query = "admins?select=*&active=eq.true";
@@ -1105,6 +1106,7 @@ export async function verifyAdminCredentials(
       }
     } catch (err: any) {
       console.warn("Supabase auth check:", err.message);
+      supabaseAuthUnavailable = true;
     }
   }
 
@@ -1121,6 +1123,10 @@ export async function verifyAdminCredentials(
         active: true,
       },
     };
+  }
+
+  if (supabaseAuthUnavailable) {
+    return { ok: false, error: "Não foi possível consultar os logins no Supabase. Verifique a chave privada do servidor." };
   }
 
   return { ok: false, error: "Senha ou usuário incorreto." };
